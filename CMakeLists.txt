@@ -9,6 +9,7 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(EXTERN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/extern")
 set(GLAD_DIR "${EXTERN_DIR}/glad")
+set(CGLTF_DIR "${EXTERN_DIR}/cgltf")
 
 file(GLOB SRC_FILES "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.hpp")
 add_executable(${PROJECT_NAME} ${SRC_FILES})
@@ -26,3 +27,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE glad "${CMAKE_DL_LIBS}")
 # GLM
 find_package(glm CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE glm)
+
+# cgtlf
+include_directories(${PROJECT_NAME} ${CGLTF_DIR})
