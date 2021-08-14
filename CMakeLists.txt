@@ -17,8 +17,12 @@ add_executable(${PROJECT_NAME} ${SRC_FILES})
 find_package(glfw3 CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
 
-# GLAD
+# glad
 add_library(glad STATIC "${GLAD_DIR}/src/glad.c")
 target_include_directories(glad PRIVATE "${GLAD_DIR}/include")
 target_include_directories(${PROJECT_NAME} PRIVATE "${GLAD_DIR}/include")
 target_link_libraries(${PROJECT_NAME} PRIVATE glad "${CMAKE_DL_LIBS}")
+
+# GLM
+find_package(glm CONFIG REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE glm)
