@@ -1,27 +1,44 @@
 #include <array>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
+#include <optional>
 #include <string>
+#include <unordered_map>
 
 #define GLFW_INCLUDE_NONE
 
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
+#include <glm/glm.hpp>
+
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/fwd.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/transform.hpp>
 
 using std::array;
+using std::optional;
 using std::string;
+using std::unordered_map;
 
-constexpr unsigned int window_width = 640;
-constexpr unsigned int window_height = 480;
+using glm::mat4;
+using glm::vec3;
+using glm::vec4;
+
+unsigned int window_width = 640;
+unsigned int window_height = 480;
 
 static const char *vert_source = "#version 460 core\n"
                                  "layout (location = 0) in vec3 aPos;"
                                  "layout (location = 1) in vec3 aCol;"
                                  "out vec3 vCol;"
+                                 "uniform mat4 u_mvp;"
                                  "void main()"
                                  "{"
                                  "   vCol = aCol;"
-                                 "   gl_Position = vec4(aPos, 1.);"
+                                 "   gl_Position = u_mvp * vec4(aPos, 1.);"
                                  "}";
 
 static const char *frag_source = "#version 460 core\n"
@@ -40,7 +57,9 @@ static void error_callback(int error, const char *description)
 
 static void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 {
-    glViewport(0, 0, width, height);
+    window_height = width;
+    window_height = height;
+    glViewport(0, 0, window_width, window_height);
 }
 
 static void key_callback(GLFWwindow *window, int key, int scancode, int action,
@@ -62,10 +81,9 @@ unsigned int create_shader(const char *source, GLenum type)
     {
         int length;
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
-        string log;
-        log.reserve(length);
-        glGetShaderInfoLog(shader, length, nullptr, &log[0]);
-        std::cerr << log << std::endl;
+        auto log = std::make_unique<char[]>(length);
+        glGetShaderInfoLog(shader, length, nullptr, log.get());
+        std::cerr << "Shader failure: " << log << std::endl;
     }
 
     return shader;
@@ -84,13 +102,61 @@ unsigned int create_program(unsigned int vert_shader, unsigned int frag_shader)
     {
         int length;
         glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
-        string log;
-        log.reserve(length);
-        glGetProgramInfoLog(program, length, nullptr, &log[0]);
-        std::cerr << log << std::endl;
+        auto log = std::make_unique<char[]>(length);
+        glGetProgramInfoLog(program, length, nullptr, log.get());
+        std::cerr << "Shader program failure: " << log << std::endl;
     }
 
     return program;
+}
+
+struct Uniform
+{
+    int location;
+    int count;
+};
+
+optional<unordered_map<string, Uniform>> parse_uniforms(unsigned int program)
+{
+    int count;
+    glGetProgramiv(program, GL_ACTIVE_UNIFORMS, &count);
+
+    if (count == 0)
+        return std::nullopt;
+
+    int max_length;
+    glGetProgramiv(program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &max_length);
+
+    auto name = std::make_unique<char[]>(max_length);
+
+    unordered_map<string, Uniform> name_uniform_map(count);
+
+    int length, size;
+    GLenum type;
+
+    for (int i = 0; i < count; i++)
+    {
+        glGetActiveUniform(program, i, max_length, &length, &size, &type,
+                           &name[0]);
+
+        Uniform uniform{glGetUniformLocation(program, name.get()), size};
+        name_uniform_map.emplace(
+            std::make_pair(string(name.get(), length), uniform));
+    }
+
+    return std::make_optional(name_uniform_map);
+}
+
+void set_uniform(unsigned int program, Uniform uniform, const mat4 &value)
+{
+    glProgramUniformMatrix4fv(program, uniform.location, uniform.count, false,
+                              glm::value_ptr(value));
+}
+
+void set_uniform(unsigned int program, Uniform uniform, const vec3 &value)
+{
+    glProgramUniform3fv(program, uniform.location, uniform.count,
+                        glm::value_ptr(value));
 }
 
 int main()
@@ -166,9 +232,31 @@ int main()
 
     glClearColor(0.f, 0.f, 0.f, 1.0f);
 
+    const mat4 model = mat4{1};
+    const mat4 view = glm::lookAt(vec3{0, 0, -2}, vec3{0.f}, vec3{0, 1, 0});
+
+    Uniform mvp_uniform;
+
+    if (auto uniform_map = parse_uniforms(program))
+    {
+        mvp_uniform = uniform_map->at("u_mvp");
+    }
+    else
+    {
+        std::cerr << "Missing uniform in shader" << std::endl;
+    }
+
     while (!glfwWindowShouldClose(window))
     {
         glClear(GL_COLOR_BUFFER_BIT);
+
+        mat4 perspective =
+            glm::perspective(glm::radians(90.f),
+                             static_cast<float>(window_width) /
+                                 static_cast<float>(window_height),
+                             0.1f, 100.f);
+
+        set_uniform(program, mvp_uniform, perspective * view * model);
 
         glDrawArrays(GL_TRIANGLES, 0, 4);
 
