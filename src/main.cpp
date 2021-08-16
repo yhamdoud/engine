@@ -1,3 +1,5 @@
+#define GLFW_INCLUDE_NONE
+
 #include <array>
 #include <cstdint>
 #include <cstdlib>
@@ -13,19 +15,20 @@
 #include <string_view>
 #include <unordered_map>
 
-#define GLFW_INCLUDE_NONE
-
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 
-#include "glm/gtx/string_cast.hpp"
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/fwd.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/transform.hpp>
+
+#include <Tracy.hpp>
+#include <TracyOpenGL.hpp>
 
 #include "model.hpp"
 
@@ -378,9 +381,16 @@ int main()
 
     float turn_speed = glm::radians(45.f);
 
+    // Enable profiling.
+    TracyGpuContext;
+
     while (!glfwWindowShouldClose(window))
     {
+        TracyGpuZone("Render");
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glfwPollEvents();
 
         // Timestep.
         float time = glfwGetTime();
@@ -411,7 +421,10 @@ int main()
         glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
 
         glfwSwapBuffers(window);
-        glfwPollEvents();
+
+        TracyGpuCollect;
+
+        FrameMark
     }
 
     glDeleteVertexArrays(1, &vao);
