@@ -30,6 +30,7 @@
 #include <Tracy.hpp>
 #include <TracyOpenGL.hpp>
 
+#include "camera.hpp"
 #include "model.hpp"
 
 using std::array;
@@ -39,16 +40,14 @@ using std::string_view;
 using std::unordered_map;
 using std::filesystem::path;
 
-using glm::mat3;
-using glm::mat4;
-using glm::vec2;
-using glm::vec3;
-using glm::vec4;
+using namespace glm;
 
 using namespace engine;
 
-unsigned int window_width = 640;
-unsigned int window_height = 480;
+unsigned int window_width = 1280;
+unsigned int window_height = 720;
+
+Camera camera{vec3{0, 0, 2}, vec3{0}};
 
 static void glfw_error_callback(int error, const char *description)
 {
@@ -133,6 +132,12 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action,
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+}
+
+static void scroll_callback(GLFWwindow *window, double x_offset,
+                            double y_offset)
+{
+    camera.zoom(y_offset);
 }
 
 std::string from_file(const path &path)
@@ -241,6 +246,13 @@ void set_uniform(unsigned int program, Uniform uniform, const vec3 &value)
                         glm::value_ptr(value));
 }
 
+vec2 get_cursor_position(GLFWwindow *window)
+{
+    double x, y;
+    glfwGetCursorPos(window, &x, &y);
+    return vec2(x, y);
+}
+
 int main()
 {
     glfwSetErrorCallback(glfw_error_callback);
@@ -266,6 +278,7 @@ int main()
 
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetKeyCallback(window, key_callback);
+    glfwSetScrollCallback(window, scroll_callback);
 
     glfwMakeContextCurrent(window);
 
@@ -347,8 +360,6 @@ int main()
 
     glClearColor(0.f, 0.f, 0.f, 1.0f);
 
-    const mat4 view = glm::lookAt(vec3{0, 0, -3}, vec3{0.f}, vec3{0, 1, 0});
-
     Uniform uniform_mvp, uniform_normal_mat, uniform_model_view,
         uniform_light_pos;
 
@@ -379,7 +390,11 @@ int main()
 
     mat4 model = glm::scale(mat4{1}, vec3{0.01f});
 
-    float turn_speed = glm::radians(45.f);
+    float turn_speed = glm::radians(0.f);
+
+    vec2 cursor_pos = get_cursor_position(window);
+
+    const vec4 light_pos = vec4{10, 10, 10, 1};
 
     // Enable profiling.
     TracyGpuContext;
@@ -390,37 +405,46 @@ int main()
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glfwPollEvents();
-
         // Timestep.
         float time = glfwGetTime();
         float delta_time = time - last_time;
         last_time = time;
 
-        model = glm::rotate(delta_time * turn_speed, up) * model;
+        vec2 new_cursor_pos = get_cursor_position(window);
 
-        const mat4 view = glm::lookAt(vec3{0, 0, 2}, vec3{0.f}, up);
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
+        {
+            auto delta = cursor_pos - new_cursor_pos;
 
-        mat4 perspective =
+            if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+                camera.pan(delta);
+            else
+                camera.rotate(delta);
+        }
+
+        cursor_pos = new_cursor_pos;
+
+        const mat4 perspective =
             glm::perspective(glm::radians(90.f),
                              static_cast<float>(window_width) /
                                  static_cast<float>(window_height),
                              0.1f, 100.f);
 
+        const mat4 view = camera.get_view();
         const auto model_view = view * model;
         const auto mvp = perspective * model_view;
-
-        vec4 light_pos = view * vec4{10, 10, 10, 1};
 
         set_uniform(program, uniform_mvp, mvp);
         set_uniform(program, uniform_normal_mat,
                     glm::inverseTranspose(mat3{model_view}));
         set_uniform(program, uniform_model_view, view * model);
-        set_uniform(program, uniform_light_pos, vec3(light_pos) / light_pos.w);
+        set_uniform(program, uniform_light_pos, vec3(view * vec4(light_pos)));
 
         glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
 
         glfwSwapBuffers(window);
+
+        glfwPollEvents();
 
         TracyGpuCollect;
 

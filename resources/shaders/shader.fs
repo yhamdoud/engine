@@ -20,14 +20,15 @@ void main()
 	vec3 n = normalize(fs_in.normal);
 	vec3 h = normalize(l + v);
 
-	float i = max(dot(n, h), 0);
-	float s = pow(i, 2);
+	float ambient = 0.3;
+	float diffuse = max(dot(n, l), 0);
+	float spec = pow(max(dot(n, h), 0), 16);
 
-	vec3 ambient = vec3(0.3);
+	vec3 ambient_color = vec3(1, 1, 0);
+	vec3 diffuse_color = vec3(1, 1, 0);
+	vec3 light_color = vec3(1);
 
-	vec3 light_col = vec3(1);
-
-	vec3 col = ambient + i * light_col + s;
+	vec3 col = ambient * ambient_color + diffuse * diffuse_color + spec * light_color;
 
 	frag_color = vec4(col, 1);
 }
