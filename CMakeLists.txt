@@ -9,9 +9,11 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -march=native -DTRACY_ENA
 
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(EXTERN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/extern")
+
 set(GLAD_DIR "${EXTERN_DIR}/glad")
 set(CGLTF_DIR "${EXTERN_DIR}/cgltf")
 set(TRACY_DIR "${EXTERN_DIR}/tracy")
+set(STB_DIR "${EXTERN_DIR}/stb")
 
 file(GLOB SRC_FILES "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.hpp")
 add_executable(${PROJECT_NAME} ${SRC_FILES})
@@ -37,3 +39,6 @@ include_directories(${PROJECT_NAME} ${CGLTF_DIR})
 add_subdirectory(${TRACY_DIR})
 target_include_directories(${PROJECT_NAME} PRIVATE ${TRACY_DIR})
 target_link_libraries(${PROJECT_NAME} PRIVATE TracyClient)
+
+# stb
+target_include_directories(${PROJECT_NAME} PRIVATE ${STB_DIR})
