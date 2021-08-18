@@ -21,6 +21,7 @@ class Camera
     void rotate(glm::vec2 delta);
     void pan(glm::vec2 delta);
     void zoom(float direction);
+    void reset();
 
     glm::mat4 get_view() const;
 };

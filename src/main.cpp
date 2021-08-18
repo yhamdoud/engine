@@ -1,4 +1,6 @@
+#include <cstddef>
 #define GLFW_INCLUDE_NONE
+#define STB_IMAGE_IMPLEMENTATION
 
 #include <array>
 #include <cstdint>
@@ -18,21 +20,16 @@
 
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
+#include <glm/ext.hpp>
 #include <glm/glm.hpp>
-
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/fwd.hpp>
-#include <glm/gtc/matrix_inverse.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/string_cast.hpp>
-#include <glm/gtx/transform.hpp>
+#include <stb_image.h>
 
 #include <Tracy.hpp>
 #include <TracyOpenGL.hpp>
 
 #include "camera.hpp"
 #include "model.hpp"
+#include "primitives.hpp"
 #include "transform.hpp"
 
 using std::array;
@@ -53,7 +50,12 @@ using namespace engine;
 unsigned int window_width = 1280;
 unsigned int window_height = 720;
 
-Camera camera{vec3{0, 0, 2}, vec3{0}};
+Camera camera{vec3{0, 0, 4}, vec3{0}};
+
+const path resources_path{"../resources"};
+const path textures_path = resources_path / "textures";
+const path shaders_path = resources_path / "shaders";
+const path models_path = resources_path / "models";
 
 static void glfw_error_callback(int error, const char *description)
 {
@@ -137,7 +139,13 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action,
                          int mods)
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+    {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
+    else if (key == GLFW_KEY_C && action == GLFW_PRESS)
+    {
+        camera.reset();
+    }
 }
 
 static void scroll_callback(GLFWwindow *window, double x_offset,
@@ -176,6 +184,11 @@ unsigned int create_shader(const string &source, GLenum type)
     return shader;
 }
 
+unsigned int create_shader(const path &path, GLenum type)
+{
+    return create_shader(from_file(path), type);
+}
+
 unsigned int create_program(unsigned int vert_shader, unsigned int frag_shader)
 {
     unsigned int program = glCreateProgram();
@@ -195,6 +208,12 @@ unsigned int create_program(unsigned int vert_shader, unsigned int frag_shader)
     }
 
     return program;
+}
+
+unsigned int create_program(const path &vert_shader, const path &frag_shader)
+{
+    return create_program(create_shader(vert_shader, GL_VERTEX_SHADER),
+                          create_shader(frag_shader, GL_FRAGMENT_SHADER));
 }
 
 struct Uniform
@@ -281,7 +300,7 @@ int attrib_positions = 0;
 int attrib_normals = 1;
 int attrib_tex_coords = 2;
 
-RenderData register_entity(Entity e)
+RenderData register_entity(const Entity &e)
 {
     unsigned int buffer;
     glCreateBuffers(1, &buffer);
@@ -313,6 +332,77 @@ RenderData register_entity(Entity e)
                       size_indices + size_positions};
 }
 
+optional<GLuint> upload_cube_map(const array<path, 6> &paths)
+{
+    unsigned int id;
+
+    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &id);
+
+    GLenum format = GL_RGB;
+
+    for (size_t face_idx = 0; face_idx < 6; face_idx++)
+    {
+        const auto &path = paths[face_idx];
+
+        int width, height, channel_count;
+
+        uint8_t *data =
+            stbi_load(path.c_str(), &width, &height, &channel_count, 0);
+
+        if (face_idx == 0)
+            glTextureStorage2D(id, 1, GL_RGBA8, width, height);
+
+        if (data)
+        {
+            glad_glTextureSubImage3D(id, 0, 0, 0, face_idx, width, height, 1,
+                                     format, GL_UNSIGNED_BYTE, data);
+
+            std::free(data);
+        }
+        else
+        {
+            std::cerr << "Failed to load texture: " << path << std::endl;
+            return std::nullopt;
+        }
+    }
+
+    glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    return std::make_optional(id);
+}
+
+// Return skybox VAO.
+unsigned int init_skybox()
+{
+    unsigned int buffer;
+    glCreateBuffers(1, &buffer);
+
+    unsigned int vao;
+    glCreateVertexArrays(1, &vao);
+
+    unsigned int binding = 0, attribute = 0;
+
+    glVertexArrayAttribFormat(vao, attribute, 3, GL_FLOAT, false, 0);
+    glVertexArrayAttribBinding(vao, attribute, binding);
+    glEnableVertexArrayAttrib(vao, attribute);
+
+    glNamedBufferStorage(buffer, sizeof(primitives::cube), primitives::cube,
+                         GL_DYNAMIC_STORAGE_BIT);
+    glVertexArrayVertexBuffer(vao, binding_positions, buffer, 0, sizeof(vec3));
+
+    return vao;
+}
+
+void render_skybox(unsigned int vao)
+{
+    glBindVertexArray(vao);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+}
+
 void render(unsigned int vao, RenderData data)
 {
     ZoneScoped;
@@ -323,7 +413,8 @@ void render(unsigned int vao, RenderData data)
     glVertexArrayVertexBuffer(vao, binding_normals, data.buffer,
                               data.normals_offset, sizeof(vec3));
 
-    glDrawElements(GL_TRIANGLES, data.primitive_count, GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES, data.primitive_count, GL_UNSIGNED_INT,
+                   nullptr);
 }
 
 enum class Error
@@ -392,11 +483,12 @@ int main()
     glDebugMessageCallback(gl_message_callback, nullptr);
 
     glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
 
-    unsigned int vert_shader = create_shader(
-        from_file(path{"../resources/shaders/shader.vs"}), GL_VERTEX_SHADER);
-    unsigned int frag_shader = create_shader(
-        from_file(path{"../resources/shaders/shader.fs"}), GL_FRAGMENT_SHADER);
+    unsigned int vert_shader =
+        create_shader(shaders_path / "shader.vs", GL_VERTEX_SHADER);
+    unsigned int frag_shader =
+        create_shader(shaders_path / "shader.fs", GL_FRAGMENT_SHADER);
     unsigned int program = create_program(vert_shader, frag_shader);
 
     glDeleteShader(vert_shader);
@@ -417,7 +509,7 @@ int main()
     vector<RenderData> render_queue;
 
     auto mesh =
-        std::make_shared<Mesh>(Mesh::from_gtlf("../models/duck.glb")[0]);
+        std::make_shared<Mesh>(Mesh::from_gtlf(models_path / "duck.glb")[0]);
 
     Entity duck1{Transform{vec3{2, 0, 1}, vec3{0.01f}}, mesh};
     duck1.transform.set_euler_angles(radians(60.f), radians(20.f),
@@ -427,9 +519,6 @@ int main()
 
     render_queue.push_back(register_entity(duck1));
     render_queue.push_back(register_entity(duck2));
-
-    glBindVertexArray(vao);
-    glUseProgram(program);
 
     glClearColor(0.f, 0.f, 0.f, 1.0f);
 
@@ -457,17 +546,34 @@ int main()
         exit(EXIT_FAILURE);
     }
 
-    const vec3 up = vec3{0, 1, 0};
-
     double last_time = glfwGetTime();
 
     mat4 model = glm::scale(mat4{1}, vec3{0.01f});
 
-    float turn_speed = glm::radians(0.f);
-
     vec2 cursor_pos = get_cursor_position(window);
 
     const vec4 light_pos = vec4{10, 10, 10, 1};
+
+    const path skybox_path = textures_path / "skybox-1";
+
+    auto skybox_texture = upload_cube_map({
+        skybox_path / "right.jpg",
+        skybox_path / "left.jpg",
+        skybox_path / "top.jpg",
+        skybox_path / "bottom.jpg",
+        skybox_path / "front.jpg",
+        skybox_path / "back.jpg",
+    });
+
+    if (!skybox_texture.has_value())
+        return EXIT_FAILURE;
+
+    auto skybox_shader =
+        create_program(shaders_path / "skybox.vs", shaders_path / "skybox.fs");
+
+    auto skybox_uniforms = *parse_uniforms(skybox_shader);
+
+    auto skybox_vao = init_skybox();
 
     // Enable profiling.
     TracyGpuContext;
@@ -497,7 +603,7 @@ int main()
 
         cursor_pos = new_cursor_pos;
 
-        const mat4 perspective =
+        const mat4 persp =
             glm::perspective(glm::radians(90.f),
                              static_cast<float>(window_width) /
                                  static_cast<float>(window_height),
@@ -505,18 +611,37 @@ int main()
 
         const mat4 view = camera.get_view();
 
-        set_uniform(program, uniform_model_view, view * model);
-        set_uniform(program, uniform_light_pos, vec3(view * vec4(light_pos)));
-
-        for (auto &r : render_queue)
+        // Render entities.
         {
-            const auto model_view = view * r.model;
-            const auto mvp = perspective * model_view;
-            set_uniform(program, uniform_mvp, mvp);
-            set_uniform(program, uniform_normal_mat,
-                        glm::inverseTranspose(mat3{model_view}));
+            glUseProgram(program);
+            set_uniform(program, uniform_model_view, view * model);
+            set_uniform(program, uniform_light_pos,
+                        vec3(view * vec4(light_pos)));
 
-            render(vao, r);
+            glBindVertexArray(vao);
+
+            for (auto &r : render_queue)
+            {
+                const auto model_view = view * r.model;
+                const auto mvp = persp * model_view;
+                set_uniform(program, uniform_mvp, mvp);
+                set_uniform(program, uniform_normal_mat,
+                            glm::inverseTranspose(mat3{model_view}));
+
+                render(vao, r);
+            }
+        }
+
+        // Render skybox.
+        {
+            glUseProgram(skybox_shader);
+            glBindTextureUnit(0, *skybox_texture);
+
+            set_uniform(skybox_shader, skybox_uniforms["u_projection"], persp);
+            set_uniform(skybox_shader, skybox_uniforms["u_view"],
+                        mat4(mat3(view)));
+
+            render_skybox(skybox_vao);
         }
 
         glfwSwapBuffers(window);

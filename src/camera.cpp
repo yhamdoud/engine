@@ -47,6 +47,13 @@ void Camera::zoom(float direction)
         position *= 0.95;
 }
 
+void Camera::reset()
+{
+    position = vec3{0, 0, 1};
+    target = vec3{0};
+    offset = vec3{0};
+}
+
 glm::mat4 Camera::get_view() const
 {
     return lookAt(position + offset, target + offset, up);
