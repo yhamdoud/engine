@@ -14,6 +14,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <variant>
 
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
@@ -32,12 +33,17 @@
 
 #include "camera.hpp"
 #include "model.hpp"
+#include "transform.hpp"
 
 using std::array;
 using std::optional;
+using std::shared_ptr;
 using std::string;
 using std::string_view;
+using std::unique_ptr;
 using std::unordered_map;
+using std::variant;
+using std::vector;
 using std::filesystem::path;
 
 using namespace glm;
@@ -253,15 +259,85 @@ vec2 get_cursor_position(GLFWwindow *window)
     return vec2(x, y);
 }
 
-int main()
+struct Entity
+{
+    Transform transform;
+    shared_ptr<Mesh> mesh;
+};
+
+struct RenderData
+{
+    GLuint buffer;
+    mat4 model;
+    int primitive_count;
+    int positions_offset;
+    int normals_offset;
+};
+
+unsigned int binding_positions = 0;
+unsigned int binding_normals = 1;
+
+int attrib_positions = 0;
+int attrib_normals = 1;
+int attrib_tex_coords = 2;
+
+RenderData register_entity(Entity e)
+{
+    unsigned int buffer;
+    glCreateBuffers(1, &buffer);
+
+    int primitive_count = e.mesh->indices.size();
+
+    int size_indices = e.mesh->indices.size() * sizeof(uint32_t);
+    int size_positions = e.mesh->positions.size() * sizeof(vec3);
+    int size_normals = e.mesh->normals.size() * sizeof(vec3);
+    int size_tex_coords = e.mesh->tex_coords.size() * sizeof(vec2);
+
+    // TODO: Investigate if interleaved storage is more efficient than
+    // sequential storage for vertex data.
+    glNamedBufferStorage(buffer, size_indices + size_positions + size_normals,
+                         nullptr, GL_DYNAMIC_STORAGE_BIT);
+
+    int offset = 0;
+    glNamedBufferSubData(buffer, offset, size_indices, e.mesh->indices.data());
+    offset += size_indices;
+    glNamedBufferSubData(buffer, offset, size_positions,
+                         e.mesh->positions.data());
+    offset += size_positions;
+    glNamedBufferSubData(buffer, offset, size_normals, e.mesh->normals.data());
+    offset += size_normals;
+
+    mat4 model = e.transform.get_model();
+
+    return RenderData{buffer, model, primitive_count, size_indices,
+                      size_indices + size_positions};
+}
+
+void render(unsigned int vao, RenderData data)
+{
+    ZoneScoped;
+
+    glVertexArrayElementBuffer(vao, data.buffer);
+    glVertexArrayVertexBuffer(vao, binding_positions, data.buffer,
+                              data.positions_offset, sizeof(vec3));
+    glVertexArrayVertexBuffer(vao, binding_normals, data.buffer,
+                              data.normals_offset, sizeof(vec3));
+
+    glDrawElements(GL_TRIANGLES, data.primitive_count, GL_UNSIGNED_INT, 0);
+}
+
+enum class Error
+{
+    glfw_initialization,
+    window_creation,
+};
+
+variant<GLFWwindow *, Error> init_glfw()
 {
     glfwSetErrorCallback(glfw_error_callback);
 
     if (!glfwInit())
-    {
-        std::cerr << "GLFW initialization failed." << std::endl;
-        return EXIT_FAILURE;
-    }
+        return Error::glfw_initialization;
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
@@ -270,17 +346,38 @@ int main()
     GLFWwindow *window = glfwCreateWindow(window_width, window_height,
                                           "triangle", nullptr, nullptr);
     if (window == nullptr)
-    {
-        std::cerr << "Window creation failed." << std::endl;
-        glfwTerminate();
-        return EXIT_FAILURE;
-    }
+        return Error::window_creation;
 
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetKeyCallback(window, key_callback);
     glfwSetScrollCallback(window, scroll_callback);
 
     glfwMakeContextCurrent(window);
+
+    return window;
+}
+
+int main()
+{
+
+    auto window_variant = init_glfw();
+
+    if (auto error = std::get_if<Error>(&window_variant))
+    {
+        switch (*error)
+        {
+        case Error::glfw_initialization:
+            std::cout << "GLFW initialization failed." << std::endl;
+            break;
+        case Error::window_creation:
+            std::cout << "Window creation failed." << std::endl;
+            break;
+        }
+
+        return EXIT_FAILURE;
+    }
+
+    auto window = std::get<GLFWwindow *>(window_variant);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
@@ -305,46 +402,8 @@ int main()
     glDeleteShader(vert_shader);
     glDeleteShader(frag_shader);
 
-    auto mesh = Mesh::from_gtlf("../models/duck.glb")[0];
-
-    unsigned int vbo;
-    glCreateBuffers(1, &vbo);
-
-    int size_indices = mesh.indices.size() * sizeof(uint32_t);
-    int size_positions = mesh.positions.size() * sizeof(vec3);
-    int size_normals = mesh.normals.size() * sizeof(vec3);
-    int size_tex_coords = mesh.tex_coords.size() * sizeof(vec2);
-
-    // TODO: Investigate if interleaved storage is more efficient than
-    // sequential storage for vertex data.
-    glNamedBufferStorage(vbo, size_indices + size_positions + size_normals,
-                         nullptr, GL_DYNAMIC_STORAGE_BIT);
-
-    int offset = 0;
-    glNamedBufferSubData(vbo, offset, size_indices, mesh.indices.data());
-    offset += size_indices;
-    glNamedBufferSubData(vbo, offset, size_positions, mesh.positions.data());
-    offset += size_positions;
-    glNamedBufferSubData(vbo, offset, size_normals, mesh.normals.data());
-    offset += size_normals;
-    // glNamedBufferSubData(vbo, offset, size_tex_coords,
-    // mesh.tex_coords.data());
-
     unsigned int vao;
     glCreateVertexArrays(1, &vao);
-
-    unsigned int binding_positions = 0;
-    unsigned int binding_normals = 1;
-
-    glVertexArrayElementBuffer(vao, vbo);
-    glVertexArrayVertexBuffer(vao, binding_positions, vbo, size_indices,
-                              sizeof(vec3));
-    glVertexArrayVertexBuffer(vao, binding_normals, vbo,
-                              size_indices + size_positions, sizeof(vec3));
-
-    int attrib_positions = 0;
-    int attrib_normals = 1;
-    int attrib_tex_coords = 2;
 
     glEnableVertexArrayAttrib(vao, attrib_positions);
     glEnableVertexArrayAttrib(vao, attrib_normals);
@@ -354,6 +413,20 @@ int main()
 
     glVertexArrayAttribFormat(vao, attrib_normals, 3, GL_FLOAT, false, 0);
     glVertexArrayAttribBinding(vao, attrib_normals, binding_normals);
+
+    vector<RenderData> render_queue;
+
+    auto mesh =
+        std::make_shared<Mesh>(Mesh::from_gtlf("../models/duck.glb")[0]);
+
+    Entity duck1{Transform{vec3{2, 0, 1}, vec3{0.01f}}, mesh};
+    duck1.transform.set_euler_angles(radians(60.f), radians(20.f),
+                                     radians(90.f));
+
+    Entity duck2{Transform{vec3{3, 3, 1}, vec3{0.01f}}, mesh};
+
+    render_queue.push_back(register_entity(duck1));
+    render_queue.push_back(register_entity(duck2));
 
     glBindVertexArray(vao);
     glUseProgram(program);
@@ -431,19 +504,22 @@ int main()
                              0.1f, 100.f);
 
         const mat4 view = camera.get_view();
-        const auto model_view = view * model;
-        const auto mvp = perspective * model_view;
 
-        set_uniform(program, uniform_mvp, mvp);
-        set_uniform(program, uniform_normal_mat,
-                    glm::inverseTranspose(mat3{model_view}));
         set_uniform(program, uniform_model_view, view * model);
         set_uniform(program, uniform_light_pos, vec3(view * vec4(light_pos)));
 
-        glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
+        for (auto &r : render_queue)
+        {
+            const auto model_view = view * r.model;
+            const auto mvp = perspective * model_view;
+            set_uniform(program, uniform_mvp, mvp);
+            set_uniform(program, uniform_normal_mat,
+                        glm::inverseTranspose(mat3{model_view}));
+
+            render(vao, r);
+        }
 
         glfwSwapBuffers(window);
-
         glfwPollEvents();
 
         TracyGpuCollect;
@@ -451,8 +527,10 @@ int main()
         FrameMark
     }
 
+    for (auto &r : render_queue)
+        glDeleteBuffers(1, &r.buffer);
+
     glDeleteVertexArrays(1, &vao);
-    glDeleteBuffers(1, &vbo);
     glDeleteProgram(program);
 
     glfwTerminate();
