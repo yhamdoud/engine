@@ -1,8 +1,8 @@
-#include <cstddef>
-#define GLFW_INCLUDE_NONE
 #define STB_IMAGE_IMPLEMENTATION
+#define GLFW_INCLUDE_NONE
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
@@ -28,6 +28,7 @@
 #include <TracyOpenGL.hpp>
 
 #include "camera.hpp"
+#include "entity.hpp"
 #include "model.hpp"
 #include "primitives.hpp"
 #include "transform.hpp"
@@ -132,7 +133,6 @@ static void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 {
     window_height = width;
     window_height = height;
-    glViewport(0, 0, window_width, window_height);
 }
 
 static void key_callback(GLFWwindow *window, int key, int scancode, int action,
@@ -186,14 +186,35 @@ unsigned int create_shader(const string &source, GLenum type)
 
 unsigned int create_shader(const path &path, GLenum type)
 {
+    if (!std::filesystem::exists(path))
+    {
+        std::cerr << "Shader not found: " << path << std::endl;
+        return 0;
+    }
+
     return create_shader(from_file(path), type);
 }
 
-unsigned int create_program(unsigned int vert_shader, unsigned int frag_shader)
+struct ProgramSources
+{
+    path vert{};
+    path geom{};
+    path frag{};
+};
+
+unsigned int create_program(unsigned int vert, unsigned int geom,
+                            unsigned int frag)
 {
     unsigned int program = glCreateProgram();
-    glAttachShader(program, vert_shader);
-    glAttachShader(program, frag_shader);
+
+    glAttachShader(program, vert);
+
+    if (geom != 0)
+        glAttachShader(program, geom);
+
+    if (frag != 0)
+        glAttachShader(program, frag);
+
     glLinkProgram(program);
 
     int is_linked;
@@ -210,10 +231,19 @@ unsigned int create_program(unsigned int vert_shader, unsigned int frag_shader)
     return program;
 }
 
-unsigned int create_program(const path &vert_shader, const path &frag_shader)
+unsigned int create_program(const ProgramSources &srcs)
 {
-    return create_program(create_shader(vert_shader, GL_VERTEX_SHADER),
-                          create_shader(frag_shader, GL_FRAGMENT_SHADER));
+    auto vert = create_shader(srcs.vert, GL_VERTEX_SHADER);
+    auto geom =
+        !srcs.geom.empty() ? create_shader(srcs.geom, GL_GEOMETRY_SHADER) : 0;
+    auto frag =
+        !srcs.frag.empty() ? create_shader(srcs.frag, GL_FRAGMENT_SHADER) : 0;
+
+    return create_program(vert, geom, frag);
+
+    glDeleteShader(vert);
+    glDeleteShader(geom);
+    glDeleteShader(frag);
 }
 
 struct Uniform
@@ -278,14 +308,9 @@ vec2 get_cursor_position(GLFWwindow *window)
     return vec2(x, y);
 }
 
-struct Entity
-{
-    Transform transform;
-    shared_ptr<Mesh> mesh;
-};
-
 struct RenderData
 {
+    Entity::Flags flags;
     GLuint buffer;
     mat4 model;
     int primitive_count;
@@ -328,8 +353,10 @@ RenderData register_entity(const Entity &e)
 
     mat4 model = e.transform.get_model();
 
-    return RenderData{buffer, model, primitive_count, size_indices,
-                      size_indices + size_positions};
+    return RenderData{
+        e.flags,         buffer,       model,
+        primitive_count, size_indices, size_indices + size_positions,
+    };
 }
 
 optional<GLuint> upload_cube_map(const array<path, 6> &paths)
@@ -390,8 +417,8 @@ unsigned int init_skybox()
     glVertexArrayAttribBinding(vao, attribute, binding);
     glEnableVertexArrayAttrib(vao, attribute);
 
-    glNamedBufferStorage(buffer, sizeof(primitives::cube), primitives::cube,
-                         GL_DYNAMIC_STORAGE_BIT);
+    glNamedBufferStorage(buffer, sizeof(primitives::cube_verts),
+                         primitives::cube_verts.data(), GL_NONE);
     glVertexArrayVertexBuffer(vao, binding_positions, buffer, 0, sizeof(vec3));
 
     return vao;
@@ -485,74 +512,74 @@ int main()
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
 
-    unsigned int vert_shader =
-        create_shader(shaders_path / "shader.vs", GL_VERTEX_SHADER);
-    unsigned int frag_shader =
-        create_shader(shaders_path / "shader.fs", GL_FRAGMENT_SHADER);
-    unsigned int program = create_program(vert_shader, frag_shader);
+    unsigned int phong_shader = create_program(ProgramSources{
+        .vert = shaders_path / "shader.vs",
+        .frag = shaders_path / "shader.fs",
+    });
 
-    glDeleteShader(vert_shader);
-    glDeleteShader(frag_shader);
+    auto phong_uniforms = *parse_uniforms(phong_shader);
 
-    unsigned int vao;
-    glCreateVertexArrays(1, &vao);
+    unsigned int vao_entities;
+    glCreateVertexArrays(1, &vao_entities);
 
-    glEnableVertexArrayAttrib(vao, attrib_positions);
-    glEnableVertexArrayAttrib(vao, attrib_normals);
+    glEnableVertexArrayAttrib(vao_entities, attrib_positions);
+    glEnableVertexArrayAttrib(vao_entities, attrib_normals);
 
-    glVertexArrayAttribFormat(vao, attrib_positions, 3, GL_FLOAT, false, 0);
-    glVertexArrayAttribBinding(vao, attrib_positions, binding_positions);
+    glVertexArrayAttribFormat(vao_entities, attrib_positions, 3, GL_FLOAT,
+                              false, 0);
+    glVertexArrayAttribBinding(vao_entities, attrib_positions,
+                               binding_positions);
 
-    glVertexArrayAttribFormat(vao, attrib_normals, 3, GL_FLOAT, false, 0);
-    glVertexArrayAttribBinding(vao, attrib_normals, binding_normals);
+    glVertexArrayAttribFormat(vao_entities, attrib_normals, 3, GL_FLOAT, false,
+                              0);
+    glVertexArrayAttribBinding(vao_entities, attrib_normals, binding_normals);
 
     vector<RenderData> render_queue;
 
     auto mesh =
         std::make_shared<Mesh>(Mesh::from_gtlf(models_path / "duck.glb")[0]);
 
-    Entity duck1{Transform{vec3{2, 0, 1}, vec3{0.01f}}, mesh};
+    Entity duck1{.flags = Entity::Flags::casts_shadow,
+                 .transform = Transform{vec3{2, 0, 1}, vec3{0.01f}},
+                 .mesh = mesh};
+
+    auto duck2 = duck1;
     duck1.transform.set_euler_angles(radians(60.f), radians(20.f),
                                      radians(90.f));
+    duck2.transform.position = vec3{3, 3, 1};
 
-    Entity duck2{Transform{vec3{3, 3, 1}, vec3{0.01f}}, mesh};
+    auto plane = Entity{.transform = Transform{},
+                        .mesh = std::make_shared<Mesh>(
+
+                            Mesh::from_gtlf(models_path / "plane.gltf")[0])};
+
+    plane.transform.scale = vec3{20.f};
+    plane.flags = Entity::Flags::casts_shadow;
+
+    render_queue.push_back(register_entity(Entity{
+        .flags = Entity::Flags::casts_shadow,
+        .transform = Transform{vec3{0.f, 0.5f, 0.f}, vec3{0.5f}},
+        .mesh = std::make_shared<Mesh>(
+            Mesh::from_gtlf(models_path / "cube.gltf")[0]),
+    }));
 
     render_queue.push_back(register_entity(duck1));
     render_queue.push_back(register_entity(duck2));
+    render_queue.push_back(register_entity(plane));
 
     glClearColor(0.f, 0.f, 0.f, 1.0f);
 
-    Uniform uniform_mvp, uniform_normal_mat, uniform_model_view,
-        uniform_light_pos;
-
-    if (auto uniform_map = parse_uniforms(program))
-    {
-        try
-        {
-            uniform_mvp = uniform_map->at("u_mvp");
-            uniform_normal_mat = uniform_map->at("u_normal_mat");
-            uniform_model_view = uniform_map->at("u_model_view");
-            uniform_light_pos = uniform_map->at("u_light_pos");
-        }
-        catch (std::exception e)
-        {
-            std::cerr << "Missing uniform in shader" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-    }
-    else
-    {
-        std::cerr << "No uniforms in shader" << std::endl;
-        exit(EXIT_FAILURE);
-    }
-
     double last_time = glfwGetTime();
-
-    mat4 model = glm::scale(mat4{1}, vec3{0.01f});
 
     vec2 cursor_pos = get_cursor_position(window);
 
-    const vec4 light_pos = vec4{10, 10, 10, 1};
+    const vec4 light_pos = vec4{3, 5, -3, 1};
+    Entity light{.transform = Transform{},
+                 .mesh = std::make_shared<Mesh>(
+                     Mesh::from_gtlf(models_path / "sphere.glb")[0])};
+    light.transform.position = light_pos;
+
+    render_queue.push_back(register_entity(light));
 
     const path skybox_path = textures_path / "skybox-1";
 
@@ -568,12 +595,53 @@ int main()
     if (!skybox_texture.has_value())
         return EXIT_FAILURE;
 
-    auto skybox_shader =
-        create_program(shaders_path / "skybox.vs", shaders_path / "skybox.fs");
+    auto skybox_shader = create_program(ProgramSources{
+        .vert = shaders_path / "skybox.vs",
+        .frag = shaders_path / "skybox.fs",
+    });
 
     auto skybox_uniforms = *parse_uniforms(skybox_shader);
 
-    auto skybox_vao = init_skybox();
+    auto vao_skybox = init_skybox();
+
+    // Shadow mapping setup.
+
+    // Depth texture rendered from light perspective.
+    unsigned int shadow_texture;
+    const unsigned int shadow_texture_width = 1024,
+                       shadow_texture_height = 1024;
+    glCreateTextures(GL_TEXTURE_2D, 1, &shadow_texture);
+
+    glTextureParameteri(shadow_texture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTextureParameteri(shadow_texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTextureParameteri(shadow_texture, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(shadow_texture, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    // Areas beyond the coverage of the shadow map are in light.
+    vec4 border_color{1.f, 1.f, 1.f, 1.f};
+    glTextureParameterfv(shadow_texture, GL_TEXTURE_BORDER_COLOR,
+                         value_ptr(border_color));
+
+    // TODO: internal format.
+    glTextureStorage2D(shadow_texture, 1, GL_DEPTH_COMPONENT24,
+                       shadow_texture_width, shadow_texture_height);
+    glTextureSubImage2D(shadow_texture, 0, 0, 0, shadow_texture_width,
+                        shadow_texture_height, GL_DEPTH_COMPONENT, GL_FLOAT,
+                        nullptr);
+
+    unsigned int shadow_fbo;
+    glCreateFramebuffers(1, &shadow_fbo);
+    glNamedFramebufferTexture(shadow_fbo, GL_DEPTH_ATTACHMENT, shadow_texture,
+                              0);
+    // We only care about the depth test.
+    glNamedFramebufferDrawBuffer(shadow_fbo, GL_NONE);
+    glNamedFramebufferReadBuffer(shadow_fbo, GL_NONE);
+
+    auto shadow_shader = create_program(ProgramSources{
+        .vert = shaders_path / "shadow_map.vs",
+    });
+
+    auto shadow_uniforms = *parse_uniforms(shadow_shader);
 
     // Enable profiling.
     TracyGpuContext;
@@ -581,8 +649,6 @@ int main()
     while (!glfwWindowShouldClose(window))
     {
         TracyGpuZone("Render");
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Timestep.
         float time = glfwGetTime();
@@ -603,7 +669,7 @@ int main()
 
         cursor_pos = new_cursor_pos;
 
-        const mat4 persp =
+        const mat4 proj =
             glm::perspective(glm::radians(90.f),
                              static_cast<float>(window_width) /
                                  static_cast<float>(window_height),
@@ -611,37 +677,89 @@ int main()
 
         const mat4 view = camera.get_view();
 
+        const mat4 light_transform =
+            ortho(-10.f, 10.f, -10.f, 10.f, 1.f, 17.5f) *
+            lookAt(vec3{light_pos}, vec3{0.f}, vec3{0.f, 1.f, 0.f});
+
+        // Shadow mapping pass.
+        {
+            TracyGpuZone("Shadow mapping");
+
+            glCullFace(GL_FRONT);
+
+            glViewport(0, 0, shadow_texture_width, shadow_texture_height);
+            glBindFramebuffer(GL_FRAMEBUFFER, shadow_fbo);
+            glClear(GL_DEPTH_BUFFER_BIT);
+
+            // Directional light.
+
+            glUseProgram(shadow_shader);
+            set_uniform(shadow_shader, shadow_uniforms.at("u_light_transform"),
+                        light_transform);
+
+            glBindVertexArray(vao_entities);
+
+            for (auto &r : render_queue)
+            {
+                if (r.flags & Entity::casts_shadow)
+                {
+                    set_uniform(shadow_shader, shadow_uniforms["u_model"],
+                                r.model);
+                    render(vao_entities, r);
+                }
+            }
+
+            glCullFace(GL_BACK);
+        }
+
         // Render entities.
         {
-            glUseProgram(program);
-            set_uniform(program, uniform_model_view, view * model);
-            set_uniform(program, uniform_light_pos,
+            TracyGpuZone("Entities");
+
+            glViewport(0, 0, window_width, window_height);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            glUseProgram(phong_shader);
+
+            set_uniform(phong_shader, phong_uniforms["u_light_pos"],
                         vec3(view * vec4(light_pos)));
 
-            glBindVertexArray(vao);
+            set_uniform(phong_shader, phong_uniforms.at("u_light_transform"),
+                        light_transform);
+
+            glBindVertexArray(vao_entities);
 
             for (auto &r : render_queue)
             {
                 const auto model_view = view * r.model;
-                const auto mvp = persp * model_view;
-                set_uniform(program, uniform_mvp, mvp);
-                set_uniform(program, uniform_normal_mat,
+                const auto mvp = proj * model_view;
+
+                glBindTextureUnit(0, shadow_texture);
+
+                set_uniform(phong_shader, phong_uniforms["u_model"], r.model);
+                set_uniform(phong_shader, phong_uniforms["u_model_view"],
+                            model_view);
+                set_uniform(phong_shader, phong_uniforms["u_mvp"], mvp);
+                set_uniform(phong_shader, phong_uniforms["u_normal_mat"],
                             glm::inverseTranspose(mat3{model_view}));
 
-                render(vao, r);
+                render(vao_entities, r);
             }
         }
 
         // Render skybox.
         {
+            TracyGpuZone("Skybox");
+
             glUseProgram(skybox_shader);
             glBindTextureUnit(0, *skybox_texture);
 
-            set_uniform(skybox_shader, skybox_uniforms["u_projection"], persp);
+            set_uniform(skybox_shader, skybox_uniforms["u_projection"], proj);
             set_uniform(skybox_shader, skybox_uniforms["u_view"],
                         mat4(mat3(view)));
 
-            render_skybox(skybox_vao);
+            render_skybox(vao_skybox);
         }
 
         glfwSwapBuffers(window);
@@ -655,8 +773,8 @@ int main()
     for (auto &r : render_queue)
         glDeleteBuffers(1, &r.buffer);
 
-    glDeleteVertexArrays(1, &vao);
-    glDeleteProgram(program);
+    glDeleteVertexArrays(1, &vao_entities);
+    glDeleteProgram(phong_shader);
 
     glfwTerminate();
 
