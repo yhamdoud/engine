@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "model.hpp"
+#include "shader.hpp"
 #include "transform.hpp"
 
 namespace engine
@@ -19,6 +20,7 @@ struct Entity
     Flags flags = Flags::none;
     Transform transform;
     std::shared_ptr<Mesh> mesh;
+    std::shared_ptr<Shader> shader;
 };
 
 } // namespace engine

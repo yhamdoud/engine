@@ -86,10 +86,9 @@ void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
               << std::endl;
 }
 
-Renderer::Renderer(Shader shader, Shader shadow, Shader skybox,
-                   unsigned int skybox_texture)
-    : phong{shader}, shadow_shader{shadow}, skybox_shader{skybox},
-      texture_skybox{skybox_texture}
+Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
+    : shadow_shader{shadow}, skybox_shader{skybox}, texture_skybox{
+                                                        skybox_texture}
 {
     // Enable error callback.
     glEnable(GL_DEBUG_OUTPUT);
@@ -213,6 +212,7 @@ void Renderer::register_entity(const Entity &e)
         primitive_count,
         size_indices,
         size_indices + size_positions,
+        *e.shader,
     });
 }
 
@@ -281,24 +281,30 @@ void Renderer::render()
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glUseProgram(phong.get_id());
-
-        phong.set("u_light_pos", vec3(view * vec4(light.position, 1)));
-        phong.set("u_light_transform", light_transform);
-
         glBindVertexArray(vao_entities);
+
+        uint cur_shader_id;
 
         for (auto &r : queue)
         {
+            if (auto shader_id = r.shader.get_id(); cur_shader_id != shader_id)
+            {
+                glUseProgram(shader_id);
+                cur_shader_id = shader_id;
+            }
+
             const auto model_view = view * r.model;
             const auto mvp = proj * model_view;
 
             glBindTextureUnit(0, texture_shadow);
 
-            phong.set("u_model", r.model);
-            phong.set("u_model_view", model_view);
-            phong.set("u_mvp", mvp);
-            phong.set("u_normal_mat", inverseTranspose(mat3{model_view}));
+            r.shader.set("u_light_pos", vec3(view * vec4(light.position, 1)));
+            r.shader.set("u_light_transform", light_transform);
+
+            r.shader.set("u_model", r.model);
+            r.shader.set("u_model_view", model_view);
+            r.shader.set("u_mvp", mvp);
+            r.shader.set("u_normal_mat", inverseTranspose(mat3{model_view}));
 
             render_data(vao_entities, r);
         }

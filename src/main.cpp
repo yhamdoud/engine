@@ -145,11 +145,6 @@ int main()
         return EXIT_FAILURE;
     }
 
-    auto phong_shader = *Shader::from_paths(ShaderPaths{
-        .vert = shaders_path / "shader.vs",
-        .frag = shaders_path / "shader.fs",
-    });
-
     auto skybox_shader = *Shader::from_paths(ShaderPaths{
         .vert = shaders_path / "skybox.vs",
         .frag = shaders_path / "skybox.fs",
@@ -167,28 +162,39 @@ int main()
     if (skybox_texture == invalid_texture_id)
         return EXIT_FAILURE;
 
-    Renderer renderer{phong_shader, shadow_shader, skybox_shader,
-                      skybox_texture};
+    Renderer renderer{shadow_shader, skybox_shader, skybox_texture};
     glfwSetWindowUserPointer(window, &renderer);
 
-    auto mesh =
-        std::make_shared<Mesh>(Mesh::from_gtlf(models_path / "duck.glb")[0]);
+    auto blinn_shader =
+        std::make_shared<Shader>(*Shader::from_paths(ShaderPaths{
+            .vert = shaders_path / "shader.vs",
+            .frag = shaders_path / "blinn.fs",
+        }));
 
-    Entity duck1{
-        .flags = Entity::Flags::casts_shadow,
-        .transform = Transform{vec3{2, 0, 1}, vec3{0.01f}},
-        .mesh = mesh,
-    };
+    auto toon_shader = std::make_shared<Shader>(*Shader::from_paths(ShaderPaths{
+        .vert = shaders_path / "shader.vs",
+        .frag = shaders_path / "toon.fs",
+    }));
+
+    Entity duck1{.flags = Entity::Flags::casts_shadow,
+                 .transform = Transform{vec3{2, 0, 1}, vec3{0.01f}},
+                 .mesh = std::make_shared<Mesh>(
+                     Mesh::from_gtlf(models_path / "duck.glb")[0]),
+                 .shader = blinn_shader};
 
     auto duck2 = duck1;
     duck1.transform.set_euler_angles(radians(60.f), radians(20.f),
                                      radians(90.f));
-    duck2.transform.position = vec3{3, 3, 1};
 
-    auto plane = Entity{.transform = Transform{},
-                        .mesh = std::make_shared<Mesh>(
+    duck2.transform.position = vec3{3.f, 3.f, 1.f};
+    duck2.shader = toon_shader;
 
-                            Mesh::from_gtlf(models_path / "plane.gltf")[0])};
+    auto plane = Entity{
+        .transform = Transform{},
+        .mesh = std::make_shared<Mesh>(
+            Mesh::from_gtlf(models_path / "plane.gltf")[0]),
+        .shader = blinn_shader,
+    };
 
     plane.transform.scale = vec3{20.f};
     plane.flags = Entity::Flags::casts_shadow;

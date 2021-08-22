@@ -20,7 +20,7 @@ struct RenderData
     int primitive_count;
     int positions_offset;
     int normals_offset;
-    uint shader;
+    Shader &shader;
 };
 
 struct Light
@@ -38,8 +38,6 @@ class Renderer
     unsigned int vao_entities;
     unsigned int vao_skybox;
 
-    Shader phong;
-
     Shader shadow_shader;
     glm::ivec2 shadow_map_size{1024, 1024};
     unsigned int texture_shadow;
@@ -52,8 +50,7 @@ class Renderer
     glm::ivec2 viewport_size{1280, 720};
     Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
 
-    Renderer(Shader shader, Shader shadow, Shader skybox,
-             unsigned int skybox_texture);
+    Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture);
     ~Renderer();
 
     void register_entity(const Entity &e);
