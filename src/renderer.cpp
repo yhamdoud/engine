@@ -86,9 +86,9 @@ void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
               << std::endl;
 }
 
-Renderer::Renderer(unsigned int shader, unsigned int shadow,
-                   unsigned int skybox, unsigned int skybox_texture)
-    : shader_phong{shader}, shader_shadow{shadow}, shader_skybox{skybox},
+Renderer::Renderer(Shader shader, Shader shadow, Shader skybox,
+                   unsigned int skybox_texture)
+    : phong{shader}, shadow_shader{shadow}, skybox_shader{skybox},
       texture_skybox{skybox_texture}
 {
     // Enable error callback.
@@ -105,8 +105,6 @@ Renderer::Renderer(unsigned int shader, unsigned int shadow,
 
     // Entity stuff.
     {
-        phong_uniforms = *parse_uniforms(shader_phong);
-
         glCreateVertexArrays(1, &vao_entities);
 
         glEnableVertexArrayAttrib(vao_entities, attrib_positions);
@@ -125,7 +123,6 @@ Renderer::Renderer(unsigned int shader, unsigned int shadow,
 
     // Skybox stuff.
     {
-        skybox_uniforms = *parse_uniforms(skybox);
         unsigned int buffer;
         glCreateBuffers(1, &buffer);
 
@@ -171,8 +168,6 @@ Renderer::Renderer(unsigned int shader, unsigned int shadow,
     // We only care about the depth test.
     glNamedFramebufferDrawBuffer(fbo_shadow, GL_NONE);
     glNamedFramebufferReadBuffer(fbo_shadow, GL_NONE);
-
-    shadow_uniforms = *parse_uniforms(shadow);
 }
 
 Renderer::~Renderer()
@@ -181,7 +176,6 @@ Renderer::~Renderer()
         glDeleteBuffers(1, &r.buffer);
 
     glDeleteVertexArrays(1, &vao_entities);
-    glDeleteProgram(shader_phong);
 }
 
 void Renderer::register_entity(const Entity &e)
@@ -262,9 +256,8 @@ void Renderer::render()
 
         // Directional light.
 
-        glUseProgram(shader_shadow);
-        set_uniform(shader_shadow, shadow_uniforms.at("u_light_transform"),
-                    light_transform);
+        glUseProgram(shadow_shader.get_id());
+        shadow_shader.set("u_light_transform", light_transform);
 
         glBindVertexArray(vao_entities);
 
@@ -272,7 +265,7 @@ void Renderer::render()
         {
             if (r.flags & Entity::casts_shadow)
             {
-                set_uniform(shader_shadow, shadow_uniforms["u_model"], r.model);
+                shadow_shader.set("u_model", r.model);
                 render_data(vao_entities, r);
             }
         }
@@ -288,13 +281,10 @@ void Renderer::render()
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glUseProgram(shader_phong);
+        glUseProgram(phong.get_id());
 
-        set_uniform(shader_phong, phong_uniforms["u_light_pos"],
-                    vec3(view * vec4(light.position, 1)));
-
-        set_uniform(shader_phong, phong_uniforms.at("u_light_transform"),
-                    light_transform);
+        phong.set("u_light_pos", vec3(view * vec4(light.position, 1)));
+        phong.set("u_light_transform", light_transform);
 
         glBindVertexArray(vao_entities);
 
@@ -305,12 +295,10 @@ void Renderer::render()
 
             glBindTextureUnit(0, texture_shadow);
 
-            set_uniform(shader_phong, phong_uniforms["u_model"], r.model);
-            set_uniform(shader_phong, phong_uniforms["u_model_view"],
-                        model_view);
-            set_uniform(shader_phong, phong_uniforms["u_mvp"], mvp);
-            set_uniform(shader_phong, phong_uniforms["u_normal_mat"],
-                        inverseTranspose(mat3{model_view}));
+            phong.set("u_model", r.model);
+            phong.set("u_model_view", model_view);
+            phong.set("u_mvp", mvp);
+            phong.set("u_normal_mat", inverseTranspose(mat3{model_view}));
 
             render_data(vao_entities, r);
         }
@@ -320,11 +308,11 @@ void Renderer::render()
     {
         TracyGpuZone("Skybox");
 
-        glUseProgram(shader_skybox);
+        glUseProgram(skybox_shader.get_id());
         glBindTextureUnit(0, texture_skybox);
 
-        set_uniform(shader_skybox, skybox_uniforms["u_projection"], proj);
-        set_uniform(shader_skybox, skybox_uniforms["u_view"], mat4(mat3(view)));
+        skybox_shader.set("u_projection", proj);
+        skybox_shader.set("u_view", mat4(mat3(view)));
 
         glBindVertexArray(vao_skybox);
         glDrawArrays(GL_TRIANGLES, 0, 36);

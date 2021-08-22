@@ -19,6 +19,7 @@
 
 #include "constants.hpp"
 #include "entity.hpp"
+#include "error.hpp"
 #include "model.hpp"
 #include "renderer.hpp"
 #include "shader.hpp"
@@ -90,12 +91,6 @@ vec2 get_cursor_position(GLFWwindow *window)
     return {x, y};
 }
 
-enum class Error
-{
-    glfw_initialization,
-    window_creation,
-};
-
 variant<GLFWwindow *, Error> init_glfw()
 {
     glfwSetErrorCallback(glfw_error_callback);
@@ -150,19 +145,18 @@ int main()
         return EXIT_FAILURE;
     }
 
-    auto phong_shader = create_program(ProgramSources{
+    auto phong_shader = *Shader::from_paths(ShaderPaths{
         .vert = shaders_path / "shader.vs",
         .frag = shaders_path / "shader.fs",
     });
 
-    auto skybox_shader = create_program(ProgramSources{
+    auto skybox_shader = *Shader::from_paths(ShaderPaths{
         .vert = shaders_path / "skybox.vs",
         .frag = shaders_path / "skybox.fs",
     });
 
-    auto shadow_shader = create_program(ProgramSources{
-        .vert = shaders_path / "shadow_map.vs",
-    });
+    auto shadow_shader = *Shader::from_paths(
+        ShaderPaths{.vert = shaders_path / "shadow_map.vs"});
 
     const path skybox_path = textures_path / "skybox-1";
     auto skybox_texture =
@@ -180,9 +174,11 @@ int main()
     auto mesh =
         std::make_shared<Mesh>(Mesh::from_gtlf(models_path / "duck.glb")[0]);
 
-    Entity duck1{.flags = Entity::Flags::casts_shadow,
-                 .transform = Transform{vec3{2, 0, 1}, vec3{0.01f}},
-                 .mesh = mesh};
+    Entity duck1{
+        .flags = Entity::Flags::casts_shadow,
+        .transform = Transform{vec3{2, 0, 1}, vec3{0.01f}},
+        .mesh = mesh,
+    };
 
     auto duck2 = duck1;
     duck1.transform.set_euler_angles(radians(60.f), radians(20.f),
@@ -196,13 +192,6 @@ int main()
 
     plane.transform.scale = vec3{20.f};
     plane.flags = Entity::Flags::casts_shadow;
-
-    renderer.register_entity(Entity{
-        .flags = Entity::Flags::casts_shadow,
-        .transform = Transform{vec3{0.f, 0.5f, 0.f}, vec3{0.5f}},
-        .mesh = std::make_shared<Mesh>(
-            Mesh::from_gtlf(models_path / "cube.gltf")[0]),
-    });
 
     renderer.register_entity(duck1);
     renderer.register_entity(duck2);

@@ -20,6 +20,7 @@ struct RenderData
     int primitive_count;
     int positions_offset;
     int normals_offset;
+    uint shader;
 };
 
 struct Light
@@ -35,26 +36,24 @@ class Renderer
 
     // FIXME:
     unsigned int vao_entities;
-    unsigned int shader_phong;
-    std::unordered_map<std::string, Uniform> phong_uniforms;
-
-    glm::ivec2 shadow_map_size{1024, 1024};
-    unsigned int fbo_shadow;
-    unsigned int texture_shadow;
-    unsigned int shader_shadow;
-    std::unordered_map<std::string, Uniform> shadow_uniforms;
-
     unsigned int vao_skybox;
-    unsigned int shader_skybox;
+
+    Shader phong;
+
+    Shader shadow_shader;
+    glm::ivec2 shadow_map_size{1024, 1024};
+    unsigned int texture_shadow;
+    unsigned int fbo_shadow;
+
+    Shader skybox_shader;
     unsigned int texture_skybox;
-    std::unordered_map<std::string, Uniform> skybox_uniforms;
 
   public:
     glm::ivec2 viewport_size{1280, 720};
     Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
 
-    Renderer(unsigned int shader, unsigned int shadow, unsigned int skybox,
-             unsigned int shadow_texture);
+    Renderer(Shader shader, Shader shadow, Shader skybox,
+             unsigned int skybox_texture);
     ~Renderer();
 
     void register_entity(const Entity &e);

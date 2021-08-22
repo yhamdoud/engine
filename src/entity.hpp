@@ -21,8 +21,4 @@ struct Entity
     std::shared_ptr<Mesh> mesh;
 };
 
-// constexpr Entity::Flags operator|(Entity::Flags a, Entity::Flags b);
-
-// constexpr Entity::Flags operator&=(Entity::Flags &a, Entity::Flags b);
-
 } // namespace engine

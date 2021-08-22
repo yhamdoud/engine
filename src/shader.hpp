@@ -1,4 +1,4 @@
-#pragma once;
+#pragma once
 
 #include <filesystem>
 #include <memory>
@@ -10,33 +10,38 @@
 
 #include <glm/glm.hpp>
 
-struct Uniform {
+struct Uniform
+{
     int location;
     int count;
 };
 
-void set_uniform(unsigned int program, Uniform uniform, const glm::mat4 &value);
-
-void set_uniform(unsigned int program, Uniform uniform, const glm::mat3 &value);
-
-void set_uniform(unsigned int program, Uniform uniform, const glm::vec3 &value);
-
-struct ProgramSources {
+struct ShaderPaths
+{
     std::filesystem::path vert;
     std::filesystem::path geom;
     std::filesystem::path frag;
 };
 
-std::optional<std::unordered_map<std::string, Uniform>>
-parse_uniforms(unsigned int program);
+using UniformMap = std::unordered_map<std::string, Uniform>;
 
-unsigned int create_shader(const std::string &source, GLenum type);
+class Shader
+{
+    uint id;
+    UniformMap uniforms;
+    static UniformMap parse_uniforms(uint program);
+    static uint compile_shader_stage(const std::string &source, GLenum stage);
 
-unsigned int create_shader(const std::filesystem::path &path, GLenum type);
+  public:
+    Shader(uint program, UniformMap uniforms);
+    static std::optional<Shader> from_paths(const ShaderPaths &p);
+    static std::optional<Shader> from_stages(uint vert, uint geom, uint frag);
 
-unsigned int create_program(unsigned int vert, unsigned int geom,
-                            unsigned int frag);
+    uint get_id() const;
 
-unsigned int create_program(const ProgramSources &srcs);
+    void set(const std::string &name, const glm::mat4 &value);
+    void set(const std::string &name, const glm::mat3 &value);
+    void set(const std::string &name, const glm::vec3 &value);
+};
 
 GLuint upload_cube_map(const std::array<std::filesystem::path, 6> &paths);

@@ -7,6 +7,7 @@
 #include <iostream>
 #include <optional>
 #include <string_view>
+#include <utility>
 #include <variant>
 
 #include <glad/glad.h>
@@ -28,10 +29,9 @@ using std::filesystem::path;
 
 using namespace engine;
 
-unsigned int create_shader(const string &source, GLenum type)
+uint Shader::compile_shader_stage(const string &source, GLenum stage)
 {
-
-    unsigned int shader = glCreateShader(type);
+    unsigned int shader = glCreateShader(stage);
 
     auto c_str = source.c_str();
     glShaderSource(shader, 1, &c_str, nullptr);
@@ -46,24 +46,71 @@ unsigned int create_shader(const string &source, GLenum type)
         auto log = std::make_unique<char[]>(length);
         glGetShaderInfoLog(shader, length, nullptr, log.get());
         std::cerr << "Shader failure: " << log << std::endl;
+        return invalid_shader_id;
     }
 
     return shader;
 }
 
-unsigned int create_shader(const path &path, GLenum type)
+optional<Shader> Shader::from_paths(const ShaderPaths &p)
 {
-    if (!std::filesystem::exists(path))
+    uint vert, geom, frag;
+
+    if (std::filesystem::exists(p.vert))
     {
-        std::cerr << "Shader not found: " << path << std::endl;
-        return 0;
+        vert = compile_shader_stage(utils::from_file(p.vert), GL_VERTEX_SHADER);
+        if (vert == invalid_shader_id)
+            return std::nullopt;
+    }
+    else
+    {
+        std::cerr << "Vertex shader not found at path: " << p.vert << std::endl;
+        return std::nullopt;
     }
 
-    return create_shader(utils::from_file(path), type);
+    if (!p.geom.empty())
+    {
+        if (std::filesystem::exists(p.geom))
+        {
+            geom = compile_shader_stage(utils::from_file(p.geom),
+                                        GL_GEOMETRY_SHADER);
+            if (geom == invalid_shader_id)
+                return std::nullopt;
+        }
+        else
+        {
+            std::cerr << "Geometry shader not found at path: " << p.geom
+                      << std::endl;
+            return std::nullopt;
+        }
+    }
+
+    if (!p.frag.empty())
+    {
+        if (std::filesystem::exists(p.frag))
+        {
+            frag = compile_shader_stage(utils::from_file(p.frag),
+                                        GL_FRAGMENT_SHADER);
+            if (frag == invalid_shader_id)
+                return std::nullopt;
+        }
+        else
+        {
+            std::cerr << "Fragment shader not found at path: " << p.geom
+                      << std::endl;
+            return std::nullopt;
+        }
+    }
+
+    return Shader::from_stages(vert, geom, frag);
 }
 
-unsigned int create_program(unsigned int vert, unsigned int geom,
-                            unsigned int frag)
+Shader::Shader(uint id, UniformMap uniforms)
+    : id{id}, uniforms{std::move(uniforms)}
+{
+}
+
+optional<Shader> Shader::from_stages(uint vert, uint geom, uint frag)
 {
     unsigned int program = glCreateProgram();
 
@@ -86,58 +133,54 @@ unsigned int create_program(unsigned int vert, unsigned int geom,
         auto log = std::make_unique<char[]>(length);
         glGetProgramInfoLog(program, length, nullptr, log.get());
         std::cerr << "Shader program failure: " << log << std::endl;
+        return std::nullopt;
     }
 
-    return program;
-}
-
-unsigned int create_program(const ProgramSources &srcs)
-{
-    auto vert = create_shader(srcs.vert, GL_VERTEX_SHADER);
-    auto geom =
-        !srcs.geom.empty() ? create_shader(srcs.geom, GL_GEOMETRY_SHADER) : 0;
-    auto frag =
-        !srcs.frag.empty() ? create_shader(srcs.frag, GL_FRAGMENT_SHADER) : 0;
-
-    return create_program(vert, geom, frag);
+    auto uniforms = parse_uniforms(program);
 
     glDeleteShader(vert);
     glDeleteShader(geom);
     glDeleteShader(frag);
+
+    return std::make_optional<Shader>(Shader{program, uniforms});
 }
 
-void set_uniform(unsigned int program, Uniform uniform, const glm::mat4 &value)
+void Shader::set(const std::string &name, const glm::mat4 &value)
 {
-    glProgramUniformMatrix4fv(program, uniform.location, uniform.count, false,
+    auto uniform = uniforms.at(name);
+    glProgramUniformMatrix4fv(id, uniform.location, uniform.count, false,
                               glm::value_ptr(value));
 }
 
-void set_uniform(unsigned int program, Uniform uniform, const glm::mat3 &value)
+void Shader::set(const std::string &name, const glm::mat3 &value)
 {
-    glProgramUniformMatrix3fv(program, uniform.location, uniform.count, false,
+    auto uniform = uniforms.at(name);
+    glProgramUniformMatrix3fv(id, uniform.location, uniform.count, false,
                               glm::value_ptr(value));
 }
 
-void set_uniform(unsigned int program, Uniform uniform, const glm::vec3 &value)
+void Shader::set(const std::string &name, const glm::vec3 &value)
 {
-    glProgramUniform3fv(program, uniform.location, uniform.count,
+    auto uniform = uniforms.at(name);
+    glProgramUniform3fv(id, uniform.location, uniform.count,
                         glm::value_ptr(value));
 }
+uint Shader::get_id() const { return id; }
 
-optional<unordered_map<string, Uniform>> parse_uniforms(unsigned int program)
+UniformMap Shader::parse_uniforms(uint program)
 {
     int count;
     glGetProgramiv(program, GL_ACTIVE_UNIFORMS, &count);
 
     if (count == 0)
-        return std::nullopt;
+        return UniformMap{};
 
     int max_length;
     glGetProgramiv(program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &max_length);
 
     auto name = std::make_unique<char[]>(max_length);
 
-    unordered_map<string, Uniform> name_uniform_map(count);
+    UniformMap uniforms(count);
 
     int length, size;
     GLenum type;
@@ -148,11 +191,10 @@ optional<unordered_map<string, Uniform>> parse_uniforms(unsigned int program)
                            &name[0]);
 
         Uniform uniform{glGetUniformLocation(program, name.get()), size};
-        name_uniform_map.emplace(
-            std::make_pair(string(name.get(), length), uniform));
+        uniforms.emplace(std::make_pair(string(name.get(), length), uniform));
     }
 
-    return std::make_optional(name_uniform_map);
+    return uniforms;
 }
 
 GLuint upload_cube_map(const std::array<path, 6> &paths)
