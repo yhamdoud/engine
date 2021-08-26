@@ -54,7 +54,8 @@ uint Shader::compile_shader_stage(const string &source, GLenum stage)
 
 optional<Shader> Shader::from_paths(const ShaderPaths &p)
 {
-    uint vert, geom, frag;
+    uint vert = invalid_shader_id, geom = invalid_shader_id,
+         frag = invalid_shader_id;
 
     if (std::filesystem::exists(p.vert))
     {

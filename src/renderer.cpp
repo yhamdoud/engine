@@ -9,6 +9,8 @@
 #include <Tracy.hpp>
 #include <TracyOpenGL.hpp>
 
+#include <glm/gtx/string_cast.hpp>
+
 using namespace glm;
 using std::string;
 
@@ -171,23 +173,22 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
 
 Renderer::~Renderer()
 {
-    for (auto &r : queue)
-        glDeleteBuffers(1, &r.buffer);
+    // TODO: clean up mesh instances.
 
     glDeleteVertexArrays(1, &vao_entities);
 }
 
-void Renderer::register_entity(const Entity &e)
+size_t Renderer::register_mesh(const Mesh &mesh)
 {
     unsigned int buffer;
     glCreateBuffers(1, &buffer);
 
-    int primitive_count = e.mesh->indices.size();
+    int primitive_count = mesh.indices.size();
 
-    int size_indices = e.mesh->indices.size() * sizeof(uint32_t);
-    int size_positions = e.mesh->positions.size() * sizeof(vec3);
-    int size_normals = e.mesh->normals.size() * sizeof(vec3);
-    int size_tex_coords = e.mesh->tex_coords.size() * sizeof(vec2);
+    int size_indices = mesh.indices.size() * sizeof(uint32_t);
+    int size_positions = mesh.positions.size() * sizeof(vec3);
+    int size_normals = mesh.normals.size() * sizeof(vec3);
+    int size_tex_coords = mesh.tex_coords.size() * sizeof(vec2);
 
     // TODO: Investigate if interleaved storage is more efficient than
     // sequential storage for vertex data.
@@ -195,42 +196,37 @@ void Renderer::register_entity(const Entity &e)
                          nullptr, GL_DYNAMIC_STORAGE_BIT);
 
     int offset = 0;
-    glNamedBufferSubData(buffer, offset, size_indices, e.mesh->indices.data());
+    glNamedBufferSubData(buffer, offset, size_indices, mesh.indices.data());
     offset += size_indices;
-    glNamedBufferSubData(buffer, offset, size_positions,
-                         e.mesh->positions.data());
+    glNamedBufferSubData(buffer, offset, size_positions, mesh.positions.data());
     offset += size_positions;
-    glNamedBufferSubData(buffer, offset, size_normals, e.mesh->normals.data());
+    glNamedBufferSubData(buffer, offset, size_normals, mesh.normals.data());
     offset += size_normals;
 
-    mat4 model = e.transform.get_model();
-
-    queue.push_back(RenderData{
-        e.flags,
+    mesh_instances.emplace_back(MeshInstance{
         buffer,
-        model,
         primitive_count,
         size_indices,
         size_indices + size_positions,
-        *e.shader,
     });
+
+    return mesh_instances.size() - 1;
 }
 
-void Renderer::render_data(unsigned int vao, RenderData data)
+void Renderer::render_mesh_instance(unsigned int vao, const MeshInstance &m)
 {
     ZoneScoped;
 
-    glVertexArrayElementBuffer(vao, data.buffer);
-    glVertexArrayVertexBuffer(vao, binding_positions, data.buffer,
-                              data.positions_offset, sizeof(vec3));
-    glVertexArrayVertexBuffer(vao, binding_normals, data.buffer,
-                              data.normals_offset, sizeof(vec3));
+    glVertexArrayElementBuffer(vao, m.buffer_id);
+    glVertexArrayVertexBuffer(vao, binding_positions, m.buffer_id,
+                              m.positions_offset, sizeof(vec3));
+    glVertexArrayVertexBuffer(vao, binding_normals, m.buffer_id,
+                              m.normals_offset, sizeof(vec3));
 
-    glDrawElements(GL_TRIANGLES, data.primitive_count, GL_UNSIGNED_INT,
-                   nullptr);
+    glDrawElements(GL_TRIANGLES, m.primitive_count, GL_UNSIGNED_INT, nullptr);
 }
 
-void Renderer::render()
+void Renderer::render(std::vector<RenderData> &queue)
 {
 
     const mat4 proj = perspective(radians(90.f),
@@ -266,7 +262,8 @@ void Renderer::render()
             if (r.flags & Entity::casts_shadow)
             {
                 shadow_shader.set("u_model", r.model);
-                render_data(vao_entities, r);
+                render_mesh_instance(vao_entities,
+                                     mesh_instances[r.mesh_index]);
             }
         }
 
@@ -283,7 +280,7 @@ void Renderer::render()
 
         glBindVertexArray(vao_entities);
 
-        uint cur_shader_id;
+        uint cur_shader_id = invalid_shader_id;
 
         for (auto &r : queue)
         {
@@ -306,7 +303,7 @@ void Renderer::render()
             r.shader.set("u_mvp", mvp);
             r.shader.set("u_normal_mat", inverseTranspose(mat3{model_view}));
 
-            render_data(vao_entities, r);
+            render_mesh_instance(vao_entities, mesh_instances[r.mesh_index]);
         }
     }
 

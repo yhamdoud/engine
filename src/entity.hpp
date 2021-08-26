@@ -18,9 +18,9 @@ struct Entity
     };
 
     Flags flags = Flags::none;
-    Transform transform;
-    std::shared_ptr<Mesh> mesh;
-    std::shared_ptr<Shader> shader;
+    size_t scene_graph_index;
+    size_t mesh_index;
+    Shader &shader;
 };
 
 } // namespace engine
