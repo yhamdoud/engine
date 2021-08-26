@@ -21,10 +21,12 @@
 #include "constants.hpp"
 #include "entity.hpp"
 #include "error.hpp"
+#include "logger.hpp"
 #include "model.hpp"
 #include "renderer.hpp"
 #include "shader.hpp"
 #include "transform.hpp"
+#include "window.hpp"
 
 using std::array;
 using std::optional;
@@ -33,7 +35,6 @@ using std::string;
 using std::string_view;
 using std::tuple;
 using std::unique_ptr;
-using std::variant;
 using std::vector;
 using std::filesystem::path;
 
@@ -41,82 +42,10 @@ using namespace glm;
 
 using namespace engine;
 
-unsigned int window_width = 1280;
-unsigned int window_height = 720;
-
 const path resources_path{"../resources"};
 const path textures_path = resources_path / "textures";
 const path shaders_path = resources_path / "shaders";
 const path models_path = resources_path / "models";
-
-static void glfw_error_callback(int error, const char *description)
-{
-    std::cerr << "GLFW error " << error << ": " << description << std::endl;
-    abort();
-}
-
-static void framebuffer_size_callback(GLFWwindow *window, int width, int height)
-{
-    window_height = width;
-    window_height = height;
-}
-
-static void key_callback(GLFWwindow *window, int key, int scancode, int action,
-                         int mods)
-{
-    auto *renderer =
-        reinterpret_cast<Renderer *>(glfwGetWindowUserPointer(window));
-
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-    {
-        glfwSetWindowShouldClose(window, GLFW_TRUE);
-    }
-    else if (key == GLFW_KEY_C && action == GLFW_PRESS)
-    {
-        renderer->camera.reset();
-    }
-}
-
-static void scroll_callback(GLFWwindow *window, double x_offset,
-                            double y_offset)
-{
-    auto *renderer =
-        reinterpret_cast<Renderer *>(glfwGetWindowUserPointer(window));
-
-    renderer->camera.zoom(y_offset);
-}
-
-vec2 get_cursor_position(GLFWwindow *window)
-{
-    double x, y;
-    glfwGetCursorPos(window, &x, &y);
-    return {x, y};
-}
-
-variant<GLFWwindow *, Error> init_glfw()
-{
-    glfwSetErrorCallback(glfw_error_callback);
-
-    if (!glfwInit())
-        return Error::glfw_initialization;
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    GLFWwindow *window = glfwCreateWindow(window_width, window_height,
-                                          "triangle", nullptr, nullptr);
-    if (window == nullptr)
-        return Error::window_creation;
-
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    glfwSetKeyCallback(window, key_callback);
-    glfwSetScrollCallback(window, scroll_callback);
-
-    glfwMakeContextCurrent(window);
-
-    return window;
-}
 
 struct SceneGraphNode
 {
@@ -185,8 +114,6 @@ vector<RenderData> generate_render_data()
     {
         mat4 model = get_world_position(e.scene_graph_index);
 
-        std::cout << glm::to_string(model) << std::endl;
-
         data.emplace_back(RenderData{
             e.flags,
             e.mesh_index,
@@ -200,29 +127,16 @@ vector<RenderData> generate_render_data()
 
 int main()
 {
-    auto window_variant = init_glfw();
+    GLFWwindow *window;
 
-    if (auto error = std::get_if<Error>(&window_variant))
-    {
-        switch (*error)
-        {
-        case Error::glfw_initialization:
-            std::cout << "GLFW initialization failed." << std::endl;
-            break;
-        case Error::window_creation:
-            std::cout << "Window creation failed." << std::endl;
-            break;
-        }
-
+    if (auto maybe_window = init_glfw(1280, 720))
+        window = *maybe_window;
+    else
         return EXIT_FAILURE;
-    }
-
-    auto window = std::get<GLFWwindow *>(window_variant);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
-        std::cerr << "glad error" << std::endl;
-        glfwTerminate();
+        logger.error("OpenGL initialization failed");
         return EXIT_FAILURE;
     }
 
@@ -305,7 +219,7 @@ int main()
                 vec3(0.f, sin(glfwGetTime()), 0.f));
         }
 
-        renderer.viewport_size = vec2{window_width, window_height};
+        renderer.viewport_size = vec2{window_data.width, window_data.height};
         auto data = generate_render_data();
         renderer.render(data);
 

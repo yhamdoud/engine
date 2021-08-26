@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 3.20)
 
 project(engine)
 
-set (CMAKE_CXX_STANDARD 20)
-set (CMAKE_CXX_STANDARD_REQUIRED TRUE)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 # TODO: Only enable Tracy in debug builds.
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -march=native -DTRACY_ENABLE")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -march=native -DTRACY_ENABLE")
 
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(EXTERN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/extern")
@@ -14,6 +14,7 @@ set(GLAD_DIR "${EXTERN_DIR}/glad")
 set(CGLTF_DIR "${EXTERN_DIR}/cgltf")
 set(TRACY_DIR "${EXTERN_DIR}/tracy")
 set(STB_DIR "${EXTERN_DIR}/stb")
+set(FMT_DIR "${EXTERN_DIR}/fmt")
 
 file(GLOB SRC_FILES "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.hpp")
 add_executable(${PROJECT_NAME} ${SRC_FILES})
@@ -42,3 +43,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE TracyClient)
 
 # stb
 target_include_directories(${PROJECT_NAME} PRIVATE ${STB_DIR})
+
+# fmt
+add_subdirectory(${FMT_DIR})
+target_link_libraries(${PROJECT_NAME} PRIVATE fmt)

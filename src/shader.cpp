@@ -19,6 +19,7 @@
 #include <Tracy.hpp>
 
 #include "constants.hpp"
+#include "logger.hpp"
 #include "shader.hpp"
 #include "utils.hpp"
 
@@ -45,7 +46,7 @@ uint Shader::compile_shader_stage(const string &source, GLenum stage)
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
         auto log = std::make_unique<char[]>(length);
         glGetShaderInfoLog(shader, length, nullptr, log.get());
-        std::cerr << "Shader failure: " << log << std::endl;
+        logger.error("Shader compilation failure:\n{}", log.get());
         return invalid_shader_id;
     }
 
@@ -65,7 +66,7 @@ optional<Shader> Shader::from_paths(const ShaderPaths &p)
     }
     else
     {
-        std::cerr << "Vertex shader not found at path: " << p.vert << std::endl;
+        logger.error("Vertex shader not found at path: {}", p.vert.string());
         return std::nullopt;
     }
 
@@ -80,8 +81,8 @@ optional<Shader> Shader::from_paths(const ShaderPaths &p)
         }
         else
         {
-            std::cerr << "Geometry shader not found at path: " << p.geom
-                      << std::endl;
+            logger.error("Geometry shader not found at path: {}",
+                         p.geom.string());
             return std::nullopt;
         }
     }
@@ -97,8 +98,8 @@ optional<Shader> Shader::from_paths(const ShaderPaths &p)
         }
         else
         {
-            std::cerr << "Fragment shader not found at path: " << p.geom
-                      << std::endl;
+            logger.error("Fragment shader not found at path: {}",
+                         p.frag.string());
             return std::nullopt;
         }
     }
@@ -133,7 +134,7 @@ optional<Shader> Shader::from_stages(uint vert, uint geom, uint frag)
         glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
         auto log = std::make_unique<char[]>(length);
         glGetProgramInfoLog(program, length, nullptr, log.get());
-        std::cerr << "Shader program failure: " << log << std::endl;
+        logger.error("Shader linking failure:\n{}", log.get());
         return std::nullopt;
     }
 
@@ -227,7 +228,7 @@ GLuint upload_cube_map(const std::array<path, 6> &paths)
         }
         else
         {
-            std::cerr << "Failed to load texture: " << path << std::endl;
+            logger.error("Failed to load textures: {}", path.string());
             return invalid_texture_id;
         }
     }

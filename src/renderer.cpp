@@ -3,6 +3,7 @@
 
 #include <glm/ext.hpp>
 
+#include "logger.hpp"
 #include "primitives.hpp"
 #include "renderer.hpp"
 
@@ -27,7 +28,7 @@ void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
                          GLsizei length, GLchar const *message,
                          void const *user_param)
 {
-    const string source_string{[source]()
+    const string source_string{[&source]
                                {
                                    switch (source)
                                    {
@@ -42,11 +43,11 @@ void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
                                    case GL_DEBUG_SOURCE_APPLICATION:
                                        return "Application";
                                    case GL_DEBUG_SOURCE_OTHER:
-                                       return "Other";
+                                       return "";
                                    }
                                }()};
 
-    const string type_string{[type]()
+    const string type_string{[&type]
                              {
                                  switch (type)
                                  {
@@ -63,29 +64,27 @@ void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
                                  case GL_DEBUG_TYPE_MARKER:
                                      return "Marker";
                                  case GL_DEBUG_TYPE_OTHER:
-                                     return "Other";
+                                     return "";
                                  }
                              }()};
 
-    const string severity_string{[severity]()
-                                 {
-                                     switch (severity)
-                                     {
-                                     case GL_DEBUG_SEVERITY_NOTIFICATION:
-                                         return "Notification";
-                                     case GL_DEBUG_SEVERITY_LOW:
-                                         return "Low";
-                                     case GL_DEBUG_SEVERITY_MEDIUM:
-                                         return "Medium";
-                                     case GL_DEBUG_SEVERITY_HIGH:
-                                         return "High";
-                                     }
-                                 }()};
+    const auto log_type = [&severity]
+    {
+        switch (severity)
+        {
+        case GL_DEBUG_SEVERITY_NOTIFICATION:
+            return LogType::info;
+        case GL_DEBUG_SEVERITY_LOW:
+            return LogType::warning;
+        case GL_DEBUG_SEVERITY_MEDIUM:
+            return LogType::error;
+        case GL_DEBUG_SEVERITY_HIGH:
+            return LogType::error;
+        }
+    }();
 
-    std::cout << "(GL message) Type: " << type_string
-              << ", Severity: " << severity_string
-              << ", Source: " << source_string << ", Message: " << message
-              << std::endl;
+    logger.log(log_type, "OpenGL {0} {1}: {3}", type_string, source_string, id,
+               message);
 }
 
 Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
