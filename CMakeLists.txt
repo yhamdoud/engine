@@ -15,6 +15,7 @@ set(CGLTF_DIR "${EXTERN_DIR}/cgltf")
 set(TRACY_DIR "${EXTERN_DIR}/tracy")
 set(STB_DIR "${EXTERN_DIR}/stb")
 set(FMT_DIR "${EXTERN_DIR}/fmt")
+set(IMGUI_DIR "${EXTERN_DIR}/imgui")
 
 file(GLOB SRC_FILES "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.hpp")
 add_executable(${PROJECT_NAME} ${SRC_FILES})
@@ -47,3 +48,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${STB_DIR})
 # fmt
 add_subdirectory(${FMT_DIR})
 target_link_libraries(${PROJECT_NAME} PRIVATE fmt)
+
+# Dear ImGui
+file(GLOB IMGUI_SOURCES ${IMGUI_DIR}/*.cpp ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp)
+add_library(imgui ${IMGUI_SOURCES})
+target_compile_definitions(imgui PRIVATE IMGUI_IMPL_OPENGL_LOADER_GLAD)
+target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
+target_link_libraries(${PROJECT_NAME} PRIVATE imgui)
