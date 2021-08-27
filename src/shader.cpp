@@ -4,7 +4,6 @@
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
-#include <iostream>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -16,10 +15,9 @@
 #include <glm/glm.hpp>
 #include <stb_image.h>
 
-#include <Tracy.hpp>
-
 #include "constants.hpp"
 #include "logger.hpp"
+#include "primitives.hpp"
 #include "shader.hpp"
 #include "utils.hpp"
 
@@ -112,6 +110,8 @@ Shader::Shader(uint id, UniformMap uniforms)
 {
 }
 
+Shader::Shader() : id{invalid_shader_id}, uniforms{UniformMap{}} {}
+
 optional<Shader> Shader::from_stages(uint vert, uint geom, uint frag)
 {
     unsigned int program = glCreateProgram();
@@ -167,6 +167,13 @@ void Shader::set(const std::string &name, const glm::vec3 &value)
     glProgramUniform3fv(id, uniform.location, uniform.count,
                         glm::value_ptr(value));
 }
+
+void Shader::set(const std::string &name, int value)
+{
+    auto uniform = uniforms.at(name);
+    glProgramUniform1i(id, uniform.location, value);
+}
+
 uint Shader::get_id() const { return id; }
 
 UniformMap Shader::parse_uniforms(uint program)

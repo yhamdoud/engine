@@ -4,7 +4,6 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
-#include <iostream>
 #include <optional>
 #include <string_view>
 #include <variant>
@@ -13,14 +12,15 @@
 #include <glad/glad.h>
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 
 #include <Tracy.hpp>
 #include <TracyOpenGL.hpp>
-#include <glm/gtx/string_cast.hpp>
 
 #include "constants.hpp"
 #include "entity.hpp"
-#include "error.hpp"
 #include "logger.hpp"
 #include "model.hpp"
 #include "renderer.hpp"
@@ -41,11 +41,6 @@ using std::filesystem::path;
 using namespace glm;
 
 using namespace engine;
-
-const path resources_path{"../resources"};
-const path textures_path = resources_path / "textures";
-const path shaders_path = resources_path / "shaders";
-const path models_path = resources_path / "models";
 
 struct SceneGraphNode
 {
@@ -170,20 +165,25 @@ int main()
         .frag = shaders_path / "toon.fs",
     });
 
+    auto deferred_shader = *Shader::from_paths(ShaderPaths{
+        .vert = shaders_path / "shader.vs",
+        .frag = shaders_path / "deferred.fs",
+    });
+
     auto duck_mesh = Mesh::from_gtlf(models_path / "duck.glb")[0];
 
     auto duck1 = add_entity(renderer, Entity::Flags::casts_shadow,
                             Transform{vec3{0.f}, vec3{0.01f}}, duck_mesh,
-                            std::nullopt, blinn_shader);
+                            std::nullopt, deferred_shader);
 
     add_entity(renderer, Entity::Flags::none, Transform{vec3{100.f, 5.f, 0.f}},
                duck_mesh, std::make_optional<Entity>(entities[duck1]),
-               toon_shader);
+               deferred_shader);
 
     add_entity(renderer, Entity::Flags::casts_shadow,
                Transform(vec3{0.f}, vec3{10.f}),
                Mesh::from_gtlf(models_path / "plane.gltf")[0], std::nullopt,
-               blinn_shader);
+               deferred_shader);
 
     double last_time = glfwGetTime();
     vec2 cursor_pos = get_cursor_position(window);
@@ -191,9 +191,19 @@ int main()
     // Enable profiling.
     TracyGpuContext;
 
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 460");
+
     while (!glfwWindowShouldClose(window))
     {
         TracyGpuZone("Render");
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
 
         // Timestep.
         float time = glfwGetTime();
@@ -221,7 +231,16 @@ int main()
 
         renderer.viewport_size = vec2{window_data.width, window_data.height};
         auto data = generate_render_data();
+
         renderer.render(data);
+
+        // Draw UI.
+        ImGui::Text("Hello, world %d", 123);
+        if (ImGui::Button("Save"))
+            ;
+
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -231,6 +250,11 @@ int main()
         FrameMark
     }
 
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    glfwDestroyWindow(window);
     glfwTerminate();
 
     return EXIT_SUCCESS;

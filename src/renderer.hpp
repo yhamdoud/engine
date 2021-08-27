@@ -32,11 +32,16 @@ struct RenderData
 struct Light
 {
     glm::vec3 position;
+    glm::vec3 color;
 };
 
 class Renderer
 {
-    Light light;
+    std::array<Light, 3> lights = {
+        Light{glm::vec3{3, 3, 0}, glm::vec3{1, 0, 0}},
+        Light{glm::vec3{0, 3, 3}, glm::vec3{0, 1, 0}},
+        Light{glm::vec3{3, 3, 3}, glm::vec3{0, 0, 1}},
+    };
 
     std::vector<MeshInstance> mesh_instances;
 
@@ -47,10 +52,18 @@ class Renderer
     Shader shadow_shader;
     glm::ivec2 shadow_map_size{1024, 1024};
     unsigned int texture_shadow;
-    unsigned int fbo_shadow;
 
     Shader skybox_shader;
     unsigned int texture_skybox;
+
+    uint fbo_shadow;
+
+    // Deferred
+    uint g_buffer;
+    uint g_position;
+    uint g_normal;
+    uint g_albedo_specular;
+    Shader lighting_shader;
 
   public:
     glm::ivec2 viewport_size{1280, 720};

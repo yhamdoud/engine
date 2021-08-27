@@ -28,11 +28,13 @@ using UniformMap = std::unordered_map<std::string, Uniform>;
 class Shader
 {
     uint id;
-    UniformMap uniforms;
     static UniformMap parse_uniforms(uint program);
     static uint compile_shader_stage(const std::string &source, GLenum stage);
 
   public:
+    UniformMap uniforms;
+
+    Shader();
     Shader(uint program, UniformMap uniforms);
     static std::optional<Shader> from_paths(const ShaderPaths &p);
     static std::optional<Shader> from_stages(uint vert, uint geom, uint frag);
@@ -42,6 +44,7 @@ class Shader
     void set(const std::string &name, const glm::mat4 &value);
     void set(const std::string &name, const glm::mat3 &value);
     void set(const std::string &name, const glm::vec3 &value);
+    void set(const std::string &name, int value);
 };
 
 GLuint upload_cube_map(const std::array<std::filesystem::path, 6> &paths);

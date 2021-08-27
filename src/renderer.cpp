@@ -1,3 +1,4 @@
+#include <array>
 #include <iostream>
 #include <string>
 
@@ -10,12 +11,12 @@
 #include <Tracy.hpp>
 #include <TracyOpenGL.hpp>
 
-#include <glm/gtx/string_cast.hpp>
-
 using namespace glm;
-using std::string;
+using namespace std;
 
 using namespace engine;
+
+constexpr uint default_framebuffer = 0;
 
 unsigned int binding_positions = 0;
 unsigned int binding_normals = 1;
@@ -101,8 +102,6 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
 
     glClearColor(0.f, 0.f, 0.f, 1.0f);
 
-    light.position = vec3{4.f, 3.f, 3.f};
-
     // Entity stuff.
     {
         glCreateVertexArrays(1, &vao_entities);
@@ -168,6 +167,60 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
     // We only care about the depth test.
     glNamedFramebufferDrawBuffer(fbo_shadow, GL_NONE);
     glNamedFramebufferReadBuffer(fbo_shadow, GL_NONE);
+
+    // G buffer
+    {
+        ivec2 size{1280, 720};
+
+        glCreateFramebuffers(1, &g_buffer);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &g_position);
+        glTextureStorage2D(g_position, 1, GL_RGBA16F, size.x, size.y);
+        glTextureSubImage2D(g_position, 0, 0, 0, size.x, size.y, GL_RGBA,
+                            GL_FLOAT, nullptr);
+        glTextureParameteri(g_position, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(g_position, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT0, g_position,
+                                  0);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &g_normal);
+        glTextureStorage2D(g_normal, 1, GL_RGBA16F, size.x, size.y);
+        glTextureSubImage2D(g_normal, 0, 0, 0, size.x, size.y, GL_RGBA,
+                            GL_FLOAT, nullptr);
+        glTextureParameteri(g_normal, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(g_normal, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT1, g_normal, 0);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &g_albedo_specular);
+        glTextureStorage2D(g_albedo_specular, 1, GL_RGBA8, size.x, size.y);
+        glTextureSubImage2D(g_albedo_specular, 0, 0, 0, size.x, size.y, GL_RGBA,
+                            GL_FLOAT, nullptr);
+        glTextureParameteri(g_albedo_specular, GL_TEXTURE_MIN_FILTER,
+                            GL_NEAREST);
+        glTextureParameteri(g_albedo_specular, GL_TEXTURE_MAG_FILTER,
+                            GL_NEAREST);
+        glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT2,
+                                  g_albedo_specular, 0);
+
+        array<GLenum, 3> bufs{GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1,
+                              GL_COLOR_ATTACHMENT2};
+        glNamedFramebufferDrawBuffers(g_buffer, 3, bufs.data());
+
+        uint depth;
+        glCreateRenderbuffers(1, &depth);
+        glNamedRenderbufferStorage(depth, GL_DEPTH_COMPONENT, size.x, size.y);
+        glad_glNamedFramebufferRenderbuffer(g_buffer, GL_DEPTH_ATTACHMENT,
+                                            GL_RENDERBUFFER, depth);
+
+        if (glCheckNamedFramebufferStatus(depth, GL_FRAMEBUFFER) !=
+            GL_FRAMEBUFFER_COMPLETE)
+            logger.error("G-buffer incomplete");
+
+        lighting_shader = *Shader::from_paths(ShaderPaths{
+            .vert = shaders_path / "full_screen.vs",
+            .frag = shaders_path / "lighting.fs",
+        });
+    }
 }
 
 Renderer::~Renderer()
@@ -235,9 +288,9 @@ void Renderer::render(std::vector<RenderData> &queue)
 
     const mat4 view = camera.get_view();
 
-    const mat4 light_transform =
-        ortho(-10.f, 10.f, -10.f, 10.f, 1.f, 17.5f) *
-        lookAt(light.position, vec3{0.f}, vec3{0.f, 1.f, 0.f});
+    //    const mat4 light_transform =
+    //        ortho(-10.f, 10.f, -10.f, 10.f, 1.f, 17.5f) *
+    //        lookAt(light.position, vec3{0.f}, vec3{0.f, 1.f, 0.f});
 
     // Shadow mapping pass.
     {
@@ -252,7 +305,7 @@ void Renderer::render(std::vector<RenderData> &queue)
         // Directional light.
 
         glUseProgram(shadow_shader.get_id());
-        shadow_shader.set("u_light_transform", light_transform);
+        //        shadow_shader.set("u_light_transform", light_transform);
 
         glBindVertexArray(vao_entities);
 
@@ -269,12 +322,12 @@ void Renderer::render(std::vector<RenderData> &queue)
         glCullFace(GL_BACK);
     }
 
-    // Render entities.
+    // Geometry pass
     {
-        TracyGpuZone("Entities");
+        TracyGpuZone("Geometry pass");
 
         glViewport(0, 0, viewport_size.x, viewport_size.y);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, g_buffer);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glBindVertexArray(vao_entities);
@@ -292,12 +345,11 @@ void Renderer::render(std::vector<RenderData> &queue)
             const auto model_view = view * r.model;
             const auto mvp = proj * model_view;
 
-            glBindTextureUnit(0, texture_shadow);
+            //            r.shader.set("u_light_pos", vec3(view *
+            //            vec4(light.position, 1)));
+            //            r.shader.set("u_light_transform", light_transform);
 
-            r.shader.set("u_light_pos", vec3(view * vec4(light.position, 1)));
-            r.shader.set("u_light_transform", light_transform);
-
-            r.shader.set("u_model", r.model);
+            //            r.shader.set("u_model", r.model);
             r.shader.set("u_model_view", model_view);
             r.shader.set("u_mvp", mvp);
             r.shader.set("u_normal_mat", inverseTranspose(mat3{model_view}));
@@ -306,17 +358,48 @@ void Renderer::render(std::vector<RenderData> &queue)
         }
     }
 
-    // Render skybox.
+
     {
-        TracyGpuZone("Skybox");
+        TracyGpuZone("Lighting pass pass");
 
-        glUseProgram(skybox_shader.get_id());
-        glBindTextureUnit(0, texture_skybox);
+        glBindFramebuffer(GL_FRAMEBUFFER, default_framebuffer);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        skybox_shader.set("u_projection", proj);
-        skybox_shader.set("u_view", mat4(mat3(view)));
+        glUseProgram(lighting_shader.get_id());
+        lighting_shader.set("u_g_position", 0);
+        lighting_shader.set("u_g_normal", 1);
+        lighting_shader.set("u_g_albedo_specular", 2);
 
-        glBindVertexArray(vao_skybox);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+        glBindTextureUnit(0, g_position);
+        glBindTextureUnit(1, g_normal);
+        glBindTextureUnit(2, g_albedo_specular);
+        glBindTextureUnit(3, texture_shadow);
+
+        // TODO: Use a UBO or SSBO for this data.
+        for (size_t i = 0; i < lights.size(); i++)
+        {
+            const auto &light = lights[i];
+            vec4 pos = view * vec4(light.position, 1);
+            lighting_shader.set(fmt::format("u_lights[{}].position", i),
+                                vec3(pos) / pos.w);
+            lighting_shader.set(fmt::format("u_lights[{}].color", i),
+                                light.color);
+        }
+
+        glDrawArrays(GL_TRIANGLES, 0, 3);
     }
+
+    // Render skybox.
+    //    {
+    //        TracyGpuZone("Skybox");
+    //
+    //        glUseProgram(skybox_shader.get_id());
+    //        glBindTextureUnit(0, texture_skybox);
+    //
+    //        skybox_shader.set("u_projection", proj);
+    //        skybox_shader.set("u_view", mat4(mat3(view)));
+    //
+    //        glBindVertexArray(vao_skybox);
+    //        glDrawArrays(GL_TRIANGLES, 0, 36);
+    //    }
 }
