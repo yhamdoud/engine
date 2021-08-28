@@ -1,30 +1,46 @@
 #pragma once
 
 #include <filesystem>
+#include <memory>
+#include <optional>
 #include <vector>
 
+#include <glm/glm.hpp>
+
 #include "constants.hpp"
-#include "glm/glm.hpp"
 
 namespace engine
 {
 
-class Mesh
+struct Texture
 {
-  public:
+    int width;
+    int height;
+    int component_count;
+    std::unique_ptr<uint8_t, void (*)(void *)> data;
+
+    Texture(int width, int height, int component_count,
+            std::unique_ptr<uint8_t, void (*)(void *)> data);
+
+    static std::optional<Texture> from_file(std::filesystem::path path);
+    static std::optional<Texture> from_memory(uint8_t *data, int length);
+};
+
+struct Mesh
+{
     std::vector<glm::vec3> positions;
     std::vector<glm::vec3> normals;
     std::vector<glm::vec2> tex_coords;
     std::vector<std::uint32_t> indices;
-
-    static std::vector<Mesh> from_gtlf(const std::filesystem::path &path);
 };
 
 class Model
 {
   public:
-    std::shared_ptr<Mesh> mesh;
-    uint shader;
+    std::unique_ptr<Mesh> mesh;
+    std::unique_ptr<Texture> base_color;
 };
+
+std::vector<Model> load_gltf(const std::filesystem::path &path);
 
 } // namespace engine

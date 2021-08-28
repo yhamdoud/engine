@@ -1,23 +1,22 @@
+#define CGLTF_IMPLEMENTATION
+
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <vector>
 
-#define CGLTF_IMPLEMENTATION
-
 #include <cgltf.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <stb_image.h>
 
+#include "logger.hpp"
 #include "model.hpp"
 
-using std::optional;
-using std::unique_ptr;
-using std::vector;
+using namespace std;
+using namespace glm;
 
-using glm::mat4;
-using glm::vec2;
-using glm::vec3;
+using filesystem::path;
 
 using namespace engine;
 
@@ -58,7 +57,46 @@ vector<uint32_t> process_index_accessor(const cgltf_accessor &accessor)
     }
 }
 
-static Mesh process_triangles(const cgltf_primitive triangles)
+static Texture process_texture_view(const cgltf_texture_view &texture_view)
+{
+    const auto &texture = *texture_view.texture;
+    const auto &image = texture.image;
+
+    if (image->buffer_view)
+    {
+        const auto &buffer_view = *image->buffer_view;
+
+        int x, y, c;
+
+        auto const &buffer = *buffer_view.buffer;
+        uint8_t *buffer_data = (uint8_t *)buffer.data + buffer_view.offset;
+
+        return *Texture::from_memory(buffer_data,
+                                     static_cast<int>(buffer_view.size));
+    }
+    else
+    {
+        logger.warn("Texture data is in file.");
+        abort();
+    }
+}
+
+static Texture process_material(const cgltf_material &material)
+{
+
+    if (material.has_pbr_metallic_roughness)
+    {
+        const auto &metallic_roughness = material.pbr_metallic_roughness;
+        return process_texture_view(metallic_roughness.base_color_texture);
+    }
+    else if (material.has_pbr_specular_glossiness)
+    {
+        logger.warn("Specular glossiness materials aren't supported.");
+        abort();
+    }
+}
+
+static Model process_triangles(const cgltf_primitive &triangles)
 {
     vector<vec3> positions;
     vector<vec3> normals;
@@ -117,10 +155,15 @@ static Mesh process_triangles(const cgltf_primitive triangles)
 
     auto indices = process_index_accessor(*triangles.indices);
 
-    return Mesh{positions, normals, tex_coords, indices};
+    return Model{
+        make_unique<Mesh>(Mesh{positions, normals, tex_coords, indices}),
+        triangles.material
+            ? make_unique<Texture>(process_material(*triangles.material))
+            : nullptr,
+    };
 }
 
-static void process_mesh(const cgltf_mesh &mesh, vector<Mesh> &meshes)
+static void process_mesh(const cgltf_mesh &mesh, vector<Model> &model)
 {
     for (size_t i = 0; i < mesh.primitives_count; i++)
     {
@@ -130,7 +173,7 @@ static void process_mesh(const cgltf_mesh &mesh, vector<Mesh> &meshes)
         {
         case cgltf_primitive_type_triangles:
         {
-            meshes.push_back(process_triangles(primitive));
+            model.emplace_back(process_triangles(primitive));
             break;
         }
         case cgltf_primitive_type_points:
@@ -145,7 +188,7 @@ static void process_mesh(const cgltf_mesh &mesh, vector<Mesh> &meshes)
     }
 }
 
-static void process_node(const cgltf_node &node, vector<Mesh> &meshes)
+static void process_node(const cgltf_node &node, vector<Model> &meshes)
 {
     mat4 local_transform;
     cgltf_node_transform_local(&node, glm::value_ptr(local_transform));
@@ -157,15 +200,15 @@ static void process_node(const cgltf_node &node, vector<Mesh> &meshes)
         process_node(*node.children[j], meshes);
 }
 
-static void process_scene(const cgltf_scene &scene, vector<Mesh> &meshes)
+static void process_scene(const cgltf_scene &scene, vector<Model> &models)
 {
     for (size_t i = 0; i < scene.nodes_count; i++)
-        process_node(*scene.nodes[i], meshes);
+        process_node(*scene.nodes[i], models);
 }
 
-vector<Mesh> Mesh::from_gtlf(const std::filesystem::path &path)
+vector<Model> engine::load_gltf(const path &path)
 {
-    vector<Mesh> meshes;
+    vector<Model> models;
 
     cgltf_options options = {};
     cgltf_data *data = nullptr;
@@ -179,8 +222,48 @@ vector<Mesh> Mesh::from_gtlf(const std::filesystem::path &path)
 
     if (result == cgltf_result_success)
         for (size_t i = 0; i < data->scenes_count; i++)
-            process_scene(data->scenes[i], meshes);
+            process_scene(data->scenes[i], models);
 
     cgltf_free(data);
-    return meshes;
+    return models;
+}
+
+Texture::Texture(int width, int height, int component_count,
+                 std::unique_ptr<uint8_t, void (*)(void *)> data)
+    : width{width}, height{height},
+      component_count{component_count}, data{std::move(data)}
+{
+}
+
+optional<Texture> Texture::from_file(path path)
+{
+    int width, height, channel_count;
+
+    uint8_t *data = stbi_load(path.c_str(), &width, &height, &channel_count, 0);
+    if (data == nullptr)
+    {
+        logger.error("Error loading texture at path: {}", path.string());
+        return nullopt;
+    }
+
+    return make_optional<Texture>(
+        width, height, channel_count,
+        unique_ptr<uint8_t, void (*)(void *)>(data, stbi_image_free));
+}
+
+optional<Texture> Texture::from_memory(uint8_t *data, int length)
+{
+    int width, height, channel_count;
+    uint8_t *image_data =
+        stbi_load_from_memory(data, length, &width, &height, &channel_count, 0);
+
+    if (image_data == nullptr)
+    {
+        logger.error("Error loading texture from memory.");
+        return nullopt;
+    }
+
+    return make_optional<Texture>(
+        width, height, channel_count,
+        unique_ptr<uint8_t, void (*)(void *)>(image_data, stbi_image_free));
 }

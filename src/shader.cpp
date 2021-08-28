@@ -174,6 +174,12 @@ void Shader::set(const std::string &name, int value)
     glProgramUniform1i(id, uniform.location, value);
 }
 
+void Shader::set(const std::string &name, bool value)
+{
+    auto uniform = uniforms.at(name);
+    glProgramUniform1i(id, uniform.location, value);
+}
+
 uint Shader::get_id() const { return id; }
 
 UniformMap Shader::parse_uniforms(uint program)

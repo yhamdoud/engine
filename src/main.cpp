@@ -86,17 +86,30 @@ mat4 get_world_position(size_t node_idx)
 }
 
 size_t add_entity(Renderer &renderer, Entity::Flags flags, Transform transform,
-                  const Mesh &mesh, optional<Entity> parent, Shader &shader)
+                  const Model &model, optional<Entity> parent, Shader &shader)
 {
-    size_t mesh_idx = renderer.register_mesh(mesh);
+    size_t mesh_idx = renderer.register_mesh(*model.mesh);
+    auto base_color_tex_id = invalid_texture_id;
+
     size_t sg_idx;
+
+    if (model.base_color)
+        base_color_tex_id = std::get<uint>(renderer.register_texture(
+            *model.base_color, GL_CLAMP_TO_EDGE, GL_NEAREST));
 
     if (parent)
         sg_idx = scene_graph_insert(transform, parent->scene_graph_index);
     else
         sg_idx = scene_graph_insert(transform, SceneGraphNode::root_index);
 
-    entities.push_back(Entity{flags, sg_idx, mesh_idx, shader});
+    entities.emplace_back(Entity{
+        flags,
+        sg_idx,
+        mesh_idx,
+        base_color_tex_id,
+        shader,
+    });
+
     return entities.size() - 1;
 }
 
@@ -112,6 +125,7 @@ vector<RenderData> generate_render_data()
         data.emplace_back(RenderData{
             e.flags,
             e.mesh_index,
+            e.base_color_tex_id,
             model,
             e.shader,
         });
@@ -170,20 +184,27 @@ int main()
         .frag = shaders_path / "deferred.fs",
     });
 
-    auto duck_mesh = Mesh::from_gtlf(models_path / "duck.glb")[0];
+    auto duck_model = std::move(load_gltf(models_path / "duck.glb")[0]);
+    auto helmet_model =
+        std::move(load_gltf(models_path / "damaged_helmet.glb")[0]);
 
     auto duck1 = add_entity(renderer, Entity::Flags::casts_shadow,
-                            Transform{vec3{0.f}, vec3{0.01f}}, duck_mesh,
+                            Transform{vec3{0.f}, vec3{0.01f}}, duck_model,
                             std::nullopt, deferred_shader);
 
-    add_entity(renderer, Entity::Flags::none, Transform{vec3{100.f, 5.f, 0.f}},
-               duck_mesh, std::make_optional<Entity>(entities[duck1]),
-               deferred_shader);
+    auto helmet = add_entity(renderer, Entity::Flags::casts_shadow,
+                             Transform{vec3{2.f, 1.f, 0.f}}, helmet_model,
+                             std::nullopt, deferred_shader);
 
-    add_entity(renderer, Entity::Flags::casts_shadow,
-               Transform(vec3{0.f}, vec3{10.f}),
-               Mesh::from_gtlf(models_path / "plane.gltf")[0], std::nullopt,
-               deferred_shader);
+    //    add_entity(renderer, Entity::Flags::none, Transform{vec3{100.f, 5.f,
+    //    0.f}},
+    //               duck_model, std::make_optional<Entity>(entities[duck1]),
+    //               deferred_shader);
+    //
+    //    add_entity(renderer, Entity::Flags::casts_shadow,
+    //               Transform(vec3{0.f}, vec3{10.f}),
+    //               load_gltf(models_path / "plane.gltf")[0], std::nullopt,
+    //               deferred_shader);
 
     double last_time = glfwGetTime();
     vec2 cursor_pos = get_cursor_position(window);

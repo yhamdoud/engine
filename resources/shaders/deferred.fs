@@ -7,7 +7,9 @@ layout (location = 2) out vec4 g_albedo_specular;
 
 uniform vec3 u_light_pos;
 uniform mat4 u_model_view;
+uniform bool u_use_sampler;
 
+uniform sampler2D u_base_color;
 uniform sampler2D u_shadow_map;
 
 in Varying
@@ -44,6 +46,11 @@ void main()
 	// frag_color = vec4(col, 1);
 	g_position = fs_in.position;
 	g_normal = normalize(fs_in.normal);
-	g_albedo_specular.rgb = vec3(0.4, 0.4, 0.4);
+
+	if (u_use_sampler)
+        g_albedo_specular.rgb = texture(u_base_color, fs_in.tex_coords).rgb;
+    else
+        g_albedo_specular.rgb = vec3(0.5);
+
 	g_albedo_specular.a = 0.3;
 }

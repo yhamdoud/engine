@@ -1,5 +1,6 @@
 #pragma once
 
+#include <variant>
 #include <vector>
 
 #include <glad/glad.h>
@@ -19,12 +20,14 @@ struct MeshInstance
     int primitive_count;
     int positions_offset;
     int normals_offset;
+    int tex_coords_offset;
 };
 
 struct RenderData
 {
     Entity::Flags flags;
     size_t mesh_index;
+    uint base_color_tex_id;
     glm::mat4 model;
     Shader &shader;
 };
@@ -37,6 +40,11 @@ struct Light
 
 class Renderer
 {
+    enum class Error
+    {
+        unsupported_texture_format,
+    };
+
     std::array<Light, 3> lights = {
         Light{glm::vec3{3, 3, 0}, glm::vec3{1, 0, 0}},
         Light{glm::vec3{0, 3, 3}, glm::vec3{0, 1, 0}},
@@ -75,6 +83,9 @@ class Renderer
     size_t register_mesh(const Mesh &mesh);
     void render_mesh_instance(unsigned int vao, const MeshInstance &mesh);
     void render(std::vector<RenderData> &m);
+
+    std::variant<uint, Error> register_texture(const Texture &texture,
+                                               int wrap_mode, int filter_mode);
 };
 
 } // namespace engine

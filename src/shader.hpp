@@ -45,6 +45,7 @@ class Shader
     void set(const std::string &name, const glm::mat3 &value);
     void set(const std::string &name, const glm::vec3 &value);
     void set(const std::string &name, int value);
+    void set(const std::string &name, bool value);
 };
 
 GLuint upload_cube_map(const std::array<std::filesystem::path, 6> &paths);

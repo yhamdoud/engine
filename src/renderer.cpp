@@ -1,8 +1,8 @@
 #include <array>
-#include <iostream>
 #include <string>
 
 #include <glm/ext.hpp>
+#include <stb_image_write.h>
 
 #include "logger.hpp"
 #include "primitives.hpp"
@@ -18,8 +18,9 @@ using namespace engine;
 
 constexpr uint default_framebuffer = 0;
 
-unsigned int binding_positions = 0;
-unsigned int binding_normals = 1;
+uint binding_positions = 0;
+uint binding_normals = 1;
+uint binding_tex_coords = 2;
 
 int attrib_positions = 0;
 int attrib_normals = 1;
@@ -78,7 +79,6 @@ void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
         case GL_DEBUG_SEVERITY_LOW:
             return LogType::warning;
         case GL_DEBUG_SEVERITY_MEDIUM:
-            return LogType::error;
         case GL_DEBUG_SEVERITY_HIGH:
             return LogType::error;
         }
@@ -107,17 +107,22 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
         glCreateVertexArrays(1, &vao_entities);
 
         glEnableVertexArrayAttrib(vao_entities, attrib_positions);
-        glEnableVertexArrayAttrib(vao_entities, attrib_normals);
-
         glVertexArrayAttribFormat(vao_entities, attrib_positions, 3, GL_FLOAT,
                                   false, 0);
         glVertexArrayAttribBinding(vao_entities, attrib_positions,
                                    binding_positions);
 
+        glEnableVertexArrayAttrib(vao_entities, attrib_normals);
         glVertexArrayAttribFormat(vao_entities, attrib_normals, 3, GL_FLOAT,
                                   false, 0);
         glVertexArrayAttribBinding(vao_entities, attrib_normals,
                                    binding_normals);
+
+        glEnableVertexArrayAttrib(vao_entities, attrib_tex_coords);
+        glVertexArrayAttribFormat(vao_entities, attrib_tex_coords, 2, GL_FLOAT,
+                                  false, 0);
+        glVertexArrayAttribBinding(vao_entities, attrib_tex_coords,
+                                   binding_tex_coords);
     }
 
     // Skybox stuff.
@@ -230,10 +235,45 @@ Renderer::~Renderer()
     glDeleteVertexArrays(1, &vao_entities);
 }
 
+variant<uint, Renderer::Error>
+Renderer::register_texture(const Texture &texture, int wrap_mode,
+                           int filter_mode)
+{
+    uint id;
+    glCreateTextures(GL_TEXTURE_2D, 1, &id);
+
+    //    glTexParameteri(id, GL_TEXTURE_WRAP_S, wrap_mode);
+    //    glTexParameteri(id, GL_TEXTURE_WRAP_T, wrap_mode);
+    //    glTexParameteri(id, GL_TEXTURE_MIN_FILTER, filter_mode);
+    //    glTexParameteri(id, GL_TEXTURE_MAG_FILTER, filter_mode);
+
+    GLenum internal_format, format;
+
+    switch (texture.component_count)
+    {
+    case 3:
+        internal_format = GL_RGB8;
+        format = GL_RGB;
+        break;
+    case 4:
+        internal_format = GL_RGBA8;
+        format = GL_RGBA;
+        break;
+    default:
+        return Renderer::Error::unsupported_texture_format;
+    }
+
+    glTextureStorage2D(id, 1, internal_format, texture.width, texture.height);
+    glTextureSubImage2D(id, 0, 0, 0, texture.width, texture.height, format,
+                        GL_UNSIGNED_BYTE, texture.data.get());
+
+    return id;
+}
+
 size_t Renderer::register_mesh(const Mesh &mesh)
 {
-    unsigned int buffer;
-    glCreateBuffers(1, &buffer);
+    unsigned int id;
+    glCreateBuffers(1, &id);
 
     int primitive_count = mesh.indices.size();
 
@@ -244,24 +284,28 @@ size_t Renderer::register_mesh(const Mesh &mesh)
 
     // TODO: Investigate if interleaved storage is more efficient than
     // sequential storage for vertex data.
-    glNamedBufferStorage(buffer, size_indices + size_positions + size_normals,
-                         nullptr, GL_DYNAMIC_STORAGE_BIT);
+    glNamedBufferStorage(
+        id, size_indices + size_positions + size_normals + size_tex_coords,
+        nullptr, GL_DYNAMIC_STORAGE_BIT);
+
+    MeshInstance instance{.buffer_id = id, .primitive_count = primitive_count};
 
     int offset = 0;
-    glNamedBufferSubData(buffer, offset, size_indices, mesh.indices.data());
+    glNamedBufferSubData(id, offset, size_indices, mesh.indices.data());
+
     offset += size_indices;
-    glNamedBufferSubData(buffer, offset, size_positions, mesh.positions.data());
+    glNamedBufferSubData(id, offset, size_positions, mesh.positions.data());
+    instance.positions_offset = offset;
+
     offset += size_positions;
-    glNamedBufferSubData(buffer, offset, size_normals, mesh.normals.data());
+    glNamedBufferSubData(id, offset, size_normals, mesh.normals.data());
+    instance.normals_offset = offset;
+
     offset += size_normals;
+    glNamedBufferSubData(id, offset, size_tex_coords, mesh.tex_coords.data());
+    instance.tex_coords_offset = offset;
 
-    mesh_instances.emplace_back(MeshInstance{
-        buffer,
-        primitive_count,
-        size_indices,
-        size_indices + size_positions,
-    });
-
+    mesh_instances.emplace_back(instance);
     return mesh_instances.size() - 1;
 }
 
@@ -274,6 +318,8 @@ void Renderer::render_mesh_instance(unsigned int vao, const MeshInstance &m)
                               m.positions_offset, sizeof(vec3));
     glVertexArrayVertexBuffer(vao, binding_normals, m.buffer_id,
                               m.normals_offset, sizeof(vec3));
+    glVertexArrayVertexBuffer(vao, binding_tex_coords, m.buffer_id,
+                              m.tex_coords_offset, sizeof(vec2));
 
     glDrawElements(GL_TRIANGLES, m.primitive_count, GL_UNSIGNED_INT, nullptr);
 }
@@ -313,6 +359,7 @@ void Renderer::render(std::vector<RenderData> &queue)
         {
             if (r.flags & Entity::casts_shadow)
             {
+
                 shadow_shader.set("u_model", r.model);
                 render_mesh_instance(vao_entities,
                                      mesh_instances[r.mesh_index]);
@@ -345,19 +392,24 @@ void Renderer::render(std::vector<RenderData> &queue)
             const auto model_view = view * r.model;
             const auto mvp = proj * model_view;
 
-            //            r.shader.set("u_light_pos", vec3(view *
-            //            vec4(light.position, 1)));
-            //            r.shader.set("u_light_transform", light_transform);
-
-            //            r.shader.set("u_model", r.model);
             r.shader.set("u_model_view", model_view);
             r.shader.set("u_mvp", mvp);
             r.shader.set("u_normal_mat", inverseTranspose(mat3{model_view}));
 
+            if (r.base_color_tex_id != invalid_texture_id)
+            {
+                r.shader.set("u_use_sampler", true);
+                r.shader.set("u_base_color", 0);
+                glBindTextureUnit(0, r.base_color_tex_id);
+            }
+            else
+            {
+                r.shader.set("u_use_sampler", false);
+            }
+
             render_mesh_instance(vao_entities, mesh_instances[r.mesh_index]);
         }
     }
-
 
     {
         TracyGpuZone("Lighting pass pass");
