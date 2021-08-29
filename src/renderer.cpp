@@ -177,16 +177,6 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
     {
         glCreateFramebuffers(1, &g_buffer);
 
-        glCreateTextures(GL_TEXTURE_2D, 1, &g_position);
-        glTextureStorage2D(g_position, 1, GL_RGBA16F, g_buffer_size.x,
-                           g_buffer_size.y);
-        glTextureSubImage2D(g_position, 0, 0, 0, g_buffer_size.x,
-                            g_buffer_size.y, GL_RGBA, GL_FLOAT, nullptr);
-        glTextureParameteri(g_position, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTextureParameteri(g_position, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT0, g_position,
-                                  0);
-
         glCreateTextures(GL_TEXTURE_2D, 1, &g_normal);
         glTextureStorage2D(g_normal, 1, GL_RGBA16F, g_buffer_size.x,
                            g_buffer_size.y);
@@ -208,23 +198,27 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
         glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT2,
                                   g_albedo_specular, 0);
 
+        glCreateTextures(GL_TEXTURE_2D, 1, &g_depth);
+
+        glTextureStorage2D(g_depth, 1, GL_DEPTH_COMPONENT24, g_buffer_size.x,
+                           g_buffer_size.y);
+        glTextureSubImage2D(g_depth, 0, 0, 0, g_buffer_size.x, g_buffer_size.y,
+                            GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+
+        glTextureParameteri(g_depth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(g_depth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glNamedFramebufferTexture(g_buffer, GL_DEPTH_ATTACHMENT, g_depth, 0);
+
         array<GLenum, 3> bufs{GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1,
                               GL_COLOR_ATTACHMENT2};
         glNamedFramebufferDrawBuffers(g_buffer, 3, bufs.data());
 
-        uint depth;
-        glCreateRenderbuffers(1, &depth);
-        glNamedRenderbufferStorage(depth, GL_DEPTH_COMPONENT, g_buffer_size.x,
-                                   g_buffer_size.y);
-        glad_glNamedFramebufferRenderbuffer(g_buffer, GL_DEPTH_ATTACHMENT,
-                                            GL_RENDERBUFFER, depth);
-
-        if (glCheckNamedFramebufferStatus(depth, GL_FRAMEBUFFER) !=
+        if (glCheckNamedFramebufferStatus(g_buffer, GL_FRAMEBUFFER) !=
             GL_FRAMEBUFFER_COMPLETE)
             logger.error("G-buffer incomplete");
 
         lighting_shader = *Shader::from_paths(ShaderPaths{
-            .vert = shaders_path / "full_screen.vs",
+            .vert = shaders_path / "lighting.vs",
             .frag = shaders_path / "lighting.fs",
         });
     }
@@ -332,7 +326,7 @@ void Renderer::render(std::vector<RenderData> &queue)
     const mat4 proj = perspective(radians(90.f),
                                   static_cast<float>(viewport_size.x) /
                                       static_cast<float>(viewport_size.y),
-                                  0.1f, 100.f);
+                                  0.1f, far_clip_distance);
 
     const mat4 view = camera.get_view();
 
@@ -397,6 +391,7 @@ void Renderer::render(std::vector<RenderData> &queue)
             r.shader.set("u_model_view", model_view);
             r.shader.set("u_mvp", mvp);
             r.shader.set("u_normal_mat", inverseTranspose(mat3{model_view}));
+            r.shader.set("u_far_clip_distance", far_clip_distance);
 
             if (r.base_color_tex_id != invalid_texture_id)
             {
@@ -420,14 +415,14 @@ void Renderer::render(std::vector<RenderData> &queue)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(lighting_shader.get_id());
-        lighting_shader.set("u_g_position", 0);
+        lighting_shader.set("u_g_depth", 0);
         lighting_shader.set("u_g_normal", 1);
         lighting_shader.set("u_g_albedo_specular", 2);
+        lighting_shader.set("u_proj_inv", inverse(proj));
 
-        glBindTextureUnit(0, g_position);
+        glBindTextureUnit(0, g_depth);
         glBindTextureUnit(1, g_normal);
         glBindTextureUnit(2, g_albedo_specular);
-        glBindTextureUnit(3, texture_shadow);
 
         // TODO: Use a UBO or SSBO for this data.
         for (size_t i = 0; i < lights.size(); i++)

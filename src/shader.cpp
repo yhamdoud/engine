@@ -168,6 +168,12 @@ void Shader::set(const std::string &name, const glm::vec3 &value)
                         glm::value_ptr(value));
 }
 
+void Shader::set(const std::string &name, float value)
+{
+    auto uniform = uniforms.at(name);
+    glProgramUniform1f(id, uniform.location, value);
+}
+
 void Shader::set(const std::string &name, int value)
 {
     auto uniform = uniforms.at(name);

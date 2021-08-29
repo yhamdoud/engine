@@ -169,19 +169,9 @@ int main()
     Renderer renderer{shadow_shader, skybox_shader, skybox_texture};
     glfwSetWindowUserPointer(window, &renderer);
 
-    auto blinn_shader = *Shader::from_paths(ShaderPaths{
-        .vert = shaders_path / "shader.vs",
-        .frag = shaders_path / "blinn.fs",
-    });
-
-    auto toon_shader = *Shader::from_paths(ShaderPaths{
-        .vert = shaders_path / "shader.vs",
-        .frag = shaders_path / "toon.fs",
-    });
-
     auto deferred_shader = *Shader::from_paths(ShaderPaths{
-        .vert = shaders_path / "shader.vs",
-        .frag = shaders_path / "deferred.fs",
+        .vert = shaders_path / "geometry.vs",
+        .frag = shaders_path / "geometry.fs",
     });
 
     auto duck_model = std::move(load_gltf(models_path / "duck.glb")[0]);
@@ -235,7 +225,7 @@ int main()
             ImVec2 window_size = ImGui::GetWindowSize();
             ImVec2 texture_size{window_size.x, window_size.x / aspect_ratio};
 
-            ImGui::Image((ImTextureID)renderer.g_position, texture_size,
+            ImGui::Image((ImTextureID)renderer.g_depth, texture_size,
                          ImVec2(0, 1), ImVec2(1, 0));
             ImGui::Image((ImTextureID)renderer.g_albedo_specular, texture_size,
                          ImVec2(0, 1), ImVec2(1, 0));

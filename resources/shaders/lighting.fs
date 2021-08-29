@@ -1,10 +1,12 @@
 #version 460 core
 
 in vec2 tex_coords;
+in vec3 view_ray;
 
-uniform sampler2D u_g_position;
+uniform sampler2D u_g_depth;
 uniform sampler2D u_g_normal;
 uniform sampler2D u_g_albedo_specular;
+uniform sampler2D u_g_position;
 uniform sampler2D u_shadow_map;
 
 struct Light {
@@ -62,7 +64,8 @@ void main()
 	vec3 albedo = albedo_specular.rgb;
 	float intensity = albedo_specular.a;
 
-	vec3 pos = texture(u_g_position, tex_coords).xyz;
+	vec3 pos = view_ray * texture(u_g_depth, tex_coords).x;
+
 	vec3 n = texture(u_g_normal, tex_coords).xyz;
 	vec3 v = normalize(-pos);
 

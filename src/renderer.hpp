@@ -69,10 +69,13 @@ class Renderer
     Shader lighting_shader;
 
   public:
+    // Projection settings
+    float far_clip_distance = 20.f;
+
     // Deferred
     glm::ivec2 g_buffer_size{1280, 720};
     uint g_buffer;
-    uint g_position;
+    uint g_depth;
     uint g_normal;
     uint g_albedo_specular;
 
