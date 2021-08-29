@@ -1,8 +1,8 @@
 
 #version 460 core
 
-layout (location = 0) out vec3 g_position;
-layout (location = 1) out vec3 g_normal;
+layout (location = 0) out vec4 g_position;
+layout (location = 1) out vec4 g_normal;
 layout (location = 2) out vec4 g_albedo_specular;
 
 uniform vec3 u_light_pos;
@@ -44,8 +44,8 @@ void main()
 	// vec3 col = ambient * ambient_color + diffuse * diffuse_color + spec * light_color;
 
 	// frag_color = vec4(col, 1);
-	g_position = fs_in.position;
-	g_normal = normalize(fs_in.normal);
+	g_position = vec4(fs_in.position, 1.);
+	g_normal = vec4(normalize(fs_in.normal), 1.);
 
 	if (u_use_sampler)
         g_albedo_specular.rgb = texture(u_base_color, fs_in.tex_coords).rgb;

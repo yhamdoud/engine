@@ -175,31 +175,32 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
 
     // G buffer
     {
-        ivec2 size{1280, 720};
-
         glCreateFramebuffers(1, &g_buffer);
 
         glCreateTextures(GL_TEXTURE_2D, 1, &g_position);
-        glTextureStorage2D(g_position, 1, GL_RGBA16F, size.x, size.y);
-        glTextureSubImage2D(g_position, 0, 0, 0, size.x, size.y, GL_RGBA,
-                            GL_FLOAT, nullptr);
+        glTextureStorage2D(g_position, 1, GL_RGBA16F, g_buffer_size.x,
+                           g_buffer_size.y);
+        glTextureSubImage2D(g_position, 0, 0, 0, g_buffer_size.x,
+                            g_buffer_size.y, GL_RGBA, GL_FLOAT, nullptr);
         glTextureParameteri(g_position, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTextureParameteri(g_position, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT0, g_position,
                                   0);
 
         glCreateTextures(GL_TEXTURE_2D, 1, &g_normal);
-        glTextureStorage2D(g_normal, 1, GL_RGBA16F, size.x, size.y);
-        glTextureSubImage2D(g_normal, 0, 0, 0, size.x, size.y, GL_RGBA,
-                            GL_FLOAT, nullptr);
+        glTextureStorage2D(g_normal, 1, GL_RGBA16F, g_buffer_size.x,
+                           g_buffer_size.y);
+        glTextureSubImage2D(g_normal, 0, 0, 0, g_buffer_size.x, g_buffer_size.y,
+                            GL_RGBA, GL_FLOAT, nullptr);
         glTextureParameteri(g_normal, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTextureParameteri(g_normal, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT1, g_normal, 0);
 
         glCreateTextures(GL_TEXTURE_2D, 1, &g_albedo_specular);
-        glTextureStorage2D(g_albedo_specular, 1, GL_RGBA8, size.x, size.y);
-        glTextureSubImage2D(g_albedo_specular, 0, 0, 0, size.x, size.y, GL_RGBA,
-                            GL_FLOAT, nullptr);
+        glTextureStorage2D(g_albedo_specular, 1, GL_RGBA8, g_buffer_size.x,
+                           g_buffer_size.y);
+        glTextureSubImage2D(g_albedo_specular, 0, 0, 0, g_buffer_size.x,
+                            g_buffer_size.y, GL_RGBA, GL_FLOAT, nullptr);
         glTextureParameteri(g_albedo_specular, GL_TEXTURE_MIN_FILTER,
                             GL_NEAREST);
         glTextureParameteri(g_albedo_specular, GL_TEXTURE_MAG_FILTER,
@@ -213,7 +214,8 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
 
         uint depth;
         glCreateRenderbuffers(1, &depth);
-        glNamedRenderbufferStorage(depth, GL_DEPTH_COMPONENT, size.x, size.y);
+        glNamedRenderbufferStorage(depth, GL_DEPTH_COMPONENT, g_buffer_size.x,
+                                   g_buffer_size.y);
         glad_glNamedFramebufferRenderbuffer(g_buffer, GL_DEPTH_ATTACHMENT,
                                             GL_RENDERBUFFER, depth);
 
@@ -439,19 +441,25 @@ void Renderer::render(std::vector<RenderData> &queue)
         }
 
         glDrawArrays(GL_TRIANGLES, 0, 3);
-    }
 
-    // Render skybox.
-    //    {
-    //        TracyGpuZone("Skybox");
-    //
-    //        glUseProgram(skybox_shader.get_id());
-    //        glBindTextureUnit(0, texture_skybox);
-    //
-    //        skybox_shader.set("u_projection", proj);
-    //        skybox_shader.set("u_view", mat4(mat3(view)));
-    //
-    //        glBindVertexArray(vao_skybox);
-    //        glDrawArrays(GL_TRIANGLES, 0, 36);
-    //    }
+        //     Render skybox.
+        {
+            TracyGpuZone("Skybox");
+
+            glBlitNamedFramebuffer(g_buffer, default_framebuffer, 0, 0,
+                                   g_buffer_size.x, g_buffer_size.y, 0, 0,
+                                   viewport_size.x, viewport_size.y,
+                                   GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+            glBindFramebuffer(GL_FRAMEBUFFER, default_framebuffer);
+
+            glUseProgram(skybox_shader.get_id());
+            glBindTextureUnit(0, texture_skybox);
+
+            skybox_shader.set("u_projection", proj);
+            skybox_shader.set("u_view", mat4(mat3(view)));
+
+            glBindVertexArray(vao_skybox);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
+    }
 }

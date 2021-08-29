@@ -66,14 +66,16 @@ class Renderer
 
     uint fbo_shadow;
 
+    Shader lighting_shader;
+
+  public:
     // Deferred
+    glm::ivec2 g_buffer_size{1280, 720};
     uint g_buffer;
     uint g_position;
     uint g_normal;
     uint g_albedo_specular;
-    Shader lighting_shader;
 
-  public:
     glm::ivec2 viewport_size{1280, 720};
     Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
 

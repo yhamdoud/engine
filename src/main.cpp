@@ -226,6 +226,26 @@ int main()
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        ImGui::Begin("G-buffer");
+        {
+            float aspect_ratio = static_cast<float>(renderer.viewport_size.x) /
+                                 renderer.viewport_size.y;
+
+            ImGui::BeginChild("Stuff");
+            ImVec2 window_size = ImGui::GetWindowSize();
+            ImVec2 texture_size{window_size.x, window_size.x / aspect_ratio};
+
+            ImGui::Image((ImTextureID)renderer.g_position, texture_size,
+                         ImVec2(0, 1), ImVec2(1, 0));
+            ImGui::Image((ImTextureID)renderer.g_albedo_specular, texture_size,
+                         ImVec2(0, 1), ImVec2(1, 0));
+            ImGui::Image((ImTextureID)renderer.g_normal, texture_size,
+                         ImVec2(0, 1), ImVec2(1, 0));
+
+            ImGui::EndChild();
+        }
+        ImGui::End();
+
         // Timestep.
         float time = glfwGetTime();
         float delta_time = time - last_time;
