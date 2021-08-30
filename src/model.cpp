@@ -163,7 +163,8 @@ static Model process_triangles(const cgltf_primitive &triangles)
     };
 }
 
-static void process_mesh(const cgltf_mesh &mesh, vector<Model> &model)
+static void process_mesh(const cgltf_mesh &mesh, vector<Model> &models,
+                         const mat4 transform)
 {
     for (size_t i = 0; i < mesh.primitives_count; i++)
     {
@@ -173,7 +174,9 @@ static void process_mesh(const cgltf_mesh &mesh, vector<Model> &model)
         {
         case cgltf_primitive_type_triangles:
         {
-            model.emplace_back(process_triangles(primitive));
+            auto m = process_triangles(primitive);
+            m.transform = transform;
+            models.emplace_back(move(m));
             break;
         }
         case cgltf_primitive_type_points:
@@ -191,10 +194,11 @@ static void process_mesh(const cgltf_mesh &mesh, vector<Model> &model)
 static void process_node(const cgltf_node &node, vector<Model> &meshes)
 {
     mat4 local_transform;
-    cgltf_node_transform_local(&node, glm::value_ptr(local_transform));
+    // FIXME:
+    cgltf_node_transform_world(&node, glm::value_ptr(local_transform));
 
     if (node.mesh)
-        process_mesh(*node.mesh, meshes);
+        process_mesh(*node.mesh, meshes, local_transform);
 
     for (size_t j = 0; j < node.children_count; j++)
         process_node(*node.children[j], meshes);
@@ -208,6 +212,8 @@ static void process_scene(const cgltf_scene &scene, vector<Model> &models)
 
 vector<Model> engine::load_gltf(const path &path)
 {
+    logger.info("Loading model at path: {}", path.string());
+
     vector<Model> models;
 
     cgltf_options options = {};
@@ -225,6 +231,9 @@ vector<Model> engine::load_gltf(const path &path)
             process_scene(data->scenes[i], models);
 
     cgltf_free(data);
+
+    logger.info("Finished loading model at path: {}", path.string());
+
     return models;
 }
 

@@ -1,5 +1,6 @@
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 
 #include "transform.hpp"
 
@@ -26,4 +27,11 @@ mat4 Transform::get_model() const
 {
     return glm::scale(mat4_cast(rotation) * translate(mat4{1}, position),
                       scale);
+}
+
+Transform::Transform(mat4 matrix)
+{
+    glm::vec3 skew;
+    glm::vec4 perspective;
+    glm::decompose(matrix, scale, rotation, position, skew, perspective);
 }

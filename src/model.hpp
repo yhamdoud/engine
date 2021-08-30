@@ -34,11 +34,11 @@ struct Mesh
     std::vector<std::uint32_t> indices;
 };
 
-class Model
+struct Model
 {
-  public:
     std::unique_ptr<Mesh> mesh;
     std::unique_ptr<Texture> base_color;
+    glm::mat4 transform;
 };
 
 std::vector<Model> load_gltf(const std::filesystem::path &path);

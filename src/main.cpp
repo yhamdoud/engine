@@ -186,6 +186,13 @@ int main()
                              Transform{vec3{2.f, 1.f, 0.f}}, helmet_model,
                              std::nullopt, deferred_shader);
 
+    auto sponza = load_gltf(models_path / "sponza.glb");
+    for (const auto &m : sponza)
+    {
+        add_entity(renderer, Entity::Flags::casts_shadow,
+                   Transform{m.transform}, m, std::nullopt, deferred_shader);
+    }
+
     //    add_entity(renderer, Entity::Flags::none, Transform{vec3{100.f, 5.f,
     //    0.f}},
     //               duck_model, std::make_optional<Entity>(entities[duck1]),
