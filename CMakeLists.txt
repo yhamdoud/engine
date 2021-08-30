@@ -16,23 +16,17 @@ set(TRACY_DIR "${EXTERN_DIR}/tracy")
 set(STB_DIR "${EXTERN_DIR}/stb")
 set(FMT_DIR "${EXTERN_DIR}/fmt")
 set(IMGUI_DIR "${EXTERN_DIR}/imgui")
+set(GLFW_DIR "${EXTERN_DIR}/glfw")
+set(GLM_DIR "${EXTERN_DIR}/glm")
 
 file(GLOB SRC_FILES "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.hpp")
 add_executable(${PROJECT_NAME} ${SRC_FILES})
-
-# GLFW
-find_package(glfw3 CONFIG REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
 
 # glad
 add_library(glad STATIC "${GLAD_DIR}/src/glad.c")
 target_include_directories(glad PRIVATE "${GLAD_DIR}/include")
 target_include_directories(${PROJECT_NAME} PRIVATE "${GLAD_DIR}/include")
 target_link_libraries(${PROJECT_NAME} PRIVATE glad ${CMAKE_DL_LIBS})
-
-# GLM
-find_package(glm CONFIG REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE glm)
 
 # cgtlf
 include_directories(${PROJECT_NAME} ${CGLTF_DIR})
@@ -55,3 +49,14 @@ add_library(imgui ${IMGUI_SOURCES})
 target_compile_definitions(imgui PRIVATE IMGUI_IMPL_OPENGL_LOADER_GLAD)
 target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
 target_link_libraries(${PROJECT_NAME} PRIVATE imgui)
+
+# GLFW
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+add_subdirectory(${GLFW_DIR})
+target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
+
+# GLM
+add_subdirectory(${GLM_DIR})
+target_link_libraries(${PROJECT_NAME} PRIVATE glm)
