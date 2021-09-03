@@ -9,9 +9,11 @@
 ### Rendering
 
 - Deferred shading
+- Physically based shading
+- Shadow mapping
+- Tangent space normal mapping
 - Skyboxes
 - Point lights
-- Shadow mapping
 
 ### Engine
 
@@ -23,7 +25,6 @@
 ## Planned features
 
 - TAA
-- PBR
 - SSAO
 - Tonemapping
 - Bloom

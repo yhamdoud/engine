@@ -90,12 +90,20 @@ size_t add_entity(Renderer &renderer, Entity::Flags flags, Transform transform,
 {
     size_t mesh_idx = renderer.register_mesh(*model.mesh);
     auto base_color_tex_id = invalid_texture_id;
+    auto normal_tex_id = invalid_texture_id;
+    auto metallic_roughness_tex_id = invalid_texture_id;
 
     size_t sg_idx;
 
-    if (model.base_color)
-        base_color_tex_id = std::get<uint>(renderer.register_texture(
-            *model.base_color, GL_CLAMP_TO_EDGE, GL_NEAREST));
+    if (const auto &texture = model.material.base_color)
+        base_color_tex_id = std::get<uint>(renderer.register_texture(*texture));
+
+    if (const auto &texture = model.material.normal)
+        normal_tex_id = std::get<uint>(renderer.register_texture(*texture));
+
+    if (const auto &texture = model.material.metallic_roughness)
+        metallic_roughness_tex_id =
+            std::get<uint>(renderer.register_texture(*texture));
 
     if (parent)
         sg_idx = scene_graph_insert(transform, parent->scene_graph_index);
@@ -107,6 +115,10 @@ size_t add_entity(Renderer &renderer, Entity::Flags flags, Transform transform,
         sg_idx,
         mesh_idx,
         base_color_tex_id,
+        normal_tex_id,
+        metallic_roughness_tex_id,
+        model.material.metallic_factor,
+        model.material.roughness_factor,
         shader,
     });
 
@@ -126,6 +138,10 @@ vector<RenderData> generate_render_data()
             e.flags,
             e.mesh_index,
             e.base_color_tex_id,
+            e.normal_tex_id,
+            e.metallic_roughness_tex_id,
+            e.metallic_factor,
+            e.roughness_factor,
             model,
             e.shader,
         });
@@ -136,7 +152,9 @@ vector<RenderData> generate_render_data()
 
 int main()
 {
-    GLFWwindow *window;
+    FrameMarkStart("Loading")
+
+        GLFWwindow *window;
 
     if (auto maybe_window = init_glfw(1280, 720))
         window = *maybe_window;
@@ -175,16 +193,16 @@ int main()
     });
 
     auto duck_model = std::move(load_gltf(models_path / "duck.glb")[0]);
-    auto helmet_model =
-        std::move(load_gltf(models_path / "damaged_helmet.glb")[0]);
+    //    auto helmet_model =
+    //        std::move(load_gltf(models_path / "damaged_helmet.glb")[0]);
 
     auto duck1 = add_entity(renderer, Entity::Flags::casts_shadow,
                             Transform{vec3{0.f}, vec3{0.01f}}, duck_model,
                             std::nullopt, deferred_shader);
 
-    auto helmet = add_entity(renderer, Entity::Flags::casts_shadow,
-                             Transform{vec3{2.f, 1.f, 0.f}}, helmet_model,
-                             std::nullopt, deferred_shader);
+    //    auto helmet = add_entity(renderer, Entity::Flags::casts_shadow,
+    //                             Transform{vec3{2.f, 1.f, 0.f}}, helmet_model,
+    //                             std::nullopt, deferred_shader);
 
     auto sponza = load_gltf(models_path / "sponza.glb");
     for (const auto &m : sponza)
@@ -215,7 +233,9 @@ int main()
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
 
-    while (!glfwWindowShouldClose(window))
+    FrameMarkEnd("Loading")
+
+        while (!glfwWindowShouldClose(window))
     {
         TracyGpuZone("Render");
 

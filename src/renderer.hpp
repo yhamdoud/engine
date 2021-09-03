@@ -21,6 +21,7 @@ struct MeshInstance
     int positions_offset;
     int normals_offset;
     int tex_coords_offset;
+    int tangents_offset;
 };
 
 struct RenderData
@@ -28,6 +29,10 @@ struct RenderData
     Entity::Flags flags;
     size_t mesh_index;
     uint base_color_tex_id;
+    uint normal_tex_id;
+    uint metallic_roughness_id;
+    float metallic_factor;
+    float roughness_factor;
     glm::mat4 model;
     Shader &shader;
 };
@@ -46,9 +51,9 @@ class Renderer
     };
 
     std::array<Light, 3> lights = {
-        Light{glm::vec3{3, 3, 0}, glm::vec3{1, 0, 0}},
-        Light{glm::vec3{0, 3, 3}, glm::vec3{0, 1, 0}},
-        Light{glm::vec3{3, 3, 3}, glm::vec3{0, 0, 1}},
+        Light{glm::vec3{3, 3, 0}, glm::vec3{20.f, 20.f, 20.f}},
+        Light{glm::vec3{0, 3, 3}, glm::vec3{0., 0., 0.}},
+        Light{glm::vec3{3, 3, 3}, glm::vec3{0., 0., 0.}},
     };
 
     std::vector<MeshInstance> mesh_instances;
@@ -89,8 +94,7 @@ class Renderer
     void render_mesh_instance(unsigned int vao, const MeshInstance &mesh);
     void render(std::vector<RenderData> &m);
 
-    std::variant<uint, Error> register_texture(const Texture &texture,
-                                               int wrap_mode, int filter_mode);
+    std::variant<uint, Error> register_texture(const Texture &texture);
 };
 
 } // namespace engine

@@ -57,43 +57,81 @@ vector<uint32_t> process_index_accessor(const cgltf_accessor &accessor)
     }
 }
 
-static Texture process_texture_view(const cgltf_texture_view &texture_view)
+static Sampler process_sampler(const cgltf_sampler &sampler)
 {
-    const auto &texture = *texture_view.texture;
-    const auto &image = texture.image;
+    return Sampler{sampler.mag_filter, sampler.min_filter, sampler.wrap_s,
+                   sampler.wrap_t};
+}
 
-    if (image->buffer_view)
+static optional<Texture>
+process_texture_view(const cgltf_texture_view &texture_view)
+{
+    if (texture_view.texture == nullptr)
+        return std::nullopt;
+
+    const auto &texture = *texture_view.texture;
+    const auto &image = *texture.image;
+
+    auto sampler = texture.sampler == nullptr
+                       ? Sampler{}
+                       : process_sampler(*texture.sampler);
+
+    if (image.buffer_view)
     {
-        const auto &buffer_view = *image->buffer_view;
+        const auto &buffer_view = *image.buffer_view;
+        auto const &buffer = *buffer_view.buffer;
 
         int x, y, c;
-
-        auto const &buffer = *buffer_view.buffer;
         uint8_t *buffer_data = (uint8_t *)buffer.data + buffer_view.offset;
 
-        return *Texture::from_memory(buffer_data,
-                                     static_cast<int>(buffer_view.size));
+        return Texture::from_memory(
+            buffer_data, static_cast<int>(buffer_view.size), sampler);
     }
     else
     {
         logger.warn("Texture data is in file.");
-        abort();
     }
+
+    return std::nullopt;
 }
 
-static Texture process_material(const cgltf_material &material)
+static Material process_material(const cgltf_material &gltf_material)
 {
+    Material material;
 
-    if (material.has_pbr_metallic_roughness)
+    material.normal = process_texture_view(gltf_material.normal_texture);
+    //    material.emissive =
+    //    process_texture_view(gltf_material.emissive_texture);
+    //    material.occlusion =
+    //    process_texture_view(gltf_material.occlusion_texture);
+
+    if (gltf_material.has_pbr_metallic_roughness)
     {
-        const auto &metallic_roughness = material.pbr_metallic_roughness;
-        return process_texture_view(metallic_roughness.base_color_texture);
+        const auto &gltf_pbr = gltf_material.pbr_metallic_roughness;
+        material.base_color = process_texture_view(gltf_pbr.base_color_texture);
+        material.metallic_roughness =
+            process_texture_view(gltf_pbr.metallic_roughness_texture);
+        material.base_color_factor = make_vec4(gltf_pbr.base_color_factor);
+        material.metallic_factor = gltf_pbr.metallic_factor;
+        material.roughness_factor = gltf_pbr.roughness_factor;
     }
-    else if (material.has_pbr_specular_glossiness)
+    else if (gltf_material.has_pbr_specular_glossiness)
     {
         logger.warn("Specular glossiness materials aren't supported.");
-        abort();
     }
+
+    return material;
+}
+
+template <typename T>
+void process_attribute_accessor(const cgltf_accessor &accessor, vector<T> &vec)
+{
+    cgltf_size float_count =
+        cgltf_accessor_unpack_floats(&accessor, nullptr, 0);
+
+    vec.resize(accessor.count);
+    cgltf_accessor_unpack_floats(
+        &accessor, reinterpret_cast<float *>(vec.data()), float_count);
 }
 
 static Model process_triangles(const cgltf_primitive &triangles)
@@ -101,54 +139,49 @@ static Model process_triangles(const cgltf_primitive &triangles)
     vector<vec3> positions;
     vector<vec3> normals;
     vector<vec2> tex_coords;
+    vector<vec4> tangents;
 
     for (size_t i = 0; i < triangles.attributes_count; i++)
     {
         auto &attribute = triangles.attributes[i];
-        auto accessor = attribute.data;
+        auto &accessor = *attribute.data;
 
         switch (attribute.type)
         {
         case cgltf_attribute_type_position:
         {
-            cgltf_size float_count =
-                cgltf_accessor_unpack_floats(accessor, nullptr, 0);
-
-            positions.resize(accessor->count);
-            cgltf_accessor_unpack_floats(
-                accessor, reinterpret_cast<float *>(positions.data()),
-                float_count);
-
+            process_attribute_accessor(accessor, positions);
             break;
         }
         case cgltf_attribute_type_normal:
         {
-            cgltf_size float_count =
-                cgltf_accessor_unpack_floats(accessor, nullptr, 0);
-
-            normals.resize(accessor->count);
-            cgltf_accessor_unpack_floats(
-                accessor, reinterpret_cast<float *>(normals.data()),
-                float_count);
+            process_attribute_accessor(accessor, normals);
             break;
         }
         case cgltf_attribute_type_texcoord:
         {
-            cgltf_size float_count =
-                cgltf_accessor_unpack_floats(accessor, nullptr, 0);
-
-            tex_coords.resize(accessor->count);
-            cgltf_accessor_unpack_floats(
-                accessor, reinterpret_cast<float *>(tex_coords.data()),
-                float_count);
+            process_attribute_accessor(accessor, tex_coords);
             break;
         }
-        case cgltf_attribute_type_invalid:
         case cgltf_attribute_type_tangent:
+        {
+            if (accessor.component_type != cgltf_component_type_r_32f &&
+                accessor.type != cgltf_type_vec4)
+            {
+                logger.warn("Unsupported tangent attribute type or component.");
+                break;
+            }
+
+            process_attribute_accessor(accessor, tangents);
+            break;
+        }
         case cgltf_attribute_type_color:
         case cgltf_attribute_type_joints:
         case cgltf_attribute_type_weights:
-            std::cerr << "Unsupported triangle attribute" << std::endl;
+            logger.warn("Unsupported triangle attribute.");
+            break;
+        case cgltf_attribute_type_invalid:
+            logger.error("Invalid triangle attribute.");
             break;
         }
     }
@@ -156,10 +189,9 @@ static Model process_triangles(const cgltf_primitive &triangles)
     auto indices = process_index_accessor(*triangles.indices);
 
     return Model{
-        make_unique<Mesh>(Mesh{positions, normals, tex_coords, indices}),
-        triangles.material
-            ? make_unique<Texture>(process_material(*triangles.material))
-            : nullptr,
+        make_unique<Mesh>(
+            Mesh{positions, normals, tex_coords, tangents, indices}),
+        process_material(*triangles.material),
     };
 }
 
@@ -238,13 +270,14 @@ vector<Model> engine::load_gltf(const path &path)
 }
 
 Texture::Texture(int width, int height, int component_count,
-                 std::unique_ptr<uint8_t, void (*)(void *)> data)
+                 std::unique_ptr<uint8_t, void (*)(void *)> data,
+                 Sampler sampler)
     : width{width}, height{height},
-      component_count{component_count}, data{std::move(data)}
+      component_count{component_count}, data{std::move(data)}, sampler{sampler}
 {
 }
 
-optional<Texture> Texture::from_file(path path)
+optional<Texture> Texture::from_file(path path, Sampler sampler)
 {
     int width, height, channel_count;
 
@@ -257,10 +290,11 @@ optional<Texture> Texture::from_file(path path)
 
     return make_optional<Texture>(
         width, height, channel_count,
-        unique_ptr<uint8_t, void (*)(void *)>(data, stbi_image_free));
+        unique_ptr<uint8_t, void (*)(void *)>(data, stbi_image_free), sampler);
 }
 
-optional<Texture> Texture::from_memory(uint8_t *data, int length)
+optional<Texture> Texture::from_memory(uint8_t *data, int length,
+                                       Sampler sampler)
 {
     int width, height, channel_count;
     uint8_t *image_data =
@@ -274,5 +308,6 @@ optional<Texture> Texture::from_memory(uint8_t *data, int length)
 
     return make_optional<Texture>(
         width, height, channel_count,
-        unique_ptr<uint8_t, void (*)(void *)>(image_data, stbi_image_free));
+        unique_ptr<uint8_t, void (*)(void *)>(image_data, stbi_image_free),
+        sampler);
 }

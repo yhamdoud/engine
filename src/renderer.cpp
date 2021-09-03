@@ -21,10 +21,12 @@ constexpr uint default_framebuffer = 0;
 uint binding_positions = 0;
 uint binding_normals = 1;
 uint binding_tex_coords = 2;
+uint binding_tangents = 3;
 
 int attrib_positions = 0;
 int attrib_normals = 1;
 int attrib_tex_coords = 2;
+int attrib_tangents = 3;
 
 void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
                          GLsizei length, GLchar const *message,
@@ -123,6 +125,12 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
                                   false, 0);
         glVertexArrayAttribBinding(vao_entities, attrib_tex_coords,
                                    binding_tex_coords);
+
+        glEnableVertexArrayAttrib(vao_entities, attrib_tangents);
+        glVertexArrayAttribFormat(vao_entities, attrib_tangents, 4, GL_FLOAT,
+                                  false, 0);
+        glVertexArrayAttribBinding(vao_entities, attrib_tangents,
+                                   binding_tangents);
     }
 
     // Skybox stuff.
@@ -232,16 +240,15 @@ Renderer::~Renderer()
 }
 
 variant<uint, Renderer::Error>
-Renderer::register_texture(const Texture &texture, int wrap_mode,
-                           int filter_mode)
+Renderer::register_texture(const Texture &texture)
 {
     uint id;
     glCreateTextures(GL_TEXTURE_2D, 1, &id);
 
-    //    glTexParameteri(id, GL_TEXTURE_WRAP_S, wrap_mode);
-    //    glTexParameteri(id, GL_TEXTURE_WRAP_T, wrap_mode);
-    //    glTexParameteri(id, GL_TEXTURE_MIN_FILTER, filter_mode);
-    //    glTexParameteri(id, GL_TEXTURE_MAG_FILTER, filter_mode);
+    glTexParameteri(id, GL_TEXTURE_MAG_FILTER, texture.sampler.magnify_filter);
+    glTexParameteri(id, GL_TEXTURE_MIN_FILTER, texture.sampler.minify_filter);
+    glTexParameteri(id, GL_TEXTURE_WRAP_S, texture.sampler.wrap_s);
+    glTexParameteri(id, GL_TEXTURE_WRAP_T, texture.sampler.wrap_t);
 
     GLenum internal_format, format;
 
@@ -277,29 +284,35 @@ size_t Renderer::register_mesh(const Mesh &mesh)
     int size_positions = mesh.positions.size() * sizeof(vec3);
     int size_normals = mesh.normals.size() * sizeof(vec3);
     int size_tex_coords = mesh.tex_coords.size() * sizeof(vec2);
+    int size_tangents = mesh.tangents.size() * sizeof(vec4);
 
     // TODO: Investigate if interleaved storage is more efficient than
     // sequential storage for vertex data.
-    glNamedBufferStorage(
-        id, size_indices + size_positions + size_normals + size_tex_coords,
-        nullptr, GL_DYNAMIC_STORAGE_BIT);
+    glNamedBufferStorage(id,
+                         size_indices + size_positions + size_normals +
+                             size_tex_coords + size_tangents,
+                         nullptr, GL_DYNAMIC_STORAGE_BIT);
 
     MeshInstance instance{.buffer_id = id, .primitive_count = primitive_count};
 
     int offset = 0;
     glNamedBufferSubData(id, offset, size_indices, mesh.indices.data());
-
     offset += size_indices;
+
     glNamedBufferSubData(id, offset, size_positions, mesh.positions.data());
     instance.positions_offset = offset;
-
     offset += size_positions;
+
     glNamedBufferSubData(id, offset, size_normals, mesh.normals.data());
     instance.normals_offset = offset;
-
     offset += size_normals;
+
     glNamedBufferSubData(id, offset, size_tex_coords, mesh.tex_coords.data());
     instance.tex_coords_offset = offset;
+    offset += size_tex_coords;
+
+    glNamedBufferSubData(id, offset, size_tangents, mesh.tangents.data());
+    instance.tangents_offset = offset;
 
     mesh_instances.emplace_back(instance);
     return mesh_instances.size() - 1;
@@ -316,6 +329,8 @@ void Renderer::render_mesh_instance(unsigned int vao, const MeshInstance &m)
                               m.normals_offset, sizeof(vec3));
     glVertexArrayVertexBuffer(vao, binding_tex_coords, m.buffer_id,
                               m.tex_coords_offset, sizeof(vec2));
+    glVertexArrayVertexBuffer(vao, binding_tangents, m.buffer_id,
+                              m.tangents_offset, sizeof(vec4));
 
     glDrawElements(GL_TRIANGLES, m.primitive_count, GL_UNSIGNED_INT, nullptr);
 }
@@ -393,6 +408,9 @@ void Renderer::render(std::vector<RenderData> &queue)
             r.shader.set("u_normal_mat", inverseTranspose(mat3{model_view}));
             r.shader.set("u_far_clip_distance", far_clip_distance);
 
+            r.shader.set("u_metallic_factor", r.metallic_factor);
+            r.shader.set("u_roughness_factor", r.roughness_factor);
+
             if (r.base_color_tex_id != invalid_texture_id)
             {
                 r.shader.set("u_use_sampler", true);
@@ -402,6 +420,28 @@ void Renderer::render(std::vector<RenderData> &queue)
             else
             {
                 r.shader.set("u_use_sampler", false);
+            }
+
+            if (r.normal_tex_id != invalid_texture_id)
+            {
+                r.shader.set("u_use_normal", true);
+                r.shader.set("u_normal", 1);
+                glBindTextureUnit(1, r.normal_tex_id);
+            }
+            else
+            {
+                r.shader.set("u_use_normal", false);
+            }
+
+            if (r.metallic_roughness_id != invalid_texture_id)
+            {
+                r.shader.set("u_use_metallic_roughness", true);
+                r.shader.set("u_metallic_roughness", 2);
+                glBindTextureUnit(2, r.metallic_roughness_id);
+            }
+            else
+            {
+                r.shader.set("u_use_metallic_roughness", false);
             }
 
             render_mesh_instance(vao_entities, mesh_instances[r.mesh_index]);

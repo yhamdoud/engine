@@ -19,6 +19,8 @@ uniform Light u_lights[light_count];
 
 out vec4 frag_color;
 
+const float PI = 3.14159265359;
+
 // Source: https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
 float calculate_shadow(vec4 pos_light_space, vec3 normal, vec3 light_dir)
 {
@@ -57,37 +59,111 @@ float calculate_shadow(vec4 pos_light_space, vec3 normal, vec3 light_dir)
 	return shadow / float(sample_count);
 }
 
+// PBS
+
+// Normal distribution function
+// Source: https://google.github.io/filament
+float D_GGX(float NoH, float roughness)
+{
+    float a = NoH * roughness;
+    float k = roughness / (1.0 - NoH * NoH + a * a);
+    return k * k * (1.0 / PI);
+}
+
+// Geometric shadowing
+// Source: https://google.github.io/filament
+float V_SmithGGXCorrelated(float NoV, float NoL, float roughness)
+{
+    float a2 = roughness * roughness;
+    float GGXV = NoL * sqrt(NoV * NoV * (1.0 - a2) + a2);
+    float GGXL = NoV * sqrt(NoL * NoL * (1.0 - a2) + a2);
+    return 0.5 / (GGXV + GGXL);
+}
+
+// Fresnel
+// Source: https://google.github.io/filament
+vec3 F_Schlick(float u, vec3 f0)
+{
+    float f = pow(1.0 - u, 5.0);
+    return f + f0 * (1.0 - f);
+}
+
+// Source: https://google.github.io/filament
+float Fd_Lambert() {
+    return 1.0 / PI;
+}
+
 void main()
 {
 	// TODO: Differentiate between point and directional lights.
-	vec4 albedo_specular = texture(u_g_albedo_specular, tex_coords);
-	vec3 albedo = albedo_specular.rgb;
-	float intensity = albedo_specular.a;
+	vec4 base_color_roughness = texture(u_g_albedo_specular, tex_coords);
+	vec4 normal_metallic = texture(u_g_normal, tex_coords);
+
+	vec3 base_color = base_color_roughness.rgb;
+	float roughness = base_color_roughness.a;
+
+	vec3 n = normal_metallic.rgb;
+	float metallic = normal_metallic.a;
 
 	vec3 pos = view_ray * texture(u_g_depth, tex_coords).x;
 
-	vec3 n = texture(u_g_normal, tex_coords).xyz;
 	vec3 v = normalize(-pos);
 
-	float ambient = 0.1;
-	vec3 col = ambient * albedo;
+	// Non-metals have achromatic specular reflectance, metals use base color
+	// as the specular color.
+	vec3 diffuseColor = (1.0 - metallic) * base_color.rgb;
+
+	// Perceptually linear roughness to roughness (alpha).
+	float a = roughness * roughness;
+
+	// TODO: More physically accurate way to calculate?
+	vec3 f0 = mix(vec3(0.04), base_color, metallic);
+
+	vec3 out_radiance = vec3(0.);
 
 	for (uint i = 0; i < light_count; i++)
 	{
 	    Light light = u_lights[i];
+		float dist = length(light.position - pos);
+		float attenuation = 1 / (dist * dist);
+		// TODO: Might not be a good fit, can cause divide by zero.
+		// Inverse square law
+		vec3 light_radiance = light.color * attenuation;
+
         vec3 l = normalize(light.position - pos);
         vec3 h = normalize(l + v);
 
-        float diffuse = max(dot(n, l), 0);
-        float spec = pow(max(dot(n, h), 0), 16);
+		float NoV = abs(dot(n, v)) + 1e-5;
+		float NoL = clamp(dot(n, l), 0.0, 1.0);
+		float NoH = clamp(dot(n, h), 0.0, 1.0);
+		float LoH = clamp(dot(l, h), 0.0, 1.0);
 
-        col += diffuse * albedo * light.color + spec * light.color;
+		float D = D_GGX(NoH, a);
+		vec3  F = F_Schlick(LoH, f0);
+		float V = V_SmithGGXCorrelated(NoV, NoL, a);
+
+		// Specular BRDF component.
+		// V already contains the denominator from Cook-Torrance.
+		vec3 Fr = D * V * F;
+
+		// Diffuse BRDF component.
+		vec3 Fd = diffuseColor * Fd_Lambert();
+		// https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#coupling-diffuse-and-specular-reflection
+        // https://computergraphics.stackexchange.com/questions/2285/how-to-properly-combine-the-diffuse-and-specular-terms
+		vec3 Fin = F_Schlick(NoL, f0);
+		vec3 Fout = F_Schlick(NoV, f0);
+
+        // TODO: Causes black artifacts, weighing the diffuse component causes black artifacts.
+        //	out_radiance += ((1 - Fin) * (1 - Fout) * Fd + Fr) * light_radiance * NoL;
+		out_radiance += (Fd + Fr) * light_radiance * NoL;
 	}
-
 
 // 	float shadow = calculate_shadow(fs_in.light_space_pos, n, l);
 // 	diffuse *= (1-shadow);
 // 	spec *= (1-shadow);
 
-	frag_color = vec4(col, 1);
+    // TODO: Gamma correction, need to this investigate further.
+    vec3 color = pow(out_radiance / (out_radiance + vec3(1.)), vec3(1. / 2.2));
+
+	frag_color = vec4(color, 1);
 }
