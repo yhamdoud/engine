@@ -92,9 +92,8 @@ void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
                message);
 }
 
-Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
-    : shadow_shader{shadow}, skybox_shader{skybox}, texture_skybox{
-                                                        skybox_texture}
+Renderer::Renderer(Shader skybox, unsigned int skybox_texture)
+    : skybox_shader{skybox}, texture_skybox{skybox_texture}
 {
     // Enable error callback.
     glEnable(GL_DEBUG_OUTPUT);
@@ -156,29 +155,31 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
 
     // Shadow mapping stuff.
 
-    // Depth texture rendered from light perspective.
-    glCreateTextures(GL_TEXTURE_2D, 1, &texture_shadow);
+    shadow_shader = *Shader::from_paths(
+        ShaderPaths{.vert = shaders_path / "shadow_map.vs"});
 
-    glTextureParameteri(texture_shadow, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTextureParameteri(texture_shadow, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTextureParameteri(texture_shadow, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTextureParameteri(texture_shadow, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    // Depth texture rendered from light perspective.
+    glCreateTextures(GL_TEXTURE_2D, 1, &shadow_map);
+
+    glTextureParameteri(shadow_map, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTextureParameteri(shadow_map, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTextureParameteri(shadow_map, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(shadow_map, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     // Areas beyond the coverage of the shadow map are in light.
     vec4 border_color{1.f};
-    glTextureParameterfv(texture_shadow, GL_TEXTURE_BORDER_COLOR,
+    glTextureParameterfv(shadow_map, GL_TEXTURE_BORDER_COLOR,
                          value_ptr(border_color));
 
     // TODO: internal format.
-    glTextureStorage2D(texture_shadow, 1, GL_DEPTH_COMPONENT24,
-                       shadow_map_size.x, shadow_map_size.y);
-    glTextureSubImage2D(texture_shadow, 0, 0, 0, shadow_map_size.x,
+    glTextureStorage2D(shadow_map, 1, GL_DEPTH_COMPONENT24, shadow_map_size.x,
+                       shadow_map_size.y);
+    glTextureSubImage2D(shadow_map, 0, 0, 0, shadow_map_size.x,
                         shadow_map_size.y, GL_DEPTH_COMPONENT, GL_FLOAT,
                         nullptr);
 
     glCreateFramebuffers(1, &fbo_shadow);
-    glNamedFramebufferTexture(fbo_shadow, GL_DEPTH_ATTACHMENT, texture_shadow,
-                              0);
+    glNamedFramebufferTexture(fbo_shadow, GL_DEPTH_ATTACHMENT, shadow_map, 0);
     // We only care about the depth test.
     glNamedFramebufferDrawBuffer(fbo_shadow, GL_NONE);
     glNamedFramebufferReadBuffer(fbo_shadow, GL_NONE);
@@ -376,9 +377,9 @@ void Renderer::render(std::vector<RenderData> &queue)
 
     const mat4 view = camera.get_view();
 
-    //    const mat4 light_transform =
-    //        ortho(-10.f, 10.f, -10.f, 10.f, 1.f, 17.5f) *
-    //        lookAt(light.position, vec3{0.f}, vec3{0.f, 1.f, 0.f});
+    const mat4 light_transform =
+        ortho(-20.f, 20.f, -20.f, 20.f, 1.f, 20.f) *
+        lookAt(sun.position, sun.position + sun.direction, vec3{0.f, 1.f, 0.f});
 
     // Shadow mapping pass.
     {
@@ -391,9 +392,8 @@ void Renderer::render(std::vector<RenderData> &queue)
         glClear(GL_DEPTH_BUFFER_BIT);
 
         // Directional light.
-
         glUseProgram(shadow_shader.get_id());
-        //        shadow_shader.set("u_light_transform", light_transform);
+        shadow_shader.set("u_light_transform", light_transform);
 
         glBindVertexArray(vao_entities);
 
@@ -489,22 +489,31 @@ void Renderer::render(std::vector<RenderData> &queue)
         lighting_shader.set("u_g_depth", 0);
         lighting_shader.set("u_g_normal_metallic", 1);
         lighting_shader.set("u_g_base_color_roughness", 2);
+        lighting_shader.set("u_shadow_map", 3);
         lighting_shader.set("u_proj_inv", inverse(proj));
+        lighting_shader.set("u_view_inv", inverse(view));
 
         glBindTextureUnit(0, g_depth);
         glBindTextureUnit(1, g_normal_metallic);
         glBindTextureUnit(2, g_base_color_roughness);
+        glBindTextureUnit(3, shadow_map);
 
         // TODO: Use a UBO or SSBO for this data.
-        for (size_t i = 0; i < lights.size(); i++)
+        for (size_t i = 0; i < point_lights.size(); i++)
         {
-            const auto &light = lights[i];
+            const auto &light = point_lights[i];
             vec4 pos = view * vec4(light.position, 1);
             lighting_shader.set(fmt::format("u_lights[{}].position", i),
                                 vec3(pos) / pos.w);
             lighting_shader.set(fmt::format("u_lights[{}].color", i),
                                 light.color);
         }
+
+        lighting_shader.set("u_light_transform", light_transform);
+        lighting_shader.set("u_directional_light.direction",
+                            vec3{view * vec4{sun.direction, 0.f}});
+        lighting_shader.set("u_directional_light.intensity",
+                            sun.intensity * sun.color);
 
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }

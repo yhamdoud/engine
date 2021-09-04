@@ -43,6 +43,15 @@ struct Light
     glm::vec3 color;
 };
 
+struct DirectionalLight
+{
+    glm::vec3 position;
+    glm::vec3 color;
+    // Intensity is illuminance at perpendicular incidence in lux.
+    float intensity;
+    glm::vec3 direction;
+};
+
 class Renderer
 {
     enum class Error
@@ -50,8 +59,8 @@ class Renderer
         unsupported_texture_format,
     };
 
-    std::array<Light, 3> lights = {
-        Light{glm::vec3{3, 3, 0}, glm::vec3{20.f, 20.f, 20.f}},
+    std::array<Light, 3> point_lights = {
+        Light{glm::vec3{0, 3, 0}, glm::vec3{20.f, 10.f, 10.f}},
         Light{glm::vec3{0, 3, 3}, glm::vec3{0., 0., 0.}},
         Light{glm::vec3{3, 3, 3}, glm::vec3{0., 0., 0.}},
     };
@@ -63,8 +72,6 @@ class Renderer
     unsigned int vao_skybox;
 
     Shader shadow_shader;
-    glm::ivec2 shadow_map_size{1024, 1024};
-    unsigned int texture_shadow;
 
     Shader skybox_shader;
     unsigned int texture_skybox;
@@ -73,8 +80,19 @@ class Renderer
     Shader lighting_shader;
 
   public:
+    glm::ivec2 shadow_map_size{2048, 2048};
+    uint shadow_map;
+
     // Projection settings
-    float far_clip_distance = 20.f;
+    float far_clip_distance = 50.f;
+
+    DirectionalLight sun{
+        .position = glm::vec3(0.f, 15., -5.f),
+        .color = glm::vec3{1.f, 0.95f, 0.95f},
+        //        .intensity = 100'000.f,
+        .intensity = 20.f,
+        .direction = glm::normalize(glm::vec3{0.f, -1.f, 0.2f}),
+    };
 
     // Deferred
     glm::ivec2 g_buffer_size{1280, 720};
@@ -91,7 +109,7 @@ class Renderer
     glm::ivec2 viewport_size{1280, 720};
     Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
 
-    Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture);
+    Renderer(Shader skybox, unsigned int skybox_texture);
     ~Renderer();
 
     size_t register_mesh(const Mesh &mesh);

@@ -172,9 +172,6 @@ int main()
         .frag = shaders_path / "skybox.fs",
     });
 
-    auto shadow_shader = *Shader::from_paths(
-        ShaderPaths{.vert = shaders_path / "shadow_map.vs"});
-
     const path skybox_path = textures_path / "skybox-1";
     auto skybox_texture =
         upload_cube_map({skybox_path / "right.jpg", skybox_path / "left.jpg",
@@ -184,7 +181,7 @@ int main()
     if (skybox_texture == invalid_texture_id)
         return EXIT_FAILURE;
 
-    Renderer renderer{shadow_shader, skybox_shader, skybox_texture};
+    Renderer renderer{skybox_shader, skybox_texture};
     glfwSetWindowUserPointer(window, &renderer);
 
     auto deferred_shader = *Shader::from_paths(ShaderPaths{
@@ -197,12 +194,8 @@ int main()
     //        std::move(load_gltf(models_path / "damaged_helmet.glb")[0]);
 
     auto duck1 = add_entity(renderer, Entity::Flags::casts_shadow,
-                            Transform{vec3{0.f}, vec3{0.01f}}, duck_model,
-                            std::nullopt, deferred_shader);
-
-    //    auto helmet = add_entity(renderer, Entity::Flags::casts_shadow,
-    //                             Transform{vec3{2.f, 1.f, 0.f}}, helmet_model,
-    //                             std::nullopt, deferred_shader);
+                            Transform{vec3{0.f, 2.f, 0.f}, vec3{0.01f}},
+                            duck_model, std::nullopt, deferred_shader);
 
     auto sponza = load_gltf(models_path / "sponza.glb");
     for (const auto &m : sponza)
@@ -210,6 +203,10 @@ int main()
         add_entity(renderer, Entity::Flags::casts_shadow,
                    Transform{m.transform}, m, std::nullopt, deferred_shader);
     }
+
+    //    auto helmet = add_entity(renderer, Entity::Flags::casts_shadow,
+    //                             Transform{vec3{2.f, 1.f, 0.f}}, helmet_model,
+    //                             std::nullopt, deferred_shader);
 
     //    add_entity(renderer, Entity::Flags::none, Transform{vec3{100.f, 5.f,
     //    0.f}},
@@ -220,6 +217,10 @@ int main()
     //               Transform(vec3{0.f}, vec3{10.f}),
     //               load_gltf(models_path / "plane.gltf")[0], std::nullopt,
     //               deferred_shader);
+
+    auto sphere_model = std::move(load_gltf(models_path / "sphere.glb")[0]);
+    add_entity(renderer, Entity::Flags::none, Transform(renderer.sun.position),
+               sphere_model, std::nullopt, deferred_shader);
 
     double last_time = glfwGetTime();
     vec2 cursor_pos = get_cursor_position(window);
@@ -242,6 +243,15 @@ int main()
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+
+        ImGui::Begin("Shadows");
+        {
+            ImGui::Image((ImTextureID)renderer.shadow_map,
+                         ImVec2{(float)renderer.shadow_map_size.x,
+                                (float)renderer.shadow_map_size.y},
+                         ImVec2(0, 1), ImVec2(1, 0));
+        }
+        ImGui::End();
 
         ImGui::Begin("G-buffer");
         {

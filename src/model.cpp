@@ -191,7 +191,8 @@ static Model process_triangles(const cgltf_primitive &triangles)
     return Model{
         make_unique<Mesh>(
             Mesh{positions, normals, tex_coords, tangents, indices}),
-        process_material(*triangles.material),
+        (triangles.material) ? process_material(*triangles.material)
+                             : Material{},
     };
 }
 
