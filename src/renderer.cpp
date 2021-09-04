@@ -16,6 +16,8 @@ using namespace std;
 
 using namespace engine;
 
+using std::filesystem::path;
+
 constexpr uint default_framebuffer = 0;
 
 uint binding_positions = 0;
@@ -207,7 +209,6 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
                                   g_albedo_specular, 0);
 
         glCreateTextures(GL_TEXTURE_2D, 1, &g_depth);
-
         glTextureStorage2D(g_depth, 1, GL_DEPTH_COMPONENT24, g_buffer_size.x,
                            g_buffer_size.y);
         glTextureSubImage2D(g_depth, 0, 0, 0, g_buffer_size.x, g_buffer_size.y,
@@ -224,6 +225,33 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
         if (glCheckNamedFramebufferStatus(g_buffer, GL_FRAMEBUFFER) !=
             GL_FRAMEBUFFER_COMPLETE)
             logger.error("G-buffer incomplete");
+
+        array<int, 4> rgb_swizzle{GL_RED, GL_GREEN, GL_BLUE, GL_ONE};
+        array<int, 4> www_swizzle{GL_ALPHA, GL_ALPHA, GL_ALPHA, GL_ONE};
+
+        glGenTextures(1, &debug_view_normal);
+        glTextureView(debug_view_normal, GL_TEXTURE_2D, g_normal, GL_RGBA16F, 0,
+                      1, 0, 1);
+        glTextureParameteriv(debug_view_normal, GL_TEXTURE_SWIZZLE_RGBA,
+                             rgb_swizzle.data());
+
+        glGenTextures(1, &debug_view_metallic);
+        glTextureView(debug_view_metallic, GL_TEXTURE_2D, g_normal, GL_RGBA16F,
+                      0, 1, 0, 1);
+        glTextureParameteriv(debug_view_metallic, GL_TEXTURE_SWIZZLE_RGBA,
+                             www_swizzle.data());
+
+        glGenTextures(1, &debug_view_base_color);
+        glTextureView(debug_view_base_color, GL_TEXTURE_2D, g_albedo_specular,
+                      GL_RGBA8, 0, 1, 0, 1);
+        glTextureParameteriv(debug_view_base_color, GL_TEXTURE_SWIZZLE_RGBA,
+                             rgb_swizzle.data());
+
+        glGenTextures(1, &debug_view_roughness);
+        glTextureView(debug_view_roughness, GL_TEXTURE_2D, g_albedo_specular,
+                      GL_RGBA8, 0, 1, 0, 1);
+        glTextureParameteriv(debug_view_roughness, GL_TEXTURE_SWIZZLE_RGBA,
+                             www_swizzle.data());
 
         lighting_shader = *Shader::from_paths(ShaderPaths{
             .vert = shaders_path / "lighting.vs",
@@ -449,7 +477,7 @@ void Renderer::render(std::vector<RenderData> &queue)
     }
 
     {
-        TracyGpuZone("Lighting pass pass");
+        TracyGpuZone("Lighting pass");
 
         glBindFramebuffer(GL_FRAMEBUFFER, default_framebuffer);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -476,8 +504,10 @@ void Renderer::render(std::vector<RenderData> &queue)
         }
 
         glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
 
-        //     Render skybox.
+    //     Render skybox.
+    {
         {
             TracyGpuZone("Skybox");
 

@@ -252,12 +252,25 @@ int main()
             ImVec2 window_size = ImGui::GetWindowSize();
             ImVec2 texture_size{window_size.x, window_size.x / aspect_ratio};
 
+            ImGui::Text("Depth");
             ImGui::Image((ImTextureID)renderer.g_depth, texture_size,
                          ImVec2(0, 1), ImVec2(1, 0));
-            ImGui::Image((ImTextureID)renderer.g_albedo_specular, texture_size,
+
+            ImGui::Text("Base color");
+            ImGui::Image((ImTextureID)renderer.debug_view_base_color,
+                         texture_size, ImVec2(0, 1), ImVec2(1, 0));
+
+            ImGui::Text("Normal");
+            ImGui::Image((ImTextureID)renderer.debug_view_normal, texture_size,
                          ImVec2(0, 1), ImVec2(1, 0));
-            ImGui::Image((ImTextureID)renderer.g_normal, texture_size,
-                         ImVec2(0, 1), ImVec2(1, 0));
+
+            ImGui::Text("Metallic");
+            ImGui::Image((ImTextureID)renderer.debug_view_metallic,
+                         texture_size, ImVec2(0, 1), ImVec2(1, 0));
+
+            ImGui::Text("Roughness");
+            ImGui::Image((ImTextureID)renderer.debug_view_roughness,
+                         texture_size, ImVec2(0, 1), ImVec2(1, 0));
 
             ImGui::EndChild();
         }
@@ -291,11 +304,6 @@ int main()
         auto data = generate_render_data();
 
         renderer.render(data);
-
-        // Draw UI.
-        ImGui::Text("Hello, world %d", 123);
-        if (ImGui::Button("Save"))
-            ;
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

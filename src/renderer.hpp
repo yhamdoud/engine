@@ -70,8 +70,11 @@ class Renderer
     unsigned int texture_skybox;
 
     uint fbo_shadow;
-
     Shader lighting_shader;
+
+    Shader debug_roughness;
+    Shader debug_depth;
+    Shader debug_normal;
 
   public:
     // Projection settings
@@ -83,6 +86,11 @@ class Renderer
     uint g_depth;
     uint g_normal;
     uint g_albedo_specular;
+
+    uint debug_view_base_color;
+    uint debug_view_roughness;
+    uint debug_view_normal;
+    uint debug_view_metallic;
 
     glm::ivec2 viewport_size{1280, 720};
     Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
