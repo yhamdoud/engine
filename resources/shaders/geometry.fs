@@ -2,8 +2,8 @@
 #version 460 core
 
 layout (location = 0) out vec4 g_position;
-layout (location = 1) out vec4 g_normal;
-layout (location = 2) out vec4 g_albedo_specular;
+layout (location = 1) out vec4 g_normal_metallic;
+layout (location = 2) out vec4 g_base_color_roughness;
 
 uniform vec3 u_light_pos;
 uniform mat4 u_model_view;
@@ -51,30 +51,30 @@ void main()
 	gl_FragDepth = depth;
 
 	if (u_use_sampler)
-        g_albedo_specular.rgb = texture(u_base_color, fs_in.tex_coords).rgb;
+        g_base_color_roughness.rgb = texture(u_base_color, fs_in.tex_coords).rgb;
     else
-        g_albedo_specular.rgb = vec3(0.5);
+        g_base_color_roughness.rgb = vec3(0.5);
 
     if (u_use_normal)
     {
         mat3 tbn = calculate_tbn_matrix(fs_in.tangent, fs_in.normal);
         vec3 normal_tangent = texture(u_normal, fs_in.tex_coords).xyz * 2. -1.;
-        g_normal.xyz = tbn * normal_tangent;
+        g_normal_metallic.xyz = tbn * normal_tangent;
     }
     else
     {
-        g_normal = vec4(normalize(fs_in.normal), 1.);
+        g_normal_metallic = vec4(normalize(fs_in.normal), 1.);
     }
 
-    g_normal.a = u_metallic_factor;
-	g_albedo_specular.a = u_roughness_factor;
+    g_normal_metallic.a = u_metallic_factor;
+	g_base_color_roughness.a = u_roughness_factor;
 
     if (u_use_metallic_roughness)
     {
         vec2 metallic_roughness = texture(u_metallic_roughness, fs_in.tex_coords).bg;
 
-        g_normal.a *= metallic_roughness[0];
-        g_albedo_specular.a *= metallic_roughness[1];
+        g_normal_metallic.a *= metallic_roughness[0];
+        g_base_color_roughness.a *= metallic_roughness[1];
     }
 
 }

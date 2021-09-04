@@ -187,26 +187,29 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
     {
         glCreateFramebuffers(1, &g_buffer);
 
-        glCreateTextures(GL_TEXTURE_2D, 1, &g_normal);
-        glTextureStorage2D(g_normal, 1, GL_RGBA16F, g_buffer_size.x,
+        glCreateTextures(GL_TEXTURE_2D, 1, &g_normal_metallic);
+        glTextureStorage2D(g_normal_metallic, 1, GL_RGBA16F, g_buffer_size.x,
                            g_buffer_size.y);
-        glTextureSubImage2D(g_normal, 0, 0, 0, g_buffer_size.x, g_buffer_size.y,
-                            GL_RGBA, GL_FLOAT, nullptr);
-        glTextureParameteri(g_normal, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTextureParameteri(g_normal, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT1, g_normal, 0);
-
-        glCreateTextures(GL_TEXTURE_2D, 1, &g_albedo_specular);
-        glTextureStorage2D(g_albedo_specular, 1, GL_RGBA8, g_buffer_size.x,
-                           g_buffer_size.y);
-        glTextureSubImage2D(g_albedo_specular, 0, 0, 0, g_buffer_size.x,
+        glTextureSubImage2D(g_normal_metallic, 0, 0, 0, g_buffer_size.x,
                             g_buffer_size.y, GL_RGBA, GL_FLOAT, nullptr);
-        glTextureParameteri(g_albedo_specular, GL_TEXTURE_MIN_FILTER,
+        glTextureParameteri(g_normal_metallic, GL_TEXTURE_MIN_FILTER,
                             GL_NEAREST);
-        glTextureParameteri(g_albedo_specular, GL_TEXTURE_MAG_FILTER,
+        glTextureParameteri(g_normal_metallic, GL_TEXTURE_MAG_FILTER,
+                            GL_NEAREST);
+        glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT1,
+                                  g_normal_metallic, 0);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &g_base_color_roughness);
+        glTextureStorage2D(g_base_color_roughness, 1, GL_RGBA8, g_buffer_size.x,
+                           g_buffer_size.y);
+        glTextureSubImage2D(g_base_color_roughness, 0, 0, 0, g_buffer_size.x,
+                            g_buffer_size.y, GL_RGBA, GL_FLOAT, nullptr);
+        glTextureParameteri(g_base_color_roughness, GL_TEXTURE_MIN_FILTER,
+                            GL_NEAREST);
+        glTextureParameteri(g_base_color_roughness, GL_TEXTURE_MAG_FILTER,
                             GL_NEAREST);
         glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT2,
-                                  g_albedo_specular, 0);
+                                  g_base_color_roughness, 0);
 
         glCreateTextures(GL_TEXTURE_2D, 1, &g_depth);
         glTextureStorage2D(g_depth, 1, GL_DEPTH_COMPONENT24, g_buffer_size.x,
@@ -230,26 +233,26 @@ Renderer::Renderer(Shader shadow, Shader skybox, unsigned int skybox_texture)
         array<int, 4> www_swizzle{GL_ALPHA, GL_ALPHA, GL_ALPHA, GL_ONE};
 
         glGenTextures(1, &debug_view_normal);
-        glTextureView(debug_view_normal, GL_TEXTURE_2D, g_normal, GL_RGBA16F, 0,
-                      1, 0, 1);
+        glTextureView(debug_view_normal, GL_TEXTURE_2D, g_normal_metallic,
+                      GL_RGBA16F, 0, 1, 0, 1);
         glTextureParameteriv(debug_view_normal, GL_TEXTURE_SWIZZLE_RGBA,
                              rgb_swizzle.data());
 
         glGenTextures(1, &debug_view_metallic);
-        glTextureView(debug_view_metallic, GL_TEXTURE_2D, g_normal, GL_RGBA16F,
-                      0, 1, 0, 1);
+        glTextureView(debug_view_metallic, GL_TEXTURE_2D, g_normal_metallic,
+                      GL_RGBA16F, 0, 1, 0, 1);
         glTextureParameteriv(debug_view_metallic, GL_TEXTURE_SWIZZLE_RGBA,
                              www_swizzle.data());
 
         glGenTextures(1, &debug_view_base_color);
-        glTextureView(debug_view_base_color, GL_TEXTURE_2D, g_albedo_specular,
-                      GL_RGBA8, 0, 1, 0, 1);
+        glTextureView(debug_view_base_color, GL_TEXTURE_2D,
+                      g_base_color_roughness, GL_RGBA8, 0, 1, 0, 1);
         glTextureParameteriv(debug_view_base_color, GL_TEXTURE_SWIZZLE_RGBA,
                              rgb_swizzle.data());
 
         glGenTextures(1, &debug_view_roughness);
-        glTextureView(debug_view_roughness, GL_TEXTURE_2D, g_albedo_specular,
-                      GL_RGBA8, 0, 1, 0, 1);
+        glTextureView(debug_view_roughness, GL_TEXTURE_2D,
+                      g_base_color_roughness, GL_RGBA8, 0, 1, 0, 1);
         glTextureParameteriv(debug_view_roughness, GL_TEXTURE_SWIZZLE_RGBA,
                              www_swizzle.data());
 
@@ -484,13 +487,13 @@ void Renderer::render(std::vector<RenderData> &queue)
 
         glUseProgram(lighting_shader.get_id());
         lighting_shader.set("u_g_depth", 0);
-        lighting_shader.set("u_g_normal", 1);
-        lighting_shader.set("u_g_albedo_specular", 2);
+        lighting_shader.set("u_g_normal_metallic", 1);
+        lighting_shader.set("u_g_base_color_roughness", 2);
         lighting_shader.set("u_proj_inv", inverse(proj));
 
         glBindTextureUnit(0, g_depth);
-        glBindTextureUnit(1, g_normal);
-        glBindTextureUnit(2, g_albedo_specular);
+        glBindTextureUnit(1, g_normal_metallic);
+        glBindTextureUnit(2, g_base_color_roughness);
 
         // TODO: Use a UBO or SSBO for this data.
         for (size_t i = 0; i < lights.size(); i++)

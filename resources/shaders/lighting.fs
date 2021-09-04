@@ -4,8 +4,8 @@ in vec2 tex_coords;
 in vec3 view_ray;
 
 uniform sampler2D u_g_depth;
-uniform sampler2D u_g_normal;
-uniform sampler2D u_g_albedo_specular;
+uniform sampler2D u_g_normal_metallic;
+uniform sampler2D u_g_base_color_roughness;
 uniform sampler2D u_g_position;
 uniform sampler2D u_shadow_map;
 
@@ -96,8 +96,8 @@ float Fd_Lambert() {
 void main()
 {
 	// TODO: Differentiate between point and directional lights.
-	vec4 base_color_roughness = texture(u_g_albedo_specular, tex_coords);
-	vec4 normal_metallic = texture(u_g_normal, tex_coords);
+	vec4 base_color_roughness = texture(u_g_base_color_roughness, tex_coords);
+	vec4 normal_metallic = texture(u_g_normal_metallic, tex_coords);
 
 	vec3 base_color = base_color_roughness.rgb;
 	float roughness = base_color_roughness.a;

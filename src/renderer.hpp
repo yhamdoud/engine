@@ -72,10 +72,6 @@ class Renderer
     uint fbo_shadow;
     Shader lighting_shader;
 
-    Shader debug_roughness;
-    Shader debug_depth;
-    Shader debug_normal;
-
   public:
     // Projection settings
     float far_clip_distance = 20.f;
@@ -84,8 +80,8 @@ class Renderer
     glm::ivec2 g_buffer_size{1280, 720};
     uint g_buffer;
     uint g_depth;
-    uint g_normal;
-    uint g_albedo_specular;
+    uint g_normal_metallic;
+    uint g_base_color_roughness;
 
     uint debug_view_base_color;
     uint debug_view_roughness;
