@@ -92,8 +92,82 @@ void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
                message);
 }
 
-Renderer::Renderer(Shader skybox, unsigned int skybox_texture)
-    : skybox_shader{skybox}, texture_skybox{skybox_texture}
+void Renderer::create_g_buffer()
+{
+    glCreateFramebuffers(1, &g_buffer);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &g_normal_metallic);
+    glTextureStorage2D(g_normal_metallic, 1, GL_RGBA16F, viewport_size.x,
+                       viewport_size.y);
+    glTextureSubImage2D(g_normal_metallic, 0, 0, 0, viewport_size.x,
+                        viewport_size.y, GL_RGBA, GL_FLOAT, nullptr);
+    glTextureParameteri(g_normal_metallic, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(g_normal_metallic, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT1, g_normal_metallic,
+                              0);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &g_base_color_roughness);
+    glTextureStorage2D(g_base_color_roughness, 1, GL_RGBA8, viewport_size.x,
+                       viewport_size.y);
+    glTextureSubImage2D(g_base_color_roughness, 0, 0, 0, viewport_size.x,
+                        viewport_size.y, GL_RGBA, GL_FLOAT, nullptr);
+    glTextureParameteri(g_base_color_roughness, GL_TEXTURE_MIN_FILTER,
+                        GL_NEAREST);
+    glTextureParameteri(g_base_color_roughness, GL_TEXTURE_MAG_FILTER,
+                        GL_NEAREST);
+    glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT2,
+                              g_base_color_roughness, 0);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &g_depth);
+    glTextureStorage2D(g_depth, 1, GL_DEPTH_COMPONENT24, viewport_size.x,
+                       viewport_size.y);
+    glTextureSubImage2D(g_depth, 0, 0, 0, viewport_size.x, viewport_size.y,
+                        GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+
+    glTextureParameteri(g_depth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(g_depth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glNamedFramebufferTexture(g_buffer, GL_DEPTH_ATTACHMENT, g_depth, 0);
+
+    array<GLenum, 3> bufs{GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1,
+                          GL_COLOR_ATTACHMENT2};
+    glNamedFramebufferDrawBuffers(g_buffer, 3, bufs.data());
+
+    if (glCheckNamedFramebufferStatus(g_buffer, GL_FRAMEBUFFER) !=
+        GL_FRAMEBUFFER_COMPLETE)
+        logger.error("G-buffer incomplete");
+
+    array<int, 4> rgb_swizzle{GL_RED, GL_GREEN, GL_BLUE, GL_ONE};
+    array<int, 4> www_swizzle{GL_ALPHA, GL_ALPHA, GL_ALPHA, GL_ONE};
+
+    glGenTextures(1, &debug_view_normal);
+    glTextureView(debug_view_normal, GL_TEXTURE_2D, g_normal_metallic,
+                  GL_RGBA16F, 0, 1, 0, 1);
+    glTextureParameteriv(debug_view_normal, GL_TEXTURE_SWIZZLE_RGBA,
+                         rgb_swizzle.data());
+
+    glGenTextures(1, &debug_view_metallic);
+    glTextureView(debug_view_metallic, GL_TEXTURE_2D, g_normal_metallic,
+                  GL_RGBA16F, 0, 1, 0, 1);
+    glTextureParameteriv(debug_view_metallic, GL_TEXTURE_SWIZZLE_RGBA,
+                         www_swizzle.data());
+
+    glGenTextures(1, &debug_view_base_color);
+    glTextureView(debug_view_base_color, GL_TEXTURE_2D, g_base_color_roughness,
+                  GL_RGBA8, 0, 1, 0, 1);
+    glTextureParameteriv(debug_view_base_color, GL_TEXTURE_SWIZZLE_RGBA,
+                         rgb_swizzle.data());
+
+    glGenTextures(1, &debug_view_roughness);
+    glTextureView(debug_view_roughness, GL_TEXTURE_2D, g_base_color_roughness,
+                  GL_RGBA8, 0, 1, 0, 1);
+    glTextureParameteriv(debug_view_roughness, GL_TEXTURE_SWIZZLE_RGBA,
+                         www_swizzle.data());
+}
+
+Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
+                   unsigned int skybox_texture)
+    : viewport_size{viewport_size}, skybox_shader{skybox}, texture_skybox{
+                                                               skybox_texture}
 {
     // Enable error callback.
     glEnable(GL_DEBUG_OUTPUT);
@@ -184,84 +258,12 @@ Renderer::Renderer(Shader skybox, unsigned int skybox_texture)
     glNamedFramebufferDrawBuffer(fbo_shadow, GL_NONE);
     glNamedFramebufferReadBuffer(fbo_shadow, GL_NONE);
 
-    // G buffer
-    {
-        glCreateFramebuffers(1, &g_buffer);
+    create_g_buffer();
 
-        glCreateTextures(GL_TEXTURE_2D, 1, &g_normal_metallic);
-        glTextureStorage2D(g_normal_metallic, 1, GL_RGBA16F, g_buffer_size.x,
-                           g_buffer_size.y);
-        glTextureSubImage2D(g_normal_metallic, 0, 0, 0, g_buffer_size.x,
-                            g_buffer_size.y, GL_RGBA, GL_FLOAT, nullptr);
-        glTextureParameteri(g_normal_metallic, GL_TEXTURE_MIN_FILTER,
-                            GL_NEAREST);
-        glTextureParameteri(g_normal_metallic, GL_TEXTURE_MAG_FILTER,
-                            GL_NEAREST);
-        glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT1,
-                                  g_normal_metallic, 0);
-
-        glCreateTextures(GL_TEXTURE_2D, 1, &g_base_color_roughness);
-        glTextureStorage2D(g_base_color_roughness, 1, GL_RGBA8, g_buffer_size.x,
-                           g_buffer_size.y);
-        glTextureSubImage2D(g_base_color_roughness, 0, 0, 0, g_buffer_size.x,
-                            g_buffer_size.y, GL_RGBA, GL_FLOAT, nullptr);
-        glTextureParameteri(g_base_color_roughness, GL_TEXTURE_MIN_FILTER,
-                            GL_NEAREST);
-        glTextureParameteri(g_base_color_roughness, GL_TEXTURE_MAG_FILTER,
-                            GL_NEAREST);
-        glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT2,
-                                  g_base_color_roughness, 0);
-
-        glCreateTextures(GL_TEXTURE_2D, 1, &g_depth);
-        glTextureStorage2D(g_depth, 1, GL_DEPTH_COMPONENT24, g_buffer_size.x,
-                           g_buffer_size.y);
-        glTextureSubImage2D(g_depth, 0, 0, 0, g_buffer_size.x, g_buffer_size.y,
-                            GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
-
-        glTextureParameteri(g_depth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTextureParameteri(g_depth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glNamedFramebufferTexture(g_buffer, GL_DEPTH_ATTACHMENT, g_depth, 0);
-
-        array<GLenum, 3> bufs{GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1,
-                              GL_COLOR_ATTACHMENT2};
-        glNamedFramebufferDrawBuffers(g_buffer, 3, bufs.data());
-
-        if (glCheckNamedFramebufferStatus(g_buffer, GL_FRAMEBUFFER) !=
-            GL_FRAMEBUFFER_COMPLETE)
-            logger.error("G-buffer incomplete");
-
-        array<int, 4> rgb_swizzle{GL_RED, GL_GREEN, GL_BLUE, GL_ONE};
-        array<int, 4> www_swizzle{GL_ALPHA, GL_ALPHA, GL_ALPHA, GL_ONE};
-
-        glGenTextures(1, &debug_view_normal);
-        glTextureView(debug_view_normal, GL_TEXTURE_2D, g_normal_metallic,
-                      GL_RGBA16F, 0, 1, 0, 1);
-        glTextureParameteriv(debug_view_normal, GL_TEXTURE_SWIZZLE_RGBA,
-                             rgb_swizzle.data());
-
-        glGenTextures(1, &debug_view_metallic);
-        glTextureView(debug_view_metallic, GL_TEXTURE_2D, g_normal_metallic,
-                      GL_RGBA16F, 0, 1, 0, 1);
-        glTextureParameteriv(debug_view_metallic, GL_TEXTURE_SWIZZLE_RGBA,
-                             www_swizzle.data());
-
-        glGenTextures(1, &debug_view_base_color);
-        glTextureView(debug_view_base_color, GL_TEXTURE_2D,
-                      g_base_color_roughness, GL_RGBA8, 0, 1, 0, 1);
-        glTextureParameteriv(debug_view_base_color, GL_TEXTURE_SWIZZLE_RGBA,
-                             rgb_swizzle.data());
-
-        glGenTextures(1, &debug_view_roughness);
-        glTextureView(debug_view_roughness, GL_TEXTURE_2D,
-                      g_base_color_roughness, GL_RGBA8, 0, 1, 0, 1);
-        glTextureParameteriv(debug_view_roughness, GL_TEXTURE_SWIZZLE_RGBA,
-                             www_swizzle.data());
-
-        lighting_shader = *Shader::from_paths(ShaderPaths{
-            .vert = shaders_path / "lighting.vs",
-            .frag = shaders_path / "lighting.fs",
-        });
-    }
+    lighting_shader = *Shader::from_paths(ShaderPaths{
+        .vert = shaders_path / "lighting.vs",
+        .frag = shaders_path / "lighting.fs",
+    });
 }
 
 Renderer::~Renderer()
@@ -490,6 +492,7 @@ void Renderer::render(std::vector<RenderData> &queue)
     {
         TracyGpuZone("Lighting pass");
 
+        glViewport(0, 0, viewport_size.x, viewport_size.y);
         glBindFramebuffer(GL_FRAMEBUFFER, default_framebuffer);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -528,23 +531,26 @@ void Renderer::render(std::vector<RenderData> &queue)
 
     //     Render skybox.
     {
-        {
-            TracyGpuZone("Skybox");
+        TracyGpuZone("Skybox");
 
-            glBlitNamedFramebuffer(g_buffer, default_framebuffer, 0, 0,
-                                   g_buffer_size.x, g_buffer_size.y, 0, 0,
-                                   viewport_size.x, viewport_size.y,
-                                   GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-            glBindFramebuffer(GL_FRAMEBUFFER, default_framebuffer);
+        glBlitNamedFramebuffer(g_buffer, default_framebuffer, 0, 0,
+                               viewport_size.x, viewport_size.y, 0, 0,
+                               viewport_size.x, viewport_size.y,
+                               GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_FRAMEBUFFER, default_framebuffer);
 
-            glUseProgram(skybox_shader.get_id());
-            glBindTextureUnit(0, texture_skybox);
+        glUseProgram(skybox_shader.get_id());
+        glBindTextureUnit(0, texture_skybox);
 
-            skybox_shader.set("u_projection", proj);
-            skybox_shader.set("u_view", mat4(mat3(view)));
+        skybox_shader.set("u_projection", proj);
+        skybox_shader.set("u_view", mat4(mat3(view)));
 
-            glBindVertexArray(vao_skybox);
-            glDrawArrays(GL_TRIANGLES, 0, 36);
-        }
+        glBindVertexArray(vao_skybox);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
     }
+}
+void Renderer::resize_viewport(glm::vec2 size)
+{
+    viewport_size = size;
+    create_g_buffer();
 }

@@ -156,7 +156,7 @@ int main()
 
         GLFWwindow *window;
 
-    if (auto maybe_window = init_glfw(1280, 720))
+    if (auto maybe_window = init_glfw(1600, 900))
         window = *maybe_window;
     else
         return EXIT_FAILURE;
@@ -181,7 +181,7 @@ int main()
     if (skybox_texture == invalid_texture_id)
         return EXIT_FAILURE;
 
-    Renderer renderer{skybox_shader, skybox_texture};
+    Renderer renderer(ivec2{1600, 900}, skybox_shader, skybox_texture);
     glfwSetWindowUserPointer(window, &renderer);
 
     auto deferred_shader = *Shader::from_paths(ShaderPaths{
@@ -244,45 +244,67 @@ int main()
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::Begin("Shadows");
+        ImGui::Begin("Renderer");
         {
-            ImGui::Image((ImTextureID)renderer.shadow_map,
-                         ImVec2{(float)renderer.shadow_map_size.x,
-                                (float)renderer.shadow_map_size.y},
-                         ImVec2(0, 1), ImVec2(1, 0));
-        }
-        ImGui::End();
+            if (ImGui::CollapsingHeader("Viewport"))
+            {
+                const array<ivec2, 3> resolutions{
+                    ivec2{1280, 720}, ivec2{1600, 900}, ivec2{1920, 1080}};
+                const char *items[] = {"1280x720", "1600x900", "1920x1080"};
+                static_assert(resolutions.size() == IM_ARRAYSIZE(items));
 
-        ImGui::Begin("G-buffer");
-        {
-            float aspect_ratio = static_cast<float>(renderer.viewport_size.x) /
-                                 renderer.viewport_size.y;
+                static int cur_idx = 0;
+                ImGui::ListBox("Resolution", &cur_idx, items,
+                               IM_ARRAYSIZE(items), 4);
+                if (ImGui::Button("Set"))
+                {
+                    const auto &res = resolutions[cur_idx];
+                    glfwSetWindowSize(window, res.x, res.y);
+                    renderer.resize_viewport(res);
+                }
+            }
 
-            ImGui::BeginChild("Stuff");
-            ImVec2 window_size = ImGui::GetWindowSize();
-            ImVec2 texture_size{window_size.x, window_size.x / aspect_ratio};
+            if (ImGui::CollapsingHeader("Lighting"))
+            {
+                ImGui::Image((ImTextureID)renderer.shadow_map,
+                             ImVec2{(float)renderer.shadow_map_size.x,
+                                    (float)renderer.shadow_map_size.y},
+                             ImVec2(0, 1), ImVec2(1, 0));
+            }
 
-            ImGui::Text("Depth");
-            ImGui::Image((ImTextureID)renderer.g_depth, texture_size,
-                         ImVec2(0, 1), ImVec2(1, 0));
+            if (ImGui::CollapsingHeader("G-buffer"))
+            {
+                float aspect_ratio =
+                    static_cast<float>(renderer.viewport_size.x) /
+                    renderer.viewport_size.y;
 
-            ImGui::Text("Base color");
-            ImGui::Image((ImTextureID)renderer.debug_view_base_color,
-                         texture_size, ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::BeginChild("Stuff");
+                ImVec2 window_size = ImGui::GetWindowSize();
+                ImVec2 texture_size{window_size.x,
+                                    window_size.x / aspect_ratio};
 
-            ImGui::Text("Normal");
-            ImGui::Image((ImTextureID)renderer.debug_view_normal, texture_size,
-                         ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Text("Depth");
+                ImGui::Image((ImTextureID)renderer.g_depth, texture_size,
+                             ImVec2(0, 1), ImVec2(1, 0));
 
-            ImGui::Text("Metallic");
-            ImGui::Image((ImTextureID)renderer.debug_view_metallic,
-                         texture_size, ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Text("Base color");
+                ImGui::Image((ImTextureID)renderer.debug_view_base_color,
+                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
 
-            ImGui::Text("Roughness");
-            ImGui::Image((ImTextureID)renderer.debug_view_roughness,
-                         texture_size, ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Text("Normal");
+                ImGui::Image((ImTextureID)renderer.debug_view_normal,
+                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
 
-            ImGui::EndChild();
+                ImGui::Text("Metallic");
+                ImGui::Image((ImTextureID)renderer.debug_view_metallic,
+                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
+
+                ImGui::Text("Roughness");
+                ImGui::Image((ImTextureID)renderer.debug_view_roughness,
+                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
+
+                ImGui::EndChild();
+            }
         }
         ImGui::End();
 
@@ -310,7 +332,6 @@ int main()
                 vec3(0.f, sin(glfwGetTime()), 0.f));
         }
 
-        renderer.viewport_size = vec2{window_data.width, window_data.height};
         auto data = generate_render_data();
 
         renderer.render(data);

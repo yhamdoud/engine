@@ -42,8 +42,8 @@ void engine::glfw_error_callback(int error, const char *description)
 void engine::framebuffer_size_callback(GLFWwindow *window, int width,
                                        int height)
 {
-    window_data.width = width;
-    window_data.height = height;
+    //    window_data.width = width;
+    //    window_data.height = height;
 }
 
 optional<GLFWwindow *> engine::init_glfw(uint width, uint height)
@@ -62,6 +62,8 @@ optional<GLFWwindow *> engine::init_glfw(uint width, uint height)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
     GLFWwindow *window =
         glfwCreateWindow(width, height, "triangle", nullptr, nullptr);

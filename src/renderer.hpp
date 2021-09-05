@@ -79,6 +79,8 @@ class Renderer
     uint fbo_shadow;
     Shader lighting_shader;
 
+    void create_g_buffer();
+
   public:
     glm::ivec2 shadow_map_size{2048, 2048};
     uint shadow_map;
@@ -95,7 +97,6 @@ class Renderer
     };
 
     // Deferred
-    glm::ivec2 g_buffer_size{1280, 720};
     uint g_buffer;
     uint g_depth;
     uint g_normal_metallic;
@@ -106,15 +107,18 @@ class Renderer
     uint debug_view_normal;
     uint debug_view_metallic;
 
-    glm::ivec2 viewport_size{1280, 720};
+    glm::ivec2 viewport_size;
     Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
 
-    Renderer(Shader skybox, unsigned int skybox_texture);
+    Renderer(glm::ivec2 viewport_size, Shader skybox,
+             unsigned int skybox_texture);
     ~Renderer();
 
     size_t register_mesh(const Mesh &mesh);
     void render_mesh_instance(unsigned int vao, const MeshInstance &mesh);
     void render(std::vector<RenderData> &m);
+
+    void resize_viewport(glm::vec2 size);
 
     std::variant<uint, Error> register_texture(const Texture &texture);
 };
