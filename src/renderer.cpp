@@ -302,15 +302,24 @@ Renderer::register_texture(const Texture &texture)
         return Renderer::Error::unsupported_texture_format;
     }
 
-    glTextureStorage2D(id, 1, internal_format, texture.width, texture.height);
-    glTextureSubImage2D(id, 0, 0, 0, texture.width, texture.height, format,
-                        GL_UNSIGNED_BYTE, texture.data.get());
+    int level_count = 1;
 
     if (texture.sampler.use_mipmap)
     {
+        level_count =
+            1 + floor(std::log2(std::max(texture.width, texture.height)));
         glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glGenerateTextureMipmap(id);
     }
+
+    glTextureParameteri(id, GL_TEXTURE_MAX_LEVEL, level_count);
+    glTextureParameteri(id, GL_TEXTURE_BASE_LEVEL, 0);
+
+    glTextureStorage2D(id, level_count, internal_format, texture.width,
+                       texture.height);
+    glTextureSubImage2D(id, 0, 0, 0, texture.width, texture.height, format,
+                        GL_UNSIGNED_BYTE, texture.data.get());
+
+    glGenerateTextureMipmap(id);
 
     return id;
 }
