@@ -114,6 +114,13 @@ static Material process_material(const cgltf_material &gltf_material)
         material.base_color_factor = make_vec4(gltf_pbr.base_color_factor);
         material.metallic_factor = gltf_pbr.metallic_factor;
         material.roughness_factor = gltf_pbr.roughness_factor;
+
+        // FIXME:
+        if (material.metallic_roughness)
+            material.metallic_roughness->sampler.use_mipmap = true;
+
+        if (material.base_color)
+            material.base_color->sampler.use_mipmap = true;
     }
     else if (gltf_material.has_pbr_specular_glossiness)
     {

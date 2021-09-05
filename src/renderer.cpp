@@ -277,10 +277,12 @@ Renderer::register_texture(const Texture &texture)
     uint id;
     glCreateTextures(GL_TEXTURE_2D, 1, &id);
 
-    glTexParameteri(id, GL_TEXTURE_MAG_FILTER, texture.sampler.magnify_filter);
-    glTexParameteri(id, GL_TEXTURE_MIN_FILTER, texture.sampler.minify_filter);
-    glTexParameteri(id, GL_TEXTURE_WRAP_S, texture.sampler.wrap_s);
-    glTexParameteri(id, GL_TEXTURE_WRAP_T, texture.sampler.wrap_t);
+    glTextureParameteri(id, GL_TEXTURE_MAG_FILTER,
+                        texture.sampler.magnify_filter);
+    glTextureParameteri(id, GL_TEXTURE_MIN_FILTER,
+                        texture.sampler.minify_filter);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_S, texture.sampler.wrap_s);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_T, texture.sampler.wrap_t);
 
     GLenum internal_format, format;
 
@@ -301,6 +303,12 @@ Renderer::register_texture(const Texture &texture)
     glTextureStorage2D(id, 1, internal_format, texture.width, texture.height);
     glTextureSubImage2D(id, 0, 0, 0, texture.width, texture.height, format,
                         GL_UNSIGNED_BYTE, texture.data.get());
+
+    if (texture.sampler.use_mipmap)
+    {
+        glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glGenerateTextureMipmap(id);
+    }
 
     return id;
 }
