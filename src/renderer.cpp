@@ -260,6 +260,32 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
 
     create_g_buffer();
 
+    // Post-processing
+    {
+        glCreateFramebuffers(1, &hdr_fbo);
+
+        uint depth;
+        glCreateRenderbuffers(1, &depth);
+        glNamedRenderbufferStorage(depth, GL_DEPTH_COMPONENT24, viewport_size.x,
+                                   viewport_size.y);
+        glNamedFramebufferRenderbuffer(hdr_fbo, GL_DEPTH_ATTACHMENT,
+                                       GL_RENDERBUFFER, depth);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &hdr_screen);
+        glTextureStorage2D(hdr_screen, 1, GL_RGBA16F, viewport_size.x,
+                           viewport_size.y);
+        glTextureSubImage2D(hdr_screen, 0, 0, 0, viewport_size.x,
+                            viewport_size.y, GL_RGBA, GL_FLOAT, nullptr);
+        glTextureParameteri(hdr_screen, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(hdr_screen, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glNamedFramebufferTexture(hdr_fbo, GL_COLOR_ATTACHMENT0, hdr_screen, 0);
+
+        tonemap_shader = *Shader::from_paths(ShaderPaths{
+            .vert = shaders_path / "lighting.vs",
+            .frag = shaders_path / "tonemap.fs",
+        });
+    }
+
     lighting_shader = *Shader::from_paths(ShaderPaths{
         .vert = shaders_path / "lighting.vs",
         .frag = shaders_path / "lighting.fs",
@@ -502,7 +528,7 @@ void Renderer::render(std::vector<RenderData> &queue)
         TracyGpuZone("Lighting pass");
 
         glViewport(0, 0, viewport_size.x, viewport_size.y);
-        glBindFramebuffer(GL_FRAMEBUFFER, default_framebuffer);
+        glBindFramebuffer(GL_FRAMEBUFFER, hdr_fbo);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(lighting_shader.get_id());
@@ -542,11 +568,10 @@ void Renderer::render(std::vector<RenderData> &queue)
     {
         TracyGpuZone("Skybox");
 
-        glBlitNamedFramebuffer(g_buffer, default_framebuffer, 0, 0,
-                               viewport_size.x, viewport_size.y, 0, 0,
-                               viewport_size.x, viewport_size.y,
-                               GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-        glBindFramebuffer(GL_FRAMEBUFFER, default_framebuffer);
+        glBlitNamedFramebuffer(
+            g_buffer, hdr_fbo, 0, 0, viewport_size.x, viewport_size.y, 0, 0,
+            viewport_size.x, viewport_size.y, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_FRAMEBUFFER, hdr_fbo);
 
         glUseProgram(skybox_shader.get_id());
         glBindTextureUnit(0, texture_skybox);
@@ -556,6 +581,28 @@ void Renderer::render(std::vector<RenderData> &queue)
 
         glBindVertexArray(vao_skybox);
         glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+
+    // Post-processing
+    {
+        TracyGpuZone("Post-processing");
+
+        glBindFramebuffer(GL_FRAMEBUFFER, default_framebuffer);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glUseProgram(tonemap_shader.get_id());
+
+        tonemap_shader.set("u_hdr_screen", 0);
+
+        tonemap_shader.set("u_do_tonemap", post_proc_cfg.do_tonemap);
+        tonemap_shader.set("u_do_gamma_correct",
+                           post_proc_cfg.do_gamma_correct);
+        tonemap_shader.set("u_exposure", post_proc_cfg.exposure);
+        tonemap_shader.set("u_gamma", post_proc_cfg.gamma);
+
+        glBindTextureUnit(0, hdr_screen);
+
+        glDrawArrays(GL_TRIANGLES, 0, 3);
     }
 }
 void Renderer::resize_viewport(glm::vec2 size)

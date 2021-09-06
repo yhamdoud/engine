@@ -52,6 +52,14 @@ struct DirectionalLight
     glm::vec3 direction;
 };
 
+struct PostProcessingConfig
+{
+    bool do_tonemap;
+    bool do_gamma_correct;
+    float exposure;
+    float gamma;
+};
+
 class Renderer
 {
     enum class Error
@@ -96,6 +104,13 @@ class Renderer
         .direction = glm::normalize(glm::vec3{0.f, -1.f, 0.2f}),
     };
 
+    PostProcessingConfig post_proc_cfg{
+        .do_tonemap = true,
+        .do_gamma_correct = true,
+        .exposure = 1.0,
+        .gamma = 2.2f,
+    };
+
     // Deferred
     uint g_buffer;
     uint g_depth;
@@ -106,6 +121,12 @@ class Renderer
     uint debug_view_roughness;
     uint debug_view_normal;
     uint debug_view_metallic;
+
+    // Post processing
+    uint hdr_screen;
+    uint hdr_fbo;
+
+    Shader tonemap_shader;
 
     glm::ivec2 viewport_size;
     Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};

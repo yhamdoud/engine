@@ -181,8 +181,8 @@ int main()
     if (skybox_texture == invalid_texture_id)
         return EXIT_FAILURE;
 
-    Renderer renderer(ivec2{1600, 900}, skybox_shader, skybox_texture);
-    glfwSetWindowUserPointer(window, &renderer);
+    Renderer r(ivec2{1600, 900}, skybox_shader, skybox_texture);
+    glfwSetWindowUserPointer(window, &r);
 
     auto deferred_shader = *Shader::from_paths(ShaderPaths{
         .vert = shaders_path / "geometry.vs",
@@ -193,15 +193,15 @@ int main()
     //    auto helmet_model =
     //        std::move(load_gltf(models_path / "damaged_helmet.glb")[0]);
 
-    auto duck1 = add_entity(renderer, Entity::Flags::casts_shadow,
+    auto duck1 = add_entity(r, Entity::Flags::casts_shadow,
                             Transform{vec3{0.f, 2.f, 0.f}, vec3{0.01f}},
                             duck_model, std::nullopt, deferred_shader);
 
     auto sponza = load_gltf(models_path / "sponza.glb");
     for (const auto &m : sponza)
     {
-        add_entity(renderer, Entity::Flags::casts_shadow,
-                   Transform{m.transform}, m, std::nullopt, deferred_shader);
+        add_entity(r, Entity::Flags::casts_shadow, Transform{m.transform}, m,
+                   std::nullopt, deferred_shader);
     }
 
     //    auto helmet = add_entity(renderer, Entity::Flags::casts_shadow,
@@ -219,8 +219,8 @@ int main()
     //               deferred_shader);
 
     auto sphere_model = std::move(load_gltf(models_path / "sphere.glb")[0]);
-    add_entity(renderer, Entity::Flags::none, Transform(renderer.sun.position),
-               sphere_model, std::nullopt, deferred_shader);
+    add_entity(r, Entity::Flags::none, Transform(r.sun.position), sphere_model,
+               std::nullopt, deferred_shader);
 
     double last_time = glfwGetTime();
     vec2 cursor_pos = get_cursor_position(window);
@@ -234,9 +234,9 @@ int main()
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
 
-    FrameMarkEnd("Loading")
+    FrameMarkEnd("Loading");
 
-        while (!glfwWindowShouldClose(window))
+    while (!glfwWindowShouldClose(window))
     {
         TracyGpuZone("Render");
 
@@ -246,6 +246,16 @@ int main()
 
         ImGui::Begin("Renderer");
         {
+            if (ImGui::CollapsingHeader("Post processing"))
+            {
+                ImGui::Checkbox("Gamma correction",
+                                &r.post_proc_cfg.do_gamma_correct);
+
+                ImGui::Checkbox("Tonemapping", &r.post_proc_cfg.do_tonemap);
+                ImGui::InputFloat("Gamma", &r.post_proc_cfg.gamma);
+                ImGui::InputFloat("Exposure", &r.post_proc_cfg.exposure);
+            }
+
             if (ImGui::CollapsingHeader("Viewport"))
             {
                 const array<ivec2, 3> resolutions{
@@ -260,23 +270,22 @@ int main()
                 {
                     const auto &res = resolutions[cur_idx];
                     glfwSetWindowSize(window, res.x, res.y);
-                    renderer.resize_viewport(res);
+                    r.resize_viewport(res);
                 }
             }
 
             if (ImGui::CollapsingHeader("Lighting"))
             {
-                ImGui::Image((ImTextureID)renderer.shadow_map,
-                             ImVec2{(float)renderer.shadow_map_size.x,
-                                    (float)renderer.shadow_map_size.y},
+                ImGui::Image((ImTextureID)r.shadow_map,
+                             ImVec2{(float)r.shadow_map_size.x,
+                                    (float)r.shadow_map_size.y},
                              ImVec2(0, 1), ImVec2(1, 0));
             }
 
             if (ImGui::CollapsingHeader("G-buffer"))
             {
                 float aspect_ratio =
-                    static_cast<float>(renderer.viewport_size.x) /
-                    renderer.viewport_size.y;
+                    static_cast<float>(r.viewport_size.x) / r.viewport_size.y;
 
                 ImGui::BeginChild("Stuff");
                 ImVec2 window_size = ImGui::GetWindowSize();
@@ -284,24 +293,24 @@ int main()
                                     window_size.x / aspect_ratio};
 
                 ImGui::Text("Depth");
-                ImGui::Image((ImTextureID)renderer.g_depth, texture_size,
-                             ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)r.g_depth, texture_size, ImVec2(0, 1),
+                             ImVec2(1, 0));
 
                 ImGui::Text("Base color");
-                ImGui::Image((ImTextureID)renderer.debug_view_base_color,
-                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)r.debug_view_base_color, texture_size,
+                             ImVec2(0, 1), ImVec2(1, 0));
 
                 ImGui::Text("Normal");
-                ImGui::Image((ImTextureID)renderer.debug_view_normal,
-                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)r.debug_view_normal, texture_size,
+                             ImVec2(0, 1), ImVec2(1, 0));
 
                 ImGui::Text("Metallic");
-                ImGui::Image((ImTextureID)renderer.debug_view_metallic,
-                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)r.debug_view_metallic, texture_size,
+                             ImVec2(0, 1), ImVec2(1, 0));
 
                 ImGui::Text("Roughness");
-                ImGui::Image((ImTextureID)renderer.debug_view_roughness,
-                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)r.debug_view_roughness, texture_size,
+                             ImVec2(0, 1), ImVec2(1, 0));
 
                 ImGui::EndChild();
             }
@@ -320,9 +329,9 @@ int main()
             auto delta = cursor_pos - new_cursor_pos;
 
             if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-                renderer.camera.pan(delta);
+                r.camera.pan(delta);
             else
-                renderer.camera.rotate(delta);
+                r.camera.rotate(delta);
         }
 
         cursor_pos = new_cursor_pos;
@@ -334,7 +343,7 @@ int main()
 
         auto data = generate_render_data();
 
-        renderer.render(data);
+        r.render(data);
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

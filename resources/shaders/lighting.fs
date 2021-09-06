@@ -187,7 +187,7 @@ void main()
 	out_luminance += (1. - shadow) * luminance;
 
     // TODO: Gamma correction, need to this investigate further.
-    vec3 color = pow(out_luminance / (out_luminance + vec3(1.)), vec3(1. / 2.2));
+    // vec3 color = pow(out_luminance / (out_luminance + vec3(1.)), vec3(1. / 2.2));
 
-	frag_color = vec4(color, 1);
+	frag_color = vec4(out_luminance, 1.);
 }
