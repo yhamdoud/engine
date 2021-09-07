@@ -193,9 +193,9 @@ int main()
     //    auto helmet_model =
     //        std::move(load_gltf(models_path / "damaged_helmet.glb")[0]);
 
-    auto duck1 = add_entity(r, Entity::Flags::casts_shadow,
-                            Transform{vec3{0.f, 2.f, 0.f}, vec3{0.01f}},
-                            duck_model, std::nullopt, deferred_shader);
+    //    auto duck1 = add_entity(r, Entity::Flags::casts_shadow,
+    //                            Transform{vec3{0.f, 2.f, 0.f}, vec3{0.01f}},
+    //                            duck_model, std::nullopt, deferred_shader);
 
     auto sponza = load_gltf(models_path / "sponza.glb");
     for (const auto &m : sponza)
@@ -235,6 +235,9 @@ int main()
     ImGui_ImplOpenGL3_Init("#version 460");
 
     FrameMarkEnd("Loading");
+
+    auto data = generate_render_data();
+    r.render_probe(data);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -293,8 +296,8 @@ int main()
                                     window_size.x / aspect_ratio};
 
                 ImGui::Text("Depth");
-                ImGui::Image((ImTextureID)r.g_depth, texture_size, ImVec2(0, 1),
-                             ImVec2(1, 0));
+                ImGui::Image((ImTextureID)r.g_buf.depth, texture_size,
+                             ImVec2(0, 1), ImVec2(1, 0));
 
                 ImGui::Text("Base color");
                 ImGui::Image((ImTextureID)r.debug_view_base_color, texture_size,
@@ -336,10 +339,10 @@ int main()
 
         cursor_pos = new_cursor_pos;
 
-        {
-            scene_graph[entities[duck1].scene_graph_index].set_position(
-                vec3(0.f, sin(glfwGetTime()), 0.f));
-        }
+        //        {
+        //            scene_graph[entities[duck1].scene_graph_index].set_position(
+        //                vec3(0.f, sin(glfwGetTime()), 0.f));
+        //        }
 
         auto data = generate_render_data();
 

@@ -60,6 +60,15 @@ struct PostProcessingConfig
     float gamma;
 };
 
+struct GBuffer
+{
+    glm::ivec2 size;
+    uint framebuffer;
+    uint base_color_roughness;
+    uint normal_metallic;
+    uint depth;
+};
+
 class Renderer
 {
     enum class Error
@@ -87,7 +96,7 @@ class Renderer
     uint fbo_shadow;
     Shader lighting_shader;
 
-    void create_g_buffer();
+    GBuffer create_g_buffer(glm::ivec2 size);
 
   public:
     glm::ivec2 shadow_map_size{2048, 2048};
@@ -112,10 +121,7 @@ class Renderer
     };
 
     // Deferred
-    uint g_buffer;
-    uint g_depth;
-    uint g_normal_metallic;
-    uint g_base_color_roughness;
+    GBuffer g_buf;
 
     uint debug_view_base_color;
     uint debug_view_roughness;
@@ -136,12 +142,21 @@ class Renderer
     ~Renderer();
 
     size_t register_mesh(const Mesh &mesh);
+
     void render_mesh_instance(unsigned int vao, const MeshInstance &mesh);
-    void render(std::vector<RenderData> &m);
+    void render(std::vector<RenderData> &queue);
+    void render_probe(std::vector<RenderData> &queue);
 
     void resize_viewport(glm::vec2 size);
 
     std::variant<uint, Error> register_texture(const Texture &texture);
+    void geometry_pass(std::vector<RenderData> &queue, const glm::mat4 &proj,
+                       const glm::mat4 &view);
+    void lighting_pass(const glm::mat4 &proj, const glm::mat4 &view,
+                       const GBuffer &g_buf, const glm::mat4 &light_transform);
+    void forward_pass(const glm::mat4 &proj, const glm::mat4 &view);
+    void shadow_pass(std::vector<RenderData> &queue,
+                     const glm::mat4 &light_transform);
 };
 
 } // namespace engine

@@ -92,76 +92,42 @@ void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
                message);
 }
 
-void Renderer::create_g_buffer()
+GBuffer Renderer::create_g_buffer(ivec2 size)
 {
-    glCreateFramebuffers(1, &g_buffer);
+    uint fbuf, normal_metal, base_color_rough, depth;
 
-    glCreateTextures(GL_TEXTURE_2D, 1, &g_normal_metallic);
-    glTextureStorage2D(g_normal_metallic, 1, GL_RGBA16F, viewport_size.x,
-                       viewport_size.y);
-    glTextureSubImage2D(g_normal_metallic, 0, 0, 0, viewport_size.x,
-                        viewport_size.y, GL_RGBA, GL_FLOAT, nullptr);
-    glTextureParameteri(g_normal_metallic, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTextureParameteri(g_normal_metallic, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT1, g_normal_metallic,
-                              0);
+    glCreateTextures(GL_TEXTURE_2D, 1, &normal_metal);
+    glTextureStorage2D(normal_metal, 1, GL_RGBA16F, size.x, size.y);
+    glTextureParameteri(normal_metal, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(normal_metal, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    glCreateTextures(GL_TEXTURE_2D, 1, &g_base_color_roughness);
-    glTextureStorage2D(g_base_color_roughness, 1, GL_RGBA8, viewport_size.x,
-                       viewport_size.y);
-    glTextureSubImage2D(g_base_color_roughness, 0, 0, 0, viewport_size.x,
-                        viewport_size.y, GL_RGBA, GL_FLOAT, nullptr);
-    glTextureParameteri(g_base_color_roughness, GL_TEXTURE_MIN_FILTER,
-                        GL_NEAREST);
-    glTextureParameteri(g_base_color_roughness, GL_TEXTURE_MAG_FILTER,
-                        GL_NEAREST);
-    glNamedFramebufferTexture(g_buffer, GL_COLOR_ATTACHMENT2,
-                              g_base_color_roughness, 0);
+    glCreateTextures(GL_TEXTURE_2D, 1, &base_color_rough);
+    glTextureStorage2D(base_color_rough, 1, GL_RGBA8, size.x, size.y);
+    glTextureParameteri(base_color_rough, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(base_color_rough, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    glCreateTextures(GL_TEXTURE_2D, 1, &g_depth);
-    glTextureStorage2D(g_depth, 1, GL_DEPTH_COMPONENT24, viewport_size.x,
-                       viewport_size.y);
-    glTextureSubImage2D(g_depth, 0, 0, 0, viewport_size.x, viewport_size.y,
-                        GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+    glCreateTextures(GL_TEXTURE_2D, 1, &depth);
+    glTextureStorage2D(depth, 1, GL_DEPTH_COMPONENT24, size.x, size.y);
+    glTextureParameteri(depth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(depth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    glTextureParameteri(g_depth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTextureParameteri(g_depth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glNamedFramebufferTexture(g_buffer, GL_DEPTH_ATTACHMENT, g_depth, 0);
+    glCreateFramebuffers(1, &fbuf);
+    glNamedFramebufferTexture(fbuf, GL_COLOR_ATTACHMENT1, normal_metal, 0);
+    glNamedFramebufferTexture(fbuf, GL_COLOR_ATTACHMENT2, base_color_rough, 0);
+    glNamedFramebufferTexture(fbuf, GL_DEPTH_ATTACHMENT, depth, 0);
 
-    array<GLenum, 3> bufs{GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1,
-                          GL_COLOR_ATTACHMENT2};
-    glNamedFramebufferDrawBuffers(g_buffer, 3, bufs.data());
+    array<GLenum, 3> draw_bufs{
+        GL_COLOR_ATTACHMENT0,
+        GL_COLOR_ATTACHMENT1,
+        GL_COLOR_ATTACHMENT2,
+    };
+    glNamedFramebufferDrawBuffers(fbuf, 3, draw_bufs.data());
 
-    if (glCheckNamedFramebufferStatus(g_buffer, GL_FRAMEBUFFER) !=
+    if (glCheckNamedFramebufferStatus(fbuf, GL_FRAMEBUFFER) !=
         GL_FRAMEBUFFER_COMPLETE)
         logger.error("G-buffer incomplete");
 
-    array<int, 4> rgb_swizzle{GL_RED, GL_GREEN, GL_BLUE, GL_ONE};
-    array<int, 4> www_swizzle{GL_ALPHA, GL_ALPHA, GL_ALPHA, GL_ONE};
-
-    glGenTextures(1, &debug_view_normal);
-    glTextureView(debug_view_normal, GL_TEXTURE_2D, g_normal_metallic,
-                  GL_RGBA16F, 0, 1, 0, 1);
-    glTextureParameteriv(debug_view_normal, GL_TEXTURE_SWIZZLE_RGBA,
-                         rgb_swizzle.data());
-
-    glGenTextures(1, &debug_view_metallic);
-    glTextureView(debug_view_metallic, GL_TEXTURE_2D, g_normal_metallic,
-                  GL_RGBA16F, 0, 1, 0, 1);
-    glTextureParameteriv(debug_view_metallic, GL_TEXTURE_SWIZZLE_RGBA,
-                         www_swizzle.data());
-
-    glGenTextures(1, &debug_view_base_color);
-    glTextureView(debug_view_base_color, GL_TEXTURE_2D, g_base_color_roughness,
-                  GL_RGBA8, 0, 1, 0, 1);
-    glTextureParameteriv(debug_view_base_color, GL_TEXTURE_SWIZZLE_RGBA,
-                         rgb_swizzle.data());
-
-    glGenTextures(1, &debug_view_roughness);
-    glTextureView(debug_view_roughness, GL_TEXTURE_2D, g_base_color_roughness,
-                  GL_RGBA8, 0, 1, 0, 1);
-    glTextureParameteriv(debug_view_roughness, GL_TEXTURE_SWIZZLE_RGBA,
-                         www_swizzle.data());
+    return GBuffer{size, fbuf, base_color_rough, normal_metal, depth};
 }
 
 Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
@@ -248,9 +214,6 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
     // TODO: internal format.
     glTextureStorage2D(shadow_map, 1, GL_DEPTH_COMPONENT24, shadow_map_size.x,
                        shadow_map_size.y);
-    glTextureSubImage2D(shadow_map, 0, 0, 0, shadow_map_size.x,
-                        shadow_map_size.y, GL_DEPTH_COMPONENT, GL_FLOAT,
-                        nullptr);
 
     glCreateFramebuffers(1, &fbo_shadow);
     glNamedFramebufferTexture(fbo_shadow, GL_DEPTH_ATTACHMENT, shadow_map, 0);
@@ -258,7 +221,34 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
     glNamedFramebufferDrawBuffer(fbo_shadow, GL_NONE);
     glNamedFramebufferReadBuffer(fbo_shadow, GL_NONE);
 
-    create_g_buffer();
+    g_buf = create_g_buffer(viewport_size);
+
+    array<int, 4> rgb_swizzle{GL_RED, GL_GREEN, GL_BLUE, GL_ONE};
+    array<int, 4> www_swizzle{GL_ALPHA, GL_ALPHA, GL_ALPHA, GL_ONE};
+
+    glGenTextures(1, &debug_view_normal);
+    glTextureView(debug_view_normal, GL_TEXTURE_2D, g_buf.normal_metallic,
+                  GL_RGBA16F, 0, 1, 0, 1);
+    glTextureParameteriv(debug_view_normal, GL_TEXTURE_SWIZZLE_RGBA,
+                         rgb_swizzle.data());
+
+    glGenTextures(1, &debug_view_metallic);
+    glTextureView(debug_view_metallic, GL_TEXTURE_2D, g_buf.normal_metallic,
+                  GL_RGBA16F, 0, 1, 0, 1);
+    glTextureParameteriv(debug_view_metallic, GL_TEXTURE_SWIZZLE_RGBA,
+                         www_swizzle.data());
+
+    glGenTextures(1, &debug_view_base_color);
+    glTextureView(debug_view_base_color, GL_TEXTURE_2D,
+                  g_buf.base_color_roughness, GL_RGBA8, 0, 1, 0, 1);
+    glTextureParameteriv(debug_view_base_color, GL_TEXTURE_SWIZZLE_RGBA,
+                         rgb_swizzle.data());
+
+    glGenTextures(1, &debug_view_roughness);
+    glTextureView(debug_view_roughness, GL_TEXTURE_2D,
+                  g_buf.base_color_roughness, GL_RGBA8, 0, 1, 0, 1);
+    glTextureParameteriv(debug_view_roughness, GL_TEXTURE_SWIZZLE_RGBA,
+                         www_swizzle.data());
 
     // Post-processing
     {
@@ -274,8 +264,6 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
         glCreateTextures(GL_TEXTURE_2D, 1, &hdr_screen);
         glTextureStorage2D(hdr_screen, 1, GL_RGBA16F, viewport_size.x,
                            viewport_size.y);
-        glTextureSubImage2D(hdr_screen, 0, 0, 0, viewport_size.x,
-                            viewport_size.y, GL_RGBA, GL_FLOAT, nullptr);
         glTextureParameteri(hdr_screen, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTextureParameteri(hdr_screen, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glNamedFramebufferTexture(hdr_fbo, GL_COLOR_ATTACHMENT0, hdr_screen, 0);
@@ -430,30 +418,11 @@ void Renderer::render(std::vector<RenderData> &queue)
     {
         TracyGpuZone("Shadow mapping");
 
-        glCullFace(GL_FRONT);
-
         glViewport(0, 0, shadow_map_size.x, shadow_map_size.y);
         glBindFramebuffer(GL_FRAMEBUFFER, fbo_shadow);
         glClear(GL_DEPTH_BUFFER_BIT);
 
-        // Directional light.
-        glUseProgram(shadow_shader.get_id());
-        shadow_shader.set("u_light_transform", light_transform);
-
-        glBindVertexArray(vao_entities);
-
-        for (auto &r : queue)
-        {
-            if (r.flags & Entity::casts_shadow)
-            {
-
-                shadow_shader.set("u_model", r.model);
-                render_mesh_instance(vao_entities,
-                                     mesh_instances[r.mesh_index]);
-            }
-        }
-
-        glCullFace(GL_BACK);
+        shadow_pass(queue, light_transform);
     }
 
     // Geometry pass
@@ -461,67 +430,10 @@ void Renderer::render(std::vector<RenderData> &queue)
         TracyGpuZone("Geometry pass");
 
         glViewport(0, 0, viewport_size.x, viewport_size.y);
-        glBindFramebuffer(GL_FRAMEBUFFER, g_buffer);
+        glBindFramebuffer(GL_FRAMEBUFFER, g_buf.framebuffer);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glBindVertexArray(vao_entities);
-
-        uint cur_shader_id = invalid_shader_id;
-
-        for (auto &r : queue)
-        {
-            if (auto shader_id = r.shader.get_id(); cur_shader_id != shader_id)
-            {
-                glUseProgram(shader_id);
-                cur_shader_id = shader_id;
-            }
-
-            const auto model_view = view * r.model;
-            const auto mvp = proj * model_view;
-
-            r.shader.set("u_model_view", model_view);
-            r.shader.set("u_mvp", mvp);
-            r.shader.set("u_normal_mat", inverseTranspose(mat3{model_view}));
-            r.shader.set("u_far_clip_distance", far_clip_distance);
-
-            r.shader.set("u_metallic_factor", r.metallic_factor);
-            r.shader.set("u_roughness_factor", r.roughness_factor);
-
-            if (r.base_color_tex_id != invalid_texture_id)
-            {
-                r.shader.set("u_use_sampler", true);
-                r.shader.set("u_base_color", 0);
-                glBindTextureUnit(0, r.base_color_tex_id);
-            }
-            else
-            {
-                r.shader.set("u_use_sampler", false);
-            }
-
-            if (r.normal_tex_id != invalid_texture_id)
-            {
-                r.shader.set("u_use_normal", true);
-                r.shader.set("u_normal", 1);
-                glBindTextureUnit(1, r.normal_tex_id);
-            }
-            else
-            {
-                r.shader.set("u_use_normal", false);
-            }
-
-            if (r.metallic_roughness_id != invalid_texture_id)
-            {
-                r.shader.set("u_use_metallic_roughness", true);
-                r.shader.set("u_metallic_roughness", 2);
-                glBindTextureUnit(2, r.metallic_roughness_id);
-            }
-            else
-            {
-                r.shader.set("u_use_metallic_roughness", false);
-            }
-
-            render_mesh_instance(vao_entities, mesh_instances[r.mesh_index]);
-        }
+        geometry_pass(queue, proj, view);
     }
 
     {
@@ -531,56 +443,20 @@ void Renderer::render(std::vector<RenderData> &queue)
         glBindFramebuffer(GL_FRAMEBUFFER, hdr_fbo);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glUseProgram(lighting_shader.get_id());
-        lighting_shader.set("u_g_depth", 0);
-        lighting_shader.set("u_g_normal_metallic", 1);
-        lighting_shader.set("u_g_base_color_roughness", 2);
-        lighting_shader.set("u_shadow_map", 3);
-        lighting_shader.set("u_proj_inv", inverse(proj));
-        lighting_shader.set("u_view_inv", inverse(view));
-
-        glBindTextureUnit(0, g_depth);
-        glBindTextureUnit(1, g_normal_metallic);
-        glBindTextureUnit(2, g_base_color_roughness);
-        glBindTextureUnit(3, shadow_map);
-
-        // TODO: Use a UBO or SSBO for this data.
-        for (size_t i = 0; i < point_lights.size(); i++)
-        {
-            const auto &light = point_lights[i];
-            vec4 pos = view * vec4(light.position, 1);
-            lighting_shader.set(fmt::format("u_lights[{}].position", i),
-                                vec3(pos) / pos.w);
-            lighting_shader.set(fmt::format("u_lights[{}].color", i),
-                                light.color);
-        }
-
-        lighting_shader.set("u_light_transform", light_transform);
-        lighting_shader.set("u_directional_light.direction",
-                            vec3{view * vec4{sun.direction, 0.f}});
-        lighting_shader.set("u_directional_light.intensity",
-                            sun.intensity * sun.color);
-
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        lighting_pass(proj, view, g_buf, light_transform);
     }
 
     //     Render skybox.
     {
         TracyGpuZone("Skybox");
 
-        glBlitNamedFramebuffer(
-            g_buffer, hdr_fbo, 0, 0, viewport_size.x, viewport_size.y, 0, 0,
-            viewport_size.x, viewport_size.y, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        glBlitNamedFramebuffer(g_buf.framebuffer, hdr_fbo, 0, 0,
+                               viewport_size.x, viewport_size.y, 0, 0,
+                               viewport_size.x, viewport_size.y,
+                               GL_DEPTH_BUFFER_BIT, GL_NEAREST);
         glBindFramebuffer(GL_FRAMEBUFFER, hdr_fbo);
 
-        glUseProgram(skybox_shader.get_id());
-        glBindTextureUnit(0, texture_skybox);
-
-        skybox_shader.set("u_projection", proj);
-        skybox_shader.set("u_view", mat4(mat3(view)));
-
-        glBindVertexArray(vao_skybox);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+        forward_pass(proj, view);
     }
 
     // Post-processing
@@ -605,8 +481,215 @@ void Renderer::render(std::vector<RenderData> &queue)
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
 }
+void Renderer::shadow_pass(vector<RenderData> &queue,
+                           const mat4 &light_transform)
+{
+    glCullFace(GL_FRONT);
+
+    // Directional light.
+    glUseProgram(shadow_shader.get_id());
+    shadow_shader.set("u_light_transform", light_transform);
+
+    glBindVertexArray(vao_entities);
+
+    for (auto &r : queue)
+    {
+        if (r.flags & Entity::casts_shadow)
+        {
+
+            shadow_shader.set("u_model", r.model);
+            render_mesh_instance(vao_entities, mesh_instances[r.mesh_index]);
+        }
+    }
+
+    glCullFace(GL_BACK);
+}
+void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
+                             const GBuffer &g_buf, const mat4 &light_transform)
+{
+
+    glUseProgram(lighting_shader.get_id());
+    lighting_shader.set("u_g_depth", 0);
+    lighting_shader.set("u_g_normal_metallic", 1);
+    lighting_shader.set("u_g_base_color_roughness", 2);
+    lighting_shader.set("u_shadow_map", 3);
+    lighting_shader.set("u_proj_inv", inverse(proj));
+    lighting_shader.set("u_view_inv", inverse(view));
+
+    glBindTextureUnit(0, g_buf.depth);
+    glBindTextureUnit(1, g_buf.normal_metallic);
+    glBindTextureUnit(2, g_buf.base_color_roughness);
+    glBindTextureUnit(3, shadow_map);
+
+    // TODO: Use a UBO or SSBO for this data.
+    for (size_t i = 0; i < point_lights.size(); i++)
+    {
+        const auto &light = point_lights[i];
+        vec4 pos = view * vec4(light.position, 1);
+        lighting_shader.set(fmt::format("u_lights[{}].position", i),
+                            vec3(pos) / pos.w);
+        lighting_shader.set(fmt::format("u_lights[{}].color", i), light.color);
+    }
+
+    lighting_shader.set("u_light_transform", light_transform);
+    lighting_shader.set("u_directional_light.direction",
+                        vec3{view * vec4{sun.direction, 0.f}});
+    lighting_shader.set("u_directional_light.intensity",
+                        sun.intensity * sun.color);
+
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+}
+
+void Renderer::forward_pass(const mat4 &proj, const mat4 &view)
+{
+
+    glUseProgram(skybox_shader.get_id());
+    glBindTextureUnit(0, texture_skybox);
+
+    skybox_shader.set("u_projection", proj);
+    skybox_shader.set("u_view", mat4(mat3(view)));
+
+    glBindVertexArray(vao_skybox);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+}
+
+void Renderer::geometry_pass(vector<RenderData> &queue, const mat4 &proj,
+                             const mat4 &view)
+{
+    glBindVertexArray(vao_entities);
+
+    uint cur_shader_id = invalid_shader_id;
+
+    for (auto &r : queue)
+    {
+        if (auto shader_id = r.shader.get_id(); cur_shader_id != shader_id)
+        {
+            glUseProgram(shader_id);
+            cur_shader_id = shader_id;
+        }
+
+        const auto model_view = view * r.model;
+        const auto mvp = proj * model_view;
+
+        r.shader.set("u_model_view", model_view);
+        r.shader.set("u_mvp", mvp);
+        r.shader.set("u_normal_mat", inverseTranspose(mat3{model_view}));
+        float far_clip_dist = proj[3][2] / (proj[2][2] + 1.f);
+        r.shader.set("u_far_clip_distance", far_clip_dist);
+
+        r.shader.set("u_metallic_factor", r.metallic_factor);
+        r.shader.set("u_roughness_factor", r.roughness_factor);
+
+        if (r.base_color_tex_id != invalid_texture_id)
+        {
+            r.shader.set("u_use_sampler", true);
+            r.shader.set("u_base_color", 0);
+            glBindTextureUnit(0, r.base_color_tex_id);
+        }
+        else
+        {
+            r.shader.set("u_use_sampler", false);
+        }
+
+        if (r.normal_tex_id != invalid_texture_id)
+        {
+            r.shader.set("u_use_normal", true);
+            r.shader.set("u_normal", 1);
+            glBindTextureUnit(1, r.normal_tex_id);
+        }
+        else
+        {
+            r.shader.set("u_use_normal", false);
+        }
+
+        if (r.metallic_roughness_id != invalid_texture_id)
+        {
+            r.shader.set("u_use_metallic_roughness", true);
+            r.shader.set("u_metallic_roughness", 2);
+            glBindTextureUnit(2, r.metallic_roughness_id);
+        }
+        else
+        {
+            r.shader.set("u_use_metallic_roughness", false);
+        }
+
+        render_mesh_instance(vao_entities, mesh_instances[r.mesh_index]);
+    }
+}
+
 void Renderer::resize_viewport(glm::vec2 size)
 {
     viewport_size = size;
-    create_g_buffer();
+    // TODO: clean up buffers
+    g_buf = create_g_buffer(size);
+}
+
+void Renderer::render_probe(std::vector<RenderData> &queue)
+{
+    vec3 position{0.f, 3.f, 0.f};
+
+    ivec2 size{512, 512};
+    auto g_buf = create_g_buffer(size);
+
+    uint fbo;
+    glCreateFramebuffers(1, &fbo);
+
+    uint color_texture;
+    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &color_texture);
+    glTextureStorage2D(color_texture, 1, GL_RGBA16F, size.x, size.y);
+    glNamedFramebufferTextureLayer(fbo, GL_COLOR_ATTACHMENT0, color_texture, 0,
+                                   0);
+
+    uint depth_buffer;
+    glCreateRenderbuffers(1, &depth_buffer);
+    glNamedRenderbufferStorage(depth_buffer, GL_DEPTH_COMPONENT24, size.x,
+                               size.y);
+    glNamedFramebufferRenderbuffer(fbo, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
+                                   depth_buffer);
+
+    if (glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER) !=
+        GL_FRAMEBUFFER_COMPLETE)
+        logger.error("Probe framebuffer incomplete");
+
+    float far = 50.f;
+    mat4 proj = perspective(radians(90.f), 1.f, 0.1f, far);
+    array<mat4, 6> views{
+        lookAt(position, position + vec3{1.f, 0.f, 0.f}, vec3{0.f, 1.f, 0.f}),
+        lookAt(position, position + vec3{-1.f, 0.f, 0.f}, vec3{0.f, 1.f, 0.f}),
+        lookAt(position, position + vec3{0.f, 1.f, 0.f}, vec3{1.f, 0.f, 0.f}),
+        lookAt(position, position + vec3{0.f, -1.f, 0.f}, vec3{1.f, 0.f, 0.f}),
+        lookAt(position, position + vec3{0.f, 0.f, 1.f}, vec3{0.f, 1.f, 0.f}),
+        lookAt(position, position + vec3{0.f, 0.f, -1.f}, vec3{0.f, 1.f, 0.f}),
+    };
+
+    const mat4 light_transform =
+        ortho(-20.f, 20.f, -20.f, 20.f, 1.f, 20.f) *
+        lookAt(sun.position, sun.position + sun.direction, vec3{0.f, 1.f, 0.f});
+
+    glViewport(0, 0, shadow_map_size.x, shadow_map_size.y);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo_shadow);
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+    shadow_pass(queue, light_transform);
+
+    // TODO:
+    glViewport(0, 0, size.x, size.y);
+
+    for (int face_idx = 0; face_idx < 6; face_idx++)
+    {
+        glNamedFramebufferTextureLayer(fbo, GL_COLOR_ATTACHMENT0, color_texture,
+                                       0, face_idx);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, g_buf.framebuffer);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        geometry_pass(queue, proj, views[face_idx]);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        lighting_pass(proj, views[face_idx], g_buf, light_transform);
+        glBlitNamedFramebuffer(g_buf.framebuffer, fbo, 0, 0, size.x, size.y, 0,
+                               0, size.x, size.y, GL_DEPTH_BUFFER_BIT,
+                               GL_NEAREST);
+        forward_pass(proj, views[face_idx]);
+    }
 }
