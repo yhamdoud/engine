@@ -19,8 +19,9 @@ struct Sampler
     int minify_filter = GL_LINEAR;
     int wrap_s = GL_REPEAT;
     int wrap_t = GL_REPEAT;
-    bool use_mipmap = false;
     //    int wrap_r;
+    bool use_mipmap = false;
+    bool is_srgb = false;
 };
 
 struct Texture

@@ -317,11 +317,11 @@ Renderer::register_texture(const Texture &texture)
     switch (texture.component_count)
     {
     case 3:
-        internal_format = GL_RGB8;
+        internal_format = (texture.sampler.is_srgb) ? GL_SRGB8 : GL_RGB8;
         format = GL_RGB;
         break;
     case 4:
-        internal_format = GL_RGBA8;
+        internal_format = (texture.sampler.is_srgb) ? GL_SRGB8_ALPHA8 : GL_RGB8;
         format = GL_RGBA;
         break;
     default:

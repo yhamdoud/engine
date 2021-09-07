@@ -6,8 +6,8 @@
 #include <vector>
 
 #include <cgltf.h>
+#include <glm/ext.hpp>
 #include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <stb_image.h>
 
 #include "logger.hpp"
@@ -108,10 +108,13 @@ static Material process_material(const cgltf_material &gltf_material)
     if (gltf_material.has_pbr_metallic_roughness)
     {
         const auto &gltf_pbr = gltf_material.pbr_metallic_roughness;
+
         material.base_color = process_texture_view(gltf_pbr.base_color_texture);
         material.metallic_roughness =
             process_texture_view(gltf_pbr.metallic_roughness_texture);
-        material.base_color_factor = make_vec4(gltf_pbr.base_color_factor);
+
+        material.base_color_factor =
+            convertSRGBToLinear(make_vec4(gltf_pbr.base_color_factor));
         material.metallic_factor = gltf_pbr.metallic_factor;
         material.roughness_factor = gltf_pbr.roughness_factor;
 
@@ -119,8 +122,12 @@ static Material process_material(const cgltf_material &gltf_material)
         if (material.metallic_roughness)
             material.metallic_roughness->sampler.use_mipmap = true;
 
-        if (material.base_color)
-            material.base_color->sampler.use_mipmap = true;
+        if (auto &texture = material.base_color)
+        {
+            texture->sampler.use_mipmap = true;
+            // Assumption.
+            texture->sampler.is_srgb = true;
+        }
     }
     else if (gltf_material.has_pbr_specular_glossiness)
     {
