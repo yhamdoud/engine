@@ -119,6 +119,7 @@ size_t add_entity(Renderer &renderer, Entity::Flags flags, Transform transform,
         metallic_roughness_tex_id,
         model.material.metallic_factor,
         model.material.roughness_factor,
+        model.material.base_color_factor,
         shader,
     });
 
@@ -142,6 +143,7 @@ vector<RenderData> generate_render_data()
             e.metallic_roughness_tex_id,
             e.metallic_factor,
             e.roughness_factor,
+            e.base_color_factor,
             model,
             e.shader,
         });
@@ -189,38 +191,50 @@ int main()
         .frag = shaders_path / "geometry.fs",
     });
 
-    auto duck_model = std::move(load_gltf(models_path / "duck.glb")[0]);
-    //    auto helmet_model =
-    //        std::move(load_gltf(models_path / "damaged_helmet.glb")[0]);
-
-    //    auto duck1 = add_entity(r, Entity::Flags::casts_shadow,
-    //                            Transform{vec3{0.f, 2.f, 0.f}, vec3{0.01f}},
-    //                            duck_model, std::nullopt, deferred_shader);
-
-    auto sponza = load_gltf(models_path / "sponza.glb");
-    for (const auto &m : sponza)
     {
-        add_entity(r, Entity::Flags::casts_shadow, Transform{m.transform}, m,
-                   std::nullopt, deferred_shader);
+
+        auto duck_model = std::move(load_gltf(models_path / "duck.glb")[0]);
+        //    auto helmet_model =
+        //        std::move(load_gltf(models_path / "damaged_helmet.glb")[0]);
+
+        //    auto duck1 = add_entity(r, Entity::Flags::casts_shadow,
+        //                            Transform{vec3{0.f, 2.f, 0.f},
+        //                            vec3{0.01f}}, duck_model, std::nullopt,
+        //                            deferred_shader);
+
+        //        auto sponza = load_gltf(models_path / "sponza.glb");
+        //        for (const auto &m : sponza)
+        //        {
+        //            add_entity(r, Entity::Flags::casts_shadow,
+        //            Transform{m.transform},
+        //                       m, std::nullopt, deferred_shader);
+        //        }
+
+        //    auto helmet = add_entity(renderer, Entity::Flags::casts_shadow,
+        //                             Transform{vec3{2.f, 1.f, 0.f}},
+        //                             helmet_model, std::nullopt,
+        //                             deferred_shader);
+
+        //    add_entity(renderer, Entity::Flags::none,
+        //    Transform{vec3{100.f, 5.f, 0.f}},
+        //               duck_model,
+        //               std::make_optional<Entity>(entities[duck1]),
+        //               deferred_shader);
+        //
+        //    add_entity(renderer, Entity::Flags::casts_shadow,
+        //               Transform(vec3{0.f}, vec3{10.f}),
+        //               load_gltf(models_path / "plane.gltf")[0], std::nullopt,
+        //               deferred_shader);
+
+        auto gi_test = load_gltf(models_path / "gi_test.glb");
+        for (const auto &m : gi_test)
+            add_entity(r, Entity::Flags::casts_shadow, Transform(vec3{0.f}), m,
+                       std::nullopt, deferred_shader);
+
+        auto sphere_model = std::move(load_gltf(models_path / "sphere.glb")[0]);
+        add_entity(r, Entity::Flags::none, Transform(r.sun.position),
+                   sphere_model, std::nullopt, deferred_shader);
     }
-
-    //    auto helmet = add_entity(renderer, Entity::Flags::casts_shadow,
-    //                             Transform{vec3{2.f, 1.f, 0.f}}, helmet_model,
-    //                             std::nullopt, deferred_shader);
-
-    //    add_entity(renderer, Entity::Flags::none, Transform{vec3{100.f, 5.f,
-    //    0.f}},
-    //               duck_model, std::make_optional<Entity>(entities[duck1]),
-    //               deferred_shader);
-    //
-    //    add_entity(renderer, Entity::Flags::casts_shadow,
-    //               Transform(vec3{0.f}, vec3{10.f}),
-    //               load_gltf(models_path / "plane.gltf")[0], std::nullopt,
-    //               deferred_shader);
-
-    auto sphere_model = std::move(load_gltf(models_path / "sphere.glb")[0]);
-    add_entity(r, Entity::Flags::none, Transform(r.sun.position), sphere_model,
-               std::nullopt, deferred_shader);
 
     double last_time = glfwGetTime();
     vec2 cursor_pos = get_cursor_position(window);

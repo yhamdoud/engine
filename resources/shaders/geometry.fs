@@ -20,6 +20,7 @@ uniform sampler2D u_shadow_map;
 
 uniform float u_metallic_factor;
 uniform float u_roughness_factor;
+uniform vec3 u_base_color_factor;
 
 uniform float u_far_clip_distance;
 
@@ -50,10 +51,10 @@ void main()
     float depth = -fs_in.position.z / u_far_clip_distance;
 	gl_FragDepth = depth;
 
+    g_base_color_roughness.rgb = u_base_color_factor;
+
 	if (u_use_sampler)
-        g_base_color_roughness.rgb = texture(u_base_color, fs_in.tex_coords).rgb;
-    else
-        g_base_color_roughness.rgb = vec3(0.5);
+        g_base_color_roughness.rgb *= texture(u_base_color, fs_in.tex_coords).rgb;
 
     if (u_use_normal)
     {

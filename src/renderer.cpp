@@ -30,6 +30,8 @@ int attrib_normals = 1;
 int attrib_tex_coords = 2;
 int attrib_tangents = 3;
 
+vec3 probe_pos{0.f, 3.f, 0.f};
+
 void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
                          GLsizei length, GLchar const *message,
                          void const *user_param)
@@ -142,6 +144,8 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
+
+    glEnable(GL_CULL_FACE);
 
     glClearColor(0.f, 0.f, 0.f, 1.0f);
 
@@ -271,6 +275,18 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
         tonemap_shader = *Shader::from_paths(ShaderPaths{
             .vert = shaders_path / "lighting.vs",
             .frag = shaders_path / "tonemap.fs",
+        });
+    }
+
+    // Probe
+    {
+        auto sphere_model = std::move(load_gltf(models_path / "sphere.glb")[0]);
+        probe_mesh_idx = register_mesh(*sphere_model.mesh);
+
+        probe_shader = *Shader::from_paths(ShaderPaths{
+            .vert = shaders_path / "probe.vs",
+            .frag = shaders_path / "probe.fs",
+
         });
     }
 
@@ -443,18 +459,19 @@ void Renderer::render(std::vector<RenderData> &queue)
         glBindFramebuffer(GL_FRAMEBUFFER, hdr_fbo);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        lighting_pass(proj, view, g_buf, light_transform);
+        lighting_pass(proj, view, g_buf, light_transform, irradiance_texture);
     }
 
     //     Render skybox.
     {
         TracyGpuZone("Skybox");
 
+        glViewport(0, 0, viewport_size.x, viewport_size.y);
+        glBindFramebuffer(GL_FRAMEBUFFER, hdr_fbo);
         glBlitNamedFramebuffer(g_buf.framebuffer, hdr_fbo, 0, 0,
                                viewport_size.x, viewport_size.y, 0, 0,
                                viewport_size.x, viewport_size.y,
                                GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-        glBindFramebuffer(GL_FRAMEBUFFER, hdr_fbo);
 
         forward_pass(proj, view);
     }
@@ -505,7 +522,8 @@ void Renderer::shadow_pass(vector<RenderData> &queue,
     glCullFace(GL_BACK);
 }
 void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
-                             const GBuffer &g_buf, const mat4 &light_transform)
+                             const GBuffer &g_buf, const mat4 &light_transform,
+                             uint irad)
 {
 
     glUseProgram(lighting_shader.get_id());
@@ -513,6 +531,7 @@ void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
     lighting_shader.set("u_g_normal_metallic", 1);
     lighting_shader.set("u_g_base_color_roughness", 2);
     lighting_shader.set("u_shadow_map", 3);
+    lighting_shader.set("u_irradiance", 4);
     lighting_shader.set("u_proj_inv", inverse(proj));
     lighting_shader.set("u_view_inv", inverse(view));
 
@@ -520,6 +539,17 @@ void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
     glBindTextureUnit(1, g_buf.normal_metallic);
     glBindTextureUnit(2, g_buf.base_color_roughness);
     glBindTextureUnit(3, shadow_map);
+
+    if (irad != invalid_texture_id)
+    {
+        glBindTextureUnit(4, irad);
+        lighting_shader.set("u_use_irradiance", true);
+    }
+    else
+    {
+        glBindTextureUnit(4, invalid_texture_id);
+        lighting_shader.set("u_use_irradiance", false);
+    }
 
     // TODO: Use a UBO or SSBO for this data.
     for (size_t i = 0; i < point_lights.size(); i++)
@@ -542,15 +572,34 @@ void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
 
 void Renderer::forward_pass(const mat4 &proj, const mat4 &view)
 {
+    glBindVertexArray(vao_skybox);
 
     glUseProgram(skybox_shader.get_id());
-    glBindTextureUnit(0, texture_skybox);
 
     skybox_shader.set("u_projection", proj);
     skybox_shader.set("u_view", mat4(mat3(view)));
 
-    glBindVertexArray(vao_skybox);
+    glBindTextureUnit(0, texture_skybox);
+
     glDrawArrays(GL_TRIANGLES, 0, 36);
+
+    //
+
+    glBindVertexArray(vao_entities);
+
+    glUseProgram(probe_shader.get_id());
+
+    const mat4 model = translate(mat4(1.f), probe_pos);
+
+    probe_shader.set("u_cubemap", 0);
+    probe_shader.set("u_mvp", proj * view * model);
+    probe_shader.set("u_model_view", view * model);
+    float far_clip_dist = proj[3][2] / (proj[2][2] + 1.f);
+    probe_shader.set("u_far_clip_distance", far_clip_dist);
+
+    glBindTextureUnit(0, irradiance_texture);
+
+    render_mesh_instance(vao_entities, mesh_instances[probe_mesh_idx]);
 }
 
 void Renderer::geometry_pass(vector<RenderData> &queue, const mat4 &proj,
@@ -577,6 +626,7 @@ void Renderer::geometry_pass(vector<RenderData> &queue, const mat4 &proj,
         float far_clip_dist = proj[3][2] / (proj[2][2] + 1.f);
         r.shader.set("u_far_clip_distance", far_clip_dist);
 
+        r.shader.set("u_base_color_factor", r.base_color_factor);
         r.shader.set("u_metallic_factor", r.metallic_factor);
         r.shader.set("u_roughness_factor", r.roughness_factor);
 
@@ -626,7 +676,6 @@ void Renderer::resize_viewport(glm::vec2 size)
 
 void Renderer::render_probe(std::vector<RenderData> &queue)
 {
-    vec3 position{0.f, 3.f, 0.f};
 
     ivec2 size{512, 512};
     auto g_buf = create_g_buffer(size);
@@ -654,12 +703,17 @@ void Renderer::render_probe(std::vector<RenderData> &queue)
     float far = 50.f;
     mat4 proj = perspective(radians(90.f), 1.f, 0.1f, far);
     array<mat4, 6> views{
-        lookAt(position, position + vec3{1.f, 0.f, 0.f}, vec3{0.f, 1.f, 0.f}),
-        lookAt(position, position + vec3{-1.f, 0.f, 0.f}, vec3{0.f, 1.f, 0.f}),
-        lookAt(position, position + vec3{0.f, 1.f, 0.f}, vec3{1.f, 0.f, 0.f}),
-        lookAt(position, position + vec3{0.f, -1.f, 0.f}, vec3{1.f, 0.f, 0.f}),
-        lookAt(position, position + vec3{0.f, 0.f, 1.f}, vec3{0.f, 1.f, 0.f}),
-        lookAt(position, position + vec3{0.f, 0.f, -1.f}, vec3{0.f, 1.f, 0.f}),
+        lookAt(probe_pos, probe_pos + vec3{1.f, 0.f, 0.f},
+               vec3{0.f, -1.f, 0.f}),
+        lookAt(probe_pos, probe_pos + vec3{-1.f, 0.f, 0.f},
+               vec3{0.f, -1.f, 0.f}),
+        lookAt(probe_pos, probe_pos + vec3{0.f, 1.f, 0.f}, vec3{0.f, 0.f, 1.f}),
+        lookAt(probe_pos, probe_pos + vec3{0.f, -1.f, 0.f},
+               vec3{0.f, 0.f, -1.f}),
+        lookAt(probe_pos, probe_pos + vec3{0.f, 0.f, 1.f},
+               vec3{0.f, -1.f, 0.f}),
+        lookAt(probe_pos, probe_pos + vec3{0.f, 0.f, -1.f},
+               vec3{0.f, -1.f, 0.f}),
     };
 
     const mat4 light_transform =
@@ -672,9 +726,7 @@ void Renderer::render_probe(std::vector<RenderData> &queue)
 
     shadow_pass(queue, light_transform);
 
-    // TODO:
     glViewport(0, 0, size.x, size.y);
-
     for (int face_idx = 0; face_idx < 6; face_idx++)
     {
         glNamedFramebufferTextureLayer(fbo, GL_COLOR_ATTACHMENT0, color_texture,
@@ -686,10 +738,54 @@ void Renderer::render_probe(std::vector<RenderData> &queue)
 
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        lighting_pass(proj, views[face_idx], g_buf, light_transform);
+        lighting_pass(proj, views[face_idx], g_buf, light_transform,
+                      invalid_texture_id);
         glBlitNamedFramebuffer(g_buf.framebuffer, fbo, 0, 0, size.x, size.y, 0,
                                0, size.x, size.y, GL_DEPTH_BUFFER_BIT,
                                GL_NEAREST);
         forward_pass(proj, views[face_idx]);
     }
+
+    ivec2 irradiance_tex_size{32, 32};
+    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &irradiance_texture);
+    glTextureStorage2D(irradiance_texture, 1, GL_RGBA16F, irradiance_tex_size.x,
+                       irradiance_tex_size.y);
+
+    glTextureParameteri(irradiance_texture, GL_TEXTURE_WRAP_S,
+                        GL_CLAMP_TO_EDGE);
+    glTextureParameteri(irradiance_texture, GL_TEXTURE_WRAP_T,
+                        GL_CLAMP_TO_EDGE);
+    glTextureParameteri(irradiance_texture, GL_TEXTURE_WRAP_R,
+                        GL_CLAMP_TO_EDGE);
+    glTextureParameteri(irradiance_texture, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(irradiance_texture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    auto irradiance_shader = *Shader::from_paths(ShaderPaths{
+        .vert = shaders_path / "irradiance.vs",
+        .frag = shaders_path / "irradiance.fs",
+    });
+
+    glUseProgram(irradiance_shader.get_id());
+
+    irradiance_shader.set("u_environment", 0);
+    glBindTextureUnit(0, color_texture);
+
+    irradiance_shader.set("u_projection", proj);
+
+    glBindVertexArray(vao_skybox);
+
+    glViewport(0, 0, irradiance_tex_size.x, irradiance_tex_size.y);
+
+    for (int face_idx = 0; face_idx < 6; face_idx++)
+    {
+        glNamedFramebufferTextureLayer(fbo, GL_COLOR_ATTACHMENT0,
+                                       irradiance_texture, 0, face_idx);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        irradiance_shader.set("u_view", mat4(mat3(views[face_idx])));
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+
+    //    irradiance_texture = color_texture;
 }

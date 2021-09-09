@@ -8,6 +8,9 @@ uniform sampler2D u_g_normal_metallic;
 uniform sampler2D u_g_base_color_roughness;
 uniform sampler2D u_shadow_map;
 
+uniform bool u_use_irradiance;
+uniform samplerCube u_irradiance;
+
 struct Light {
     vec3 position;
     vec3 color;
@@ -177,6 +180,17 @@ void main()
         vec3 l = normalize(light.position - pos);
 
         out_luminance += brdf(v, l) * light.color * attenuation;
+	}
+
+    if (u_use_irradiance)
+    {
+        vec3 kS = F_Schlick(max(dot(n, v), 0.), f0);
+        vec3 kD = 1.0 - kS;
+        // TODO
+        vec3 irradiance = texture(u_irradiance, mat3(u_view_inv) * n).rgb;
+        vec3 diffuse = irradiance * base_color;
+        vec3 ambient = (kD * diffuse);
+        out_luminance += ambient;
 	}
 
     // Directional light (sun).

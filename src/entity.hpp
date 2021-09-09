@@ -25,6 +25,7 @@ struct Entity
     uint metallic_roughness_tex_id;
     float metallic_factor;
     float roughness_factor;
+    glm::vec3 base_color_factor;
 
     Shader &shader;
 };

@@ -33,6 +33,7 @@ struct RenderData
     uint metallic_roughness_id;
     float metallic_factor;
     float roughness_factor;
+    glm::vec3 base_color_factor;
     glm::mat4 model;
     Shader &shader;
 };
@@ -77,7 +78,8 @@ class Renderer
     };
 
     std::array<Light, 3> point_lights = {
-        Light{glm::vec3{0, 3, 0}, glm::vec3{20.f, 10.f, 10.f}},
+        //        Light{glm::vec3{0, 3, 0}, glm::vec3{20.f, 10.f, 10.f}},
+        Light{glm::vec3{0, 3, 3}, glm::vec3{0., 0., 0.}},
         Light{glm::vec3{0, 3, 3}, glm::vec3{0., 0., 0.}},
         Light{glm::vec3{3, 3, 3}, glm::vec3{0., 0., 0.}},
     };
@@ -96,6 +98,8 @@ class Renderer
     uint fbo_shadow;
     Shader lighting_shader;
 
+    size_t probe_mesh_idx;
+
     GBuffer create_g_buffer(glm::ivec2 size);
 
   public:
@@ -109,8 +113,8 @@ class Renderer
         .position = glm::vec3(0.f, 15., -5.f),
         .color = glm::vec3{1.f, 0.95f, 0.95f},
         //        .intensity = 100'000.f,
-        .intensity = 20.f,
-        .direction = glm::normalize(glm::vec3{0.f, -1.f, 0.2f}),
+        .intensity = 10.f,
+        .direction = glm::normalize(glm::vec3{0.2f, -1.f, 0.2f}),
     };
 
     PostProcessingConfig post_proc_cfg{
@@ -127,6 +131,9 @@ class Renderer
     uint debug_view_roughness;
     uint debug_view_normal;
     uint debug_view_metallic;
+
+    uint irradiance_texture = invalid_texture_id;
+    Shader probe_shader;
 
     // Post processing
     uint hdr_screen;
@@ -153,7 +160,8 @@ class Renderer
     void geometry_pass(std::vector<RenderData> &queue, const glm::mat4 &proj,
                        const glm::mat4 &view);
     void lighting_pass(const glm::mat4 &proj, const glm::mat4 &view,
-                       const GBuffer &g_buf, const glm::mat4 &light_transform);
+                       const GBuffer &g_buf, const glm::mat4 &light_transform,
+                       uint irad);
     void forward_pass(const glm::mat4 &proj, const glm::mat4 &view);
     void shadow_pass(std::vector<RenderData> &queue,
                      const glm::mat4 &light_transform);
