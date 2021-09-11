@@ -30,8 +30,6 @@ int attrib_normals = 1;
 int attrib_tex_coords = 2;
 int attrib_tangents = 3;
 
-vec3 probe_pos{0.f, 3.f, 0.f};
-
 void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
                          GLsizei length, GLchar const *message,
                          void const *user_param)
@@ -280,13 +278,39 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
 
     // Probe
     {
+        g_buf_probe = create_g_buffer(probe_env_map_size);
+
+        glCreateFramebuffers(1, &fbo_probe);
+
+        glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &probe_env_map);
+        glTextureStorage2D(probe_env_map, 1, GL_RGBA16F, probe_env_map_size.x,
+                           probe_env_map_size.y);
+        glNamedFramebufferTextureLayer(fbo_probe, GL_COLOR_ATTACHMENT0,
+                                       probe_env_map, 0, 0);
+
+        uint depth_buffer;
+        glCreateRenderbuffers(1, &depth_buffer);
+        glNamedRenderbufferStorage(depth_buffer, GL_DEPTH_COMPONENT24,
+                                   probe_env_map_size.x, probe_env_map_size.y);
+        glNamedFramebufferRenderbuffer(fbo_probe, GL_DEPTH_ATTACHMENT,
+                                       GL_RENDERBUFFER, depth_buffer);
+
+        if (glCheckNamedFramebufferStatus(fbo_probe, GL_FRAMEBUFFER) !=
+            GL_FRAMEBUFFER_COMPLETE)
+            logger.error("Probe framebuffer incomplete");
+
+        probe_shader = *Shader::from_paths(ShaderPaths{
+            .vert = shaders_path / "irradiance.vs",
+            .frag = shaders_path / "irradiance.fs",
+        });
+
+        // Setup state for displaying probe.
         auto sphere_model = std::move(load_gltf(models_path / "sphere.glb")[0]);
         probe_mesh_idx = register_mesh(*sphere_model.mesh);
 
-        probe_shader = *Shader::from_paths(ShaderPaths{
+        probe_debug_shader = *Shader::from_paths(ShaderPaths{
             .vert = shaders_path / "probe.vs",
             .frag = shaders_path / "probe.fs",
-
         });
     }
 
@@ -459,7 +483,7 @@ void Renderer::render(std::vector<RenderData> &queue)
         glBindFramebuffer(GL_FRAMEBUFFER, hdr_fbo);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        lighting_pass(proj, view, g_buf, light_transform, irradiance_texture);
+        lighting_pass(proj, view, g_buf, light_transform, false);
     }
 
     //     Render skybox.
@@ -523,9 +547,8 @@ void Renderer::shadow_pass(vector<RenderData> &queue,
 }
 void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
                              const GBuffer &g_buf, const mat4 &light_transform,
-                             uint irad)
+                             bool use_indirect)
 {
-
     glUseProgram(lighting_shader.get_id());
     lighting_shader.set("u_g_depth", 0);
     lighting_shader.set("u_g_normal_metallic", 1);
@@ -540,9 +563,9 @@ void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
     glBindTextureUnit(2, g_buf.base_color_roughness);
     glBindTextureUnit(3, shadow_map);
 
-    if (irad != invalid_texture_id)
+    if (use_indirect)
     {
-        glBindTextureUnit(4, irad);
+        glBindTextureUnit(4, probes[0].cubemap);
         lighting_shader.set("u_use_irradiance", true);
     }
     else
@@ -587,19 +610,25 @@ void Renderer::forward_pass(const mat4 &proj, const mat4 &view)
 
     glBindVertexArray(vao_entities);
 
-    glUseProgram(probe_shader.get_id());
+    glUseProgram(probe_debug_shader.get_id());
 
-    const mat4 model = translate(mat4(1.f), probe_pos);
-
-    probe_shader.set("u_cubemap", 0);
-    probe_shader.set("u_mvp", proj * view * model);
-    probe_shader.set("u_model_view", view * model);
+    probe_debug_shader.set("u_cubemap", 0);
     float far_clip_dist = proj[3][2] / (proj[2][2] + 1.f);
-    probe_shader.set("u_far_clip_distance", far_clip_dist);
+    probe_debug_shader.set("u_far_clip_distance", far_clip_dist);
 
-    glBindTextureUnit(0, irradiance_texture);
+    for (const auto &probe : probes)
+    {
+        const mat4 model =
+            scale(translate(mat4(1.f), probe.position), vec3(0.5f));
+        const mat4 model_view = view * model;
 
-    render_mesh_instance(vao_entities, mesh_instances[probe_mesh_idx]);
+        probe_debug_shader.set("u_model_view", model_view);
+        probe_debug_shader.set("u_mvp", proj * model_view);
+
+        glBindTextureUnit(0, probe.cubemap);
+
+        render_mesh_instance(vao_entities, mesh_instances[probe_mesh_idx]);
+    }
 }
 
 void Renderer::geometry_pass(vector<RenderData> &queue, const mat4 &proj,
@@ -674,46 +703,19 @@ void Renderer::resize_viewport(glm::vec2 size)
     g_buf = create_g_buffer(size);
 }
 
-void Renderer::render_probe(std::vector<RenderData> &queue)
+IrradianceProbe Renderer::generate_probe(vec3 position,
+                                         std::vector<RenderData> &queue)
 {
+    IrradianceProbe probe{position, invalid_texture_id};
 
-    ivec2 size{512, 512};
-    auto g_buf = create_g_buffer(size);
-
-    uint fbo;
-    glCreateFramebuffers(1, &fbo);
-
-    uint color_texture;
-    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &color_texture);
-    glTextureStorage2D(color_texture, 1, GL_RGBA16F, size.x, size.y);
-    glNamedFramebufferTextureLayer(fbo, GL_COLOR_ATTACHMENT0, color_texture, 0,
-                                   0);
-
-    uint depth_buffer;
-    glCreateRenderbuffers(1, &depth_buffer);
-    glNamedRenderbufferStorage(depth_buffer, GL_DEPTH_COMPONENT24, size.x,
-                               size.y);
-    glNamedFramebufferRenderbuffer(fbo, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
-                                   depth_buffer);
-
-    if (glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER) !=
-        GL_FRAMEBUFFER_COMPLETE)
-        logger.error("Probe framebuffer incomplete");
-
-    float far = 50.f;
-    mat4 proj = perspective(radians(90.f), 1.f, 0.1f, far);
+    mat4 proj = perspective(radians(90.f), 1.f, 0.1f, 50.f);
     array<mat4, 6> views{
-        lookAt(probe_pos, probe_pos + vec3{1.f, 0.f, 0.f},
-               vec3{0.f, -1.f, 0.f}),
-        lookAt(probe_pos, probe_pos + vec3{-1.f, 0.f, 0.f},
-               vec3{0.f, -1.f, 0.f}),
-        lookAt(probe_pos, probe_pos + vec3{0.f, 1.f, 0.f}, vec3{0.f, 0.f, 1.f}),
-        lookAt(probe_pos, probe_pos + vec3{0.f, -1.f, 0.f},
-               vec3{0.f, 0.f, -1.f}),
-        lookAt(probe_pos, probe_pos + vec3{0.f, 0.f, 1.f},
-               vec3{0.f, -1.f, 0.f}),
-        lookAt(probe_pos, probe_pos + vec3{0.f, 0.f, -1.f},
-               vec3{0.f, -1.f, 0.f}),
+        lookAt(position, position + vec3{1.f, 0.f, 0.f}, vec3{0.f, -1.f, 0.f}),
+        lookAt(position, position + vec3{-1.f, 0.f, 0.f}, vec3{0.f, -1.f, 0.f}),
+        lookAt(position, position + vec3{0.f, 1.f, 0.f}, vec3{0.f, 0.f, 1.f}),
+        lookAt(position, position + vec3{0.f, -1.f, 0.f}, vec3{0.f, 0.f, -1.f}),
+        lookAt(position, position + vec3{0.f, 0.f, 1.f}, vec3{0.f, -1.f, 0.f}),
+        lookAt(position, position + vec3{0.f, 0.f, -1.f}, vec3{0.f, -1.f, 0.f}),
     };
 
     const mat4 light_transform =
@@ -726,66 +728,82 @@ void Renderer::render_probe(std::vector<RenderData> &queue)
 
     shadow_pass(queue, light_transform);
 
-    glViewport(0, 0, size.x, size.y);
+    glViewport(0, 0, probe_env_map_size.x, probe_env_map_size.y);
     for (int face_idx = 0; face_idx < 6; face_idx++)
     {
-        glNamedFramebufferTextureLayer(fbo, GL_COLOR_ATTACHMENT0, color_texture,
-                                       0, face_idx);
+        glNamedFramebufferTextureLayer(fbo_probe, GL_COLOR_ATTACHMENT0,
+                                       probe_env_map, 0, face_idx);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, g_buf.framebuffer);
+        glBindFramebuffer(GL_FRAMEBUFFER, g_buf_probe.framebuffer);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         geometry_pass(queue, proj, views[face_idx]);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo_probe);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        lighting_pass(proj, views[face_idx], g_buf, light_transform,
-                      invalid_texture_id);
-        glBlitNamedFramebuffer(g_buf.framebuffer, fbo, 0, 0, size.x, size.y, 0,
-                               0, size.x, size.y, GL_DEPTH_BUFFER_BIT,
-                               GL_NEAREST);
+        lighting_pass(proj, views[face_idx], g_buf_probe, light_transform,
+                      false);
+        glBlitNamedFramebuffer(g_buf_probe.framebuffer, fbo_probe, 0, 0,
+                               probe_env_map_size.x, probe_env_map_size.y, 0, 0,
+                               probe_env_map_size.x, probe_env_map_size.y,
+                               GL_DEPTH_BUFFER_BIT, GL_NEAREST);
         forward_pass(proj, views[face_idx]);
     }
 
-    ivec2 irradiance_tex_size{32, 32};
-    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &irradiance_texture);
-    glTextureStorage2D(irradiance_texture, 1, GL_RGBA16F, irradiance_tex_size.x,
-                       irradiance_tex_size.y);
+    ivec2 cubemap_size{32, 32};
+    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &probe.cubemap);
+    glTextureStorage2D(probe.cubemap, 1, GL_RGBA16F, cubemap_size.x,
+                       cubemap_size.y);
 
-    glTextureParameteri(irradiance_texture, GL_TEXTURE_WRAP_S,
-                        GL_CLAMP_TO_EDGE);
-    glTextureParameteri(irradiance_texture, GL_TEXTURE_WRAP_T,
-                        GL_CLAMP_TO_EDGE);
-    glTextureParameteri(irradiance_texture, GL_TEXTURE_WRAP_R,
-                        GL_CLAMP_TO_EDGE);
-    glTextureParameteri(irradiance_texture, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTextureParameteri(irradiance_texture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(probe.cubemap, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(probe.cubemap, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(probe.cubemap, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(probe.cubemap, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(probe.cubemap, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    auto irradiance_shader = *Shader::from_paths(ShaderPaths{
-        .vert = shaders_path / "irradiance.vs",
-        .frag = shaders_path / "irradiance.fs",
-    });
+    glUseProgram(probe_shader.get_id());
 
-    glUseProgram(irradiance_shader.get_id());
+    glBindTextureUnit(0, probe_env_map);
 
-    irradiance_shader.set("u_environment", 0);
-    glBindTextureUnit(0, color_texture);
-
-    irradiance_shader.set("u_projection", proj);
+    probe_shader.set("u_projection", proj);
+    probe_shader.set("u_environment", 0);
 
     glBindVertexArray(vao_skybox);
 
-    glViewport(0, 0, irradiance_tex_size.x, irradiance_tex_size.y);
+    glViewport(0, 0, cubemap_size.x, cubemap_size.y);
 
     for (int face_idx = 0; face_idx < 6; face_idx++)
     {
-        glNamedFramebufferTextureLayer(fbo, GL_COLOR_ATTACHMENT0,
-                                       irradiance_texture, 0, face_idx);
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glNamedFramebufferTextureLayer(fbo_probe, GL_COLOR_ATTACHMENT0,
+                                       probe.cubemap, 0, face_idx);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo_probe);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        irradiance_shader.set("u_view", mat4(mat3(views[face_idx])));
+        probe_shader.set("u_view", mat4(mat3(views[face_idx])));
         glDrawArrays(GL_TRIANGLES, 0, 36);
     }
 
-    //    irradiance_texture = color_texture;
+    return probe;
+}
+
+void Renderer::generate_probe_grid(std::vector<RenderData> &queue,
+                                   glm::vec3 center, glm::vec3 dims,
+                                   float distance)
+{
+    ivec3 count = dims / distance;
+    float density = 1 / distance;
+
+    vec3 origin = center - dims / 2.f;
+
+    for (int i = 0; i < count.x; i++)
+    {
+        for (int j = 0; j < count.y; j++)
+        {
+            for (int k = 0; k < count.z; k++)
+            {
+                vec3 position = origin + distance * vec3{i, j, k};
+
+                probes.emplace_back(generate_probe(position, queue));
+            }
+        }
+    }
 }

@@ -70,6 +70,12 @@ struct GBuffer
     uint depth;
 };
 
+struct IrradianceProbe
+{
+    glm::vec3 position;
+    uint cubemap;
+};
+
 class Renderer
 {
     enum class Error
@@ -132,8 +138,14 @@ class Renderer
     uint debug_view_normal;
     uint debug_view_metallic;
 
-    uint irradiance_texture = invalid_texture_id;
+    // GI
+    glm::ivec2 probe_env_map_size{512, 512};
+    GBuffer g_buf_probe;
+    uint fbo_probe;
+    uint probe_env_map;
+    Shader probe_debug_shader;
     Shader probe_shader;
+    std::vector<IrradianceProbe> probes;
 
     // Post processing
     uint hdr_screen;
@@ -152,7 +164,11 @@ class Renderer
 
     void render_mesh_instance(unsigned int vao, const MeshInstance &mesh);
     void render(std::vector<RenderData> &queue);
-    void render_probe(std::vector<RenderData> &queue);
+
+    IrradianceProbe generate_probe(glm::vec3 position,
+                                   std::vector<RenderData> &queue);
+    void generate_probe_grid(std::vector<RenderData> &queue, glm::vec3 center,
+                             glm::vec3 dims, float distance);
 
     void resize_viewport(glm::vec2 size);
 
@@ -161,7 +177,7 @@ class Renderer
                        const glm::mat4 &view);
     void lighting_pass(const glm::mat4 &proj, const glm::mat4 &view,
                        const GBuffer &g_buf, const glm::mat4 &light_transform,
-                       uint irad);
+                       bool use_indirect);
     void forward_pass(const glm::mat4 &proj, const glm::mat4 &view);
     void shadow_pass(std::vector<RenderData> &queue,
                      const glm::mat4 &light_transform);

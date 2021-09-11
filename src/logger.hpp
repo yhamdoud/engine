@@ -66,8 +66,8 @@ class Logger
                    "msg"_a = msg);
     }
 
-    void info(auto &&...args) { log(LogType::warning, args...); }
-    void warn(auto &&...args) { log(LogType::info, args...); }
+    void info(auto &&...args) { log(LogType::info, args...); }
+    void warn(auto &&...args) { log(LogType::warning, args...); }
     void error(auto &&...args) { log(LogType::error, args...); }
     void debug(auto &&...args) { log(LogType::debug, args...); }
 };
