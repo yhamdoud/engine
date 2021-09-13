@@ -193,22 +193,32 @@ int main()
 
     {
 
-        auto duck_model = std::move(load_gltf(models_path / "duck.glb")[0]);
         //    auto helmet_model =
         //        std::move(load_gltf(models_path / "damaged_helmet.glb")[0]);
 
-        //    auto duck1 = add_entity(r, Entity::Flags::casts_shadow,
-        //                            Transform{vec3{0.f, 2.f, 0.f},
-        //                            vec3{0.01f}}, duck_model, std::nullopt,
-        //                            deferred_shader);
+        auto duck_model = std::move(load_gltf(models_path / "duck.glb")[0]);
 
-        //        auto sponza = load_gltf(models_path / "sponza.glb");
-        //        for (const auto &m : sponza)
-        //        {
-        //            add_entity(r, Entity::Flags::casts_shadow,
-        //            Transform{m.transform},
-        //                       m, std::nullopt, deferred_shader);
-        //        }
+        auto sphere_model = std::move(load_gltf(models_path / "sphere.glb")[0]);
+
+        auto sponza = load_gltf(models_path / "sponza.glb");
+
+        //        auto duck1 = add_entity(r, Entity::Flags::casts_shadow,
+        //                                Transform{vec3{0.f, 2.f, 0.f},
+        //                                vec3{0.01f}}, duck_model,
+        //                                std::nullopt, deferred_shader);
+
+        //        add_entity(r, Entity::Flags::none, Transform(vec3{0, 4, 2}),
+        //                   sphere_model, std::nullopt, deferred_shader);
+        //
+        //        add_entity(r, Entity::Flags::none, Transform(vec3{0, 4, -4},
+        //        vec3{0.5}),
+        //                   sphere_model, std::nullopt, deferred_shader);
+
+        for (const auto &m : sponza)
+        {
+            add_entity(r, Entity::Flags::casts_shadow, Transform{m.transform},
+                       m, std::nullopt, deferred_shader);
+        }
 
         //    auto helmet = add_entity(renderer, Entity::Flags::casts_shadow,
         //                             Transform{vec3{2.f, 1.f, 0.f}},
@@ -226,14 +236,14 @@ int main()
         //               load_gltf(models_path / "plane.gltf")[0], std::nullopt,
         //               deferred_shader);
 
-        auto gi_test = load_gltf(models_path / "gi_test.glb");
-        for (const auto &m : gi_test)
-            add_entity(r, Entity::Flags::casts_shadow, Transform(vec3{0.f}), m,
-                       std::nullopt, deferred_shader);
+        //        auto gi_test = load_gltf(models_path / "gi_test.glb");
+        //        for (const auto &m : gi_test)
+        //            add_entity(r, Entity::Flags::casts_shadow,
+        //            Transform(vec3{0.f}), m,
+        //                       std::nullopt, deferred_shader);
 
-        auto sphere_model = std::move(load_gltf(models_path / "sphere.glb")[0]);
-        add_entity(r, Entity::Flags::none, Transform(r.sun.position),
-                   sphere_model, std::nullopt, deferred_shader);
+        //        add_entity(r, Entity::Flags::none, Transform(r.sun.position),
+        //                   sphere_model, std::nullopt, deferred_shader);
     }
 
     double last_time = glfwGetTime();
@@ -251,7 +261,9 @@ int main()
     FrameMarkEnd("Loading");
 
     auto data = generate_render_data();
-    r.generate_probe_grid(data, vec3{2.f, 6.f, 2.f}, ivec3{20, 8, 20}, 4);
+    //    r.generate_probe_grid(data, vec3{2.f, 6.f, 2.f}, vec3{4, 4, 4}, 4);
+    r.generate_probe_grid(data, vec3{1.f, 5.5f, 1.f}, vec3{23.f, 8.f, 10.f},
+                          2.25f);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -263,6 +275,16 @@ int main()
 
         ImGui::Begin("Renderer");
         {
+            if (ImGui::CollapsingHeader("Debug"))
+            {
+                ImGui::Checkbox("Draw probes", &r.debug_cfg.draw_probes);
+                ImGui::Checkbox("Use direct illumination",
+                                &r.debug_cfg.use_direct_illumination);
+                ImGui::Checkbox("Use indirect illumination",
+                                &r.debug_cfg.use_indirect_illumination);
+                ImGui::Checkbox("Use base color", &r.debug_cfg.use_base_color);
+            }
+
             if (ImGui::CollapsingHeader("Post processing"))
             {
                 ImGui::Checkbox("Gamma correction",

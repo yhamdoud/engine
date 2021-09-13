@@ -3,13 +3,15 @@
 in vec2 tex_coords;
 in vec3 view_ray;
 
+
 uniform sampler2D u_g_depth;
 uniform sampler2D u_g_normal_metallic;
 uniform sampler2D u_g_base_color_roughness;
 uniform sampler2D u_shadow_map;
 
 uniform bool u_use_irradiance;
-uniform samplerCube u_irradiance;
+uniform bool u_use_direct;
+uniform bool u_use_base_color;
 
 struct Light {
     vec3 position;
@@ -29,9 +31,22 @@ uniform Light u_lights[light_count];
 uniform mat4 u_light_transform;
 uniform mat4 u_view_inv;
 
+// Diffuse GI
+uniform mat4 u_inv_grid_transform;
+uniform vec3 u_grid_dims;
+
+uniform sampler3D u_sh_0;
+uniform sampler3D u_sh_1;
+uniform sampler3D u_sh_2;
+uniform sampler3D u_sh_3;
+uniform sampler3D u_sh_4;
+uniform sampler3D u_sh_5;
+uniform sampler3D u_sh_6;
+
 out vec4 frag_color;
 
 const float PI = 3.14159265359;
+
 
 // Source: https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
 float calculate_shadow(vec4 pos_light_space, vec3 normal, vec3 light_dir)
@@ -143,7 +158,13 @@ void main()
 {
 	// TODO: Differentiate between point and directional point_lights.
 	vec4 base_color_roughness = texture(u_g_base_color_roughness, tex_coords);
-	vec3 base_color = base_color_roughness.rgb;
+
+    vec3 base_color;
+    if (u_use_base_color)
+        base_color = base_color_roughness.rgb;
+    else
+        base_color = vec3(1.f);
+
 	float roughness = base_color_roughness.a;
 
 
@@ -153,6 +174,7 @@ void main()
 
     // View space position.
 	vec3 pos = view_ray * texture(u_g_depth, tex_coords).x;
+	vec3 world_pos = (u_view_inv * vec4(pos, 1.f)).xyz;
 	vec3 v = normalize(-pos);
 
 	// Non-metals have achromatic specular reflectance, metals use base color
@@ -169,39 +191,79 @@ void main()
 	// Luminance or radiance?
 	vec3 out_luminance = vec3(0.);
 
-	for (uint i = 0; i < light_count; i++)
-	{
-	    Light light = u_lights[i];
-		float dist = length(light.position - pos);
-		// Inverse square law
-		// TODO: Might not be a good fit, can cause divide by zero.
-		float attenuation = 1 / (dist * dist);
+    // Direct lighting.
+    if (u_use_direct) {
+        // Point lights contribution.
+        for (uint i = 0; i < light_count; i++)
+        {
+            Light light = u_lights[i];
+            float dist = length(light.position - pos);
+            // Inverse square law
+            // TODO: Might not be a good fit, can cause divide by zero.
+            float attenuation = 1 / (dist * dist);
 
-        vec3 l = normalize(light.position - pos);
+            vec3 l = normalize(light.position - pos);
 
-        out_luminance += brdf(v, l) * light.color * attenuation;
-	}
+            out_luminance += brdf(v, l) * light.color * attenuation;
+        }
 
+
+        // Directional light (sun) contribution.
+        vec3 l = -u_directional_light.direction;
+        vec3 luminance = brdf(v, l) * u_directional_light.intensity;
+        float shadow = calculate_shadow(u_light_transform * u_view_inv * vec4(pos, 1.), n, l);
+
+        out_luminance += (1. - shadow) * luminance;
+    }
+
+    // Indirect lighting.
     if (u_use_irradiance)
     {
+        // Transform world position to probe grid texture coordinates.
+        vec3 grid_coords = vec3(u_inv_grid_transform * vec4(world_pos, 1.f));
+        vec3 tex_coords = (grid_coords + vec3(0.5f)) / u_grid_dims;
+        vec3 irradiance = vec3(0);
+
+        vec4 c0 = texture(u_sh_0, tex_coords);
+        vec4 c1 = texture(u_sh_1, tex_coords);
+        vec4 c2 = texture(u_sh_2, tex_coords);
+        vec4 c3 = texture(u_sh_3, tex_coords);
+        vec4 c4 = texture(u_sh_4, tex_coords);
+        vec4 c5 = texture(u_sh_5, tex_coords);
+        vec4 c6 = texture(u_sh_6, tex_coords);
+        vec3 c7 = vec3(c0.w, c1.w, c2.w);
+        vec3 c8 = vec3(c3.w, c4.w, c5.w);
+
+        // Cosine kernel
+        const float a0 = 1.0f;
+        const float a1 = 2.0f / 3.0f;
+        const float a2 = 0.25f;
+
+        // World-space normal.
+        vec3 N = mat3(u_view_inv) * n;
+
+        // Convolution is multiplication in the frequency domain.
+        irradiance = a0 * c0.rgb * 0.282095f +
+                     a1 * c1.rgb * 0.488603f * N.y +
+                     a1 * c2.rgb * 0.488603f * N.z +
+                     a1 * c3.rgb * 0.488603f * N.x +
+                     a2 * c4.rgb * 1.092548f * N.x * N.y +
+                     a2 * c5.rgb * 1.092548f * N.y * N.z +
+                     a2 * c6.rgb * 0.315392f * (3.f * N.z * N.z - 1.f) +
+                     a2 * c7.rgb * 1.092548f * N.x * N.z +
+                     a2 * c8.rgb * 0.546274f * (N.x * N.x - N.y * N.y);
+
+
         vec3 kS = F_Schlick(max(dot(n, v), 0.), f0);
         vec3 kD = 1.0 - kS;
-        // TODO
-        vec3 irradiance = texture(u_irradiance, mat3(u_view_inv) * n).rgb;
-        vec3 diffuse = irradiance * base_color;
-        vec3 ambient = (kD * diffuse);
-        out_luminance += ambient;
+
+        vec3 diffuse = irradiance * base_color * Fd_Lambert();
+
+        // TODO: This isn't correct, I think.
+        // diffuse = (kD * diffuse);
+
+        out_luminance += diffuse;
 	}
-
-    // Directional light (sun).
-    vec3 l = -u_directional_light.direction;
-	vec3 luminance = brdf(v, l) * u_directional_light.intensity;
-	float shadow = calculate_shadow(u_light_transform * u_view_inv * vec4(pos, 1.), n, l);
-
-	out_luminance += (1. - shadow) * luminance;
-
-    // TODO: Gamma correction, need to this investigate further.
-    // vec3 color = pow(out_luminance / (out_luminance + vec3(1.)), vec3(1. / 2.2));
 
 	frag_color = vec4(out_luminance, 1.);
 }

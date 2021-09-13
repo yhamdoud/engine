@@ -61,7 +61,7 @@ struct Material
     std::optional<Texture> metallic_roughness;
     std::optional<Texture> emisive;
 
-    glm::vec4 base_color_factor;
+    glm::vec4 base_color_factor{1.f};
     float metallic_factor;
     float roughness_factor;
 };

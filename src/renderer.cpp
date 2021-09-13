@@ -1,7 +1,12 @@
+#define GLM_SWIZZLE_XYZW
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+
 #include <array>
 #include <string>
 
 #include <glm/ext.hpp>
+#include <glm/gtx/string_cast.hpp>
 #include <stb_image_write.h>
 
 #include "logger.hpp"
@@ -285,8 +290,6 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
         glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &probe_env_map);
         glTextureStorage2D(probe_env_map, 1, GL_RGBA16F, probe_env_map_size.x,
                            probe_env_map_size.y);
-        glNamedFramebufferTextureLayer(fbo_probe, GL_COLOR_ATTACHMENT0,
-                                       probe_env_map, 0, 0);
 
         uint depth_buffer;
         glCreateRenderbuffers(1, &depth_buffer);
@@ -483,7 +486,7 @@ void Renderer::render(std::vector<RenderData> &queue)
         glBindFramebuffer(GL_FRAMEBUFFER, hdr_fbo);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        lighting_pass(proj, view, g_buf, light_transform, false);
+        lighting_pass(proj, view, g_buf, light_transform, true);
     }
 
     //     Render skybox.
@@ -554,23 +557,42 @@ void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
     lighting_shader.set("u_g_normal_metallic", 1);
     lighting_shader.set("u_g_base_color_roughness", 2);
     lighting_shader.set("u_shadow_map", 3);
-    lighting_shader.set("u_irradiance", 4);
     lighting_shader.set("u_proj_inv", inverse(proj));
     lighting_shader.set("u_view_inv", inverse(view));
+
+    lighting_shader.set("u_use_direct", debug_cfg.use_direct_illumination);
+    lighting_shader.set("u_use_base_color", debug_cfg.use_base_color);
 
     glBindTextureUnit(0, g_buf.depth);
     glBindTextureUnit(1, g_buf.normal_metallic);
     glBindTextureUnit(2, g_buf.base_color_roughness);
     glBindTextureUnit(3, shadow_map);
 
-    if (use_indirect)
+    lighting_shader.set("u_sh_0", 4);
+    lighting_shader.set("u_sh_1", 5);
+    lighting_shader.set("u_sh_2", 6);
+    lighting_shader.set("u_sh_3", 7);
+    lighting_shader.set("u_sh_4", 8);
+    lighting_shader.set("u_sh_5", 9);
+    lighting_shader.set("u_sh_6", 10);
+
+    if (use_indirect && debug_cfg.use_indirect_illumination)
     {
-        glBindTextureUnit(4, probes[0].cubemap);
+        lighting_shader.set("u_inv_grid_transform", inv_grid_transform);
+        lighting_shader.set("u_grid_dims", grid_dims);
+
+        glBindTextureUnit(4, sh_texs[0]);
+        glBindTextureUnit(5, sh_texs[1]);
+        glBindTextureUnit(6, sh_texs[2]);
+        glBindTextureUnit(7, sh_texs[3]);
+        glBindTextureUnit(8, sh_texs[4]);
+        glBindTextureUnit(9, sh_texs[5]);
+        glBindTextureUnit(10, sh_texs[6]);
+
         lighting_shader.set("u_use_irradiance", true);
     }
     else
     {
-        glBindTextureUnit(4, invalid_texture_id);
         lighting_shader.set("u_use_irradiance", false);
     }
 
@@ -606,28 +628,50 @@ void Renderer::forward_pass(const mat4 &proj, const mat4 &view)
 
     glDrawArrays(GL_TRIANGLES, 0, 36);
 
-    //
-
-    glBindVertexArray(vao_entities);
-
-    glUseProgram(probe_debug_shader.get_id());
-
-    probe_debug_shader.set("u_cubemap", 0);
-    float far_clip_dist = proj[3][2] / (proj[2][2] + 1.f);
-    probe_debug_shader.set("u_far_clip_distance", far_clip_dist);
-
-    for (const auto &probe : probes)
+    if (debug_cfg.draw_probes)
     {
-        const mat4 model =
-            scale(translate(mat4(1.f), probe.position), vec3(0.5f));
-        const mat4 model_view = view * model;
+        glBindVertexArray(vao_entities);
 
-        probe_debug_shader.set("u_model_view", model_view);
-        probe_debug_shader.set("u_mvp", proj * model_view);
+        glUseProgram(probe_debug_shader.get_id());
 
-        glBindTextureUnit(0, probe.cubemap);
+        float far_clip_dist = proj[3][2] / (proj[2][2] + 1.f);
+        probe_debug_shader.set("u_far_clip_distance", far_clip_dist);
 
-        render_mesh_instance(vao_entities, mesh_instances[probe_mesh_idx]);
+        probe_debug_shader.set("u_inv_grid_transform", inv_grid_transform);
+        probe_debug_shader.set("u_grid_dims", grid_dims);
+
+        // FIXME:
+        if (sh_texs.size() == 0)
+            return;
+
+        probe_debug_shader.set("u_sh_0", 0);
+        probe_debug_shader.set("u_sh_1", 1);
+        probe_debug_shader.set("u_sh_2", 2);
+        probe_debug_shader.set("u_sh_3", 3);
+        probe_debug_shader.set("u_sh_4", 4);
+        probe_debug_shader.set("u_sh_5", 5);
+        probe_debug_shader.set("u_sh_6", 6);
+
+        glBindTextureUnit(0, sh_texs[0]);
+        glBindTextureUnit(1, sh_texs[1]);
+        glBindTextureUnit(2, sh_texs[2]);
+        glBindTextureUnit(3, sh_texs[3]);
+        glBindTextureUnit(4, sh_texs[4]);
+        glBindTextureUnit(5, sh_texs[5]);
+        glBindTextureUnit(6, sh_texs[6]);
+
+        for (const auto &probe : probes)
+        {
+            const mat4 model =
+                scale(translate(mat4(1.f), probe.position), vec3(0.3f));
+            const mat4 model_view = view * model;
+
+            probe_debug_shader.set("u_model", model);
+            probe_debug_shader.set("u_model_view", model_view);
+            probe_debug_shader.set("u_mvp", proj * model_view);
+
+            render_mesh_instance(vao_entities, mesh_instances[probe_mesh_idx]);
+        }
     }
 }
 
@@ -704,7 +748,8 @@ void Renderer::resize_viewport(glm::vec2 size)
 }
 
 IrradianceProbe Renderer::generate_probe(vec3 position,
-                                         std::vector<RenderData> &queue)
+                                         std::vector<RenderData> &queue,
+                                         bool use_indirect)
 {
     IrradianceProbe probe{position, invalid_texture_id};
 
@@ -741,7 +786,7 @@ IrradianceProbe Renderer::generate_probe(vec3 position,
         glBindFramebuffer(GL_FRAMEBUFFER, fbo_probe);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         lighting_pass(proj, views[face_idx], g_buf_probe, light_transform,
-                      false);
+                      use_indirect);
         glBlitNamedFramebuffer(g_buf_probe.framebuffer, fbo_probe, 0, 0,
                                probe_env_map_size.x, probe_env_map_size.y, 0, 0,
                                probe_env_map_size.x, probe_env_map_size.y,
@@ -749,61 +794,296 @@ IrradianceProbe Renderer::generate_probe(vec3 position,
         forward_pass(proj, views[face_idx]);
     }
 
-    ivec2 cubemap_size{32, 32};
-    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &probe.cubemap);
-    glTextureStorage2D(probe.cubemap, 1, GL_RGBA16F, cubemap_size.x,
-                       cubemap_size.y);
+    probe.cubemap = probe_env_map;
+    return probe;
 
-    glTextureParameteri(probe.cubemap, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(probe.cubemap, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(probe.cubemap, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(probe.cubemap, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTextureParameteri(probe.cubemap, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    //    ivec2 cubemap_size{32, 32};
+    //    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &probe.cubemap);
+    //    glTextureStorage2D(probe.cubemap, 1, GL_RGBA16F, cubemap_size.x,
+    //                       cubemap_size.y);
+    //
+    //    glTextureParameteri(probe.cubemap, GL_TEXTURE_WRAP_S,
+    //    GL_CLAMP_TO_EDGE); glTextureParameteri(probe.cubemap,
+    //    GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    //    glTextureParameteri(probe.cubemap, GL_TEXTURE_WRAP_R,
+    //    GL_CLAMP_TO_EDGE); glTextureParameteri(probe.cubemap,
+    //    GL_TEXTURE_MIN_FILTER, GL_LINEAR); glTextureParameteri(probe.cubemap,
+    //    GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    //
+    //    glUseProgram(probe_shader.get_id());
+    //
+    //    glBindTextureUnit(0, probe_env_map);
+    //
+    //    probe_shader.set("u_projection", proj);
+    //    probe_shader.set("u_environment", 0);
+    //
+    //    glBindVertexArray(vao_skybox);
+    //
+    //    glViewport(0, 0, cubemap_size.x, cubemap_size.y);
+    //
+    //    for (int face_idx = 0; face_idx < 6; face_idx++)
+    //    {
+    //        glNamedFramebufferTextureLayer(fbo_probe, GL_COLOR_ATTACHMENT0,
+    //                                       probe.cubemap, 0, face_idx);
+    //        glBindFramebuffer(GL_FRAMEBUFFER, fbo_probe);
+    //        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    //
+    //        probe_shader.set("u_view", mat4(mat3(views[face_idx])));
+    //        glDrawArrays(GL_TRIANGLES, 0, 36);
+    //    }
+    //
+    //    return probe;
+}
 
-    glUseProgram(probe_shader.get_id());
+enum CubeMapFace
+{
+    positive_x,
+    negative_x,
+    positive_y,
+    negative_y,
+    positive_z,
+    negative_z,
+};
 
-    glBindTextureUnit(0, probe_env_map);
+// Real valued coefficients of first 3 bands of SH functions sampled at a given
+// point on the unit sphere.
+struct SphericalHarmonics3
+{
+    array<float, 9> coefficients;
 
-    probe_shader.set("u_projection", proj);
-    probe_shader.set("u_environment", 0);
-
-    glBindVertexArray(vao_skybox);
-
-    glViewport(0, 0, cubemap_size.x, cubemap_size.y);
-
-    for (int face_idx = 0; face_idx < 6; face_idx++)
+    // Evaluation of the SH basis functions at the given point.
+    explicit SphericalHarmonics3(const vec3 &s)
+        : coefficients{
+              // Band 0
+              0.282095f,
+              // Band 1
+              0.488603f * s.y,
+              0.488603f * s.z,
+              0.488603f * s.x,
+              // Band 2
+              1.092548f * s.x * s.y,
+              1.092548f * s.y * s.z,
+              0.315392f * (3.0f * s.z * s.z - 1.0f),
+              1.092548f * s.x * s.z,
+              0.546274f * (s.x * s.x - s.y * s.y),
+          }
     {
-        glNamedFramebufferTextureLayer(fbo_probe, GL_COLOR_ATTACHMENT0,
-                                       probe.cubemap, 0, face_idx);
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo_probe);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    }
+};
 
-        probe_shader.set("u_view", mat4(mat3(views[face_idx])));
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+// Convert a texture coordinate and cube map face to a vector directed to the
+// corresponding texel in world space.
+vec3 cube_map_st_to_dir(vec2 coords, CubeMapFace face)
+{
+    // Map [0, 1] to [-1, 1].
+    coords = 2.f * coords - 1.f;
+
+    // https://www.khronos.org/opengl/wiki/Cubemap_Texture#Upload_and_orientation
+    switch (face)
+    {
+    case CubeMapFace::positive_x:
+        return vec3{1.0f, -coords.t, -coords.s};
+    case CubeMapFace::negative_x:
+        return vec3{-1.0f, -coords.t, coords.s};
+    case CubeMapFace::positive_y:
+        return vec3{coords.s, 1.0f, coords.t};
+    case CubeMapFace::negative_y:
+        return vec3{coords.s, -1.0f, -coords.t};
+    case CubeMapFace::positive_z:
+        return vec3{coords.s, -coords.t, 1.0f};
+    case CubeMapFace::negative_z:
+        return vec3{coords.s, -coords.t, -1.0f};
+    }
+}
+
+void sh_reconstruct(array<vec3, 9> sh, int size)
+{
+    const int face_size = size * size;
+    const int face_count = 6;
+
+    vector<glm::vec3> texels(face_size * face_count);
+
+    int face_idx = 0;
+
+    for (int face_idx = 0; face_idx < face_count; face_idx++)
+    {
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                vec2 coords =
+                    (vec2(x, y) + vec2(0.5f)) / static_cast<float>(size);
+                // Project cubemap texel position on a sphere.
+                vec3 s = normalize(
+                    cube_map_st_to_dir(coords, (CubeMapFace)face_idx));
+
+                // clang-format off
+                texels.at(x + y * size + face_idx * face_size) =
+                    sh[0] * 0.282095f +
+                    sh[1] * 0.488603f * s.y +
+                    sh[2] * 0.488603f * s.z +
+                    sh[3] * 0.488603f * s.x;
+                    sh[4] * 1.092548f * s.x * s.y +
+                    sh[5] * 1.092548f * s.y * s.z +
+                    sh[6] * 0.315392f * (3.0f * s.z * s.z - 1.0f) +
+                    sh[7] * 1.092548f * s.x * s.z +
+                    sh[8] * 0.546274f * (s.x * s.x - s.y * s.y);
+                // clang-format on
+            }
+        }
     }
 
-    return probe;
+    stbi_write_hdr("radiance.hdr", size, face_count * size, 3,
+                   reinterpret_cast<float *>(texels.data()));
+}
+
+array<vec3, 9> sh_project(uint cube_map, int size)
+{
+    const int face_size = size * size;
+    const int face_count = 6;
+
+    vector<glm::vec3> texels(face_count * face_size);
+    glGetTextureImage(cube_map, 0, GL_RGB, GL_FLOAT,
+                      texels.size() * sizeof(vec3), texels.data());
+
+    array<vec3, 9> rgb_coeffs{};
+    float weight_sum = 0;
+
+    for (int face_idx = 0; face_idx < face_count; face_idx++)
+    {
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                const vec3 &texel =
+                    texels.at(x + y * size + face_idx * face_size);
+                vec2 coords =
+                    (vec2{x, y} + vec2(0.5f)) / static_cast<float>(size);
+                // Project cubemap texel position on a sphere.
+                vec3 s = normalize(
+                    cube_map_st_to_dir(coords, (CubeMapFace)face_idx));
+
+                // Differential solid angle.
+                coords.s = coords.s * 2.f - 1.f;
+                coords.t = coords.t * 2.f - 1.f;
+                float tmp = 1 + coords.s * coords.s + coords.t * coords.t;
+                float weight = 4.f / (sqrt(tmp) * tmp);
+
+                // Evaluate the SH functions at center of the current texel.
+                SphericalHarmonics3 sh(s);
+
+                for (int i = 0; i < 9; i++)
+                    rgb_coeffs[i] += weight * texel * sh.coefficients[i];
+
+                weight_sum += weight;
+            }
+        }
+    }
+
+    for (auto &c : rgb_coeffs)
+        c *= 4.f * pi<float>() / weight_sum;
+
+    return rgb_coeffs;
 }
 
 void Renderer::generate_probe_grid(std::vector<RenderData> &queue,
-                                   glm::vec3 center, glm::vec3 dims,
+                                   glm::vec3 center, glm::vec3 world_dims,
                                    float distance)
 {
-    ivec3 count = dims / distance;
-    float density = 1 / distance;
+    ivec3 dims = world_dims / distance;
+    int probe_count = dims.x * dims.y * dims.z;
+    // We can pack the 27 coefficient into 7 4 channel textures
+    int texture_count = 7;
 
-    vec3 origin = center - dims / 2.f;
+    vec3 origin = center - world_dims / 2.f;
 
-    for (int i = 0; i < count.x; i++)
+    mat4 grid_transform = scale(translate(mat4(1.f), origin), vec3(distance));
+
+    this->grid_dims = dims;
+    this->inv_grid_transform = inverse(grid_transform);
+
+    logger.debug("{}", glm::to_string(inv_grid_transform * vec4(origin, 1.f)));
+
+    logger.debug("{}", glm::to_string(dims));
+
+    // Contigious storage for 3D textures, each containing the per channel
+    // coefficients of a single SH band.
+    vector<vec4> coeffs(probe_count * texture_count);
+
+    sh_texs.resize(texture_count);
+    glCreateTextures(GL_TEXTURE_3D, texture_count, sh_texs.data());
+
+    //    for (int tex_idx = 0; tex_idx < texture_count; tex_idx++)
+    //    {
+    //        glTextureStorage3D(sh_texs[tex_idx], 1, GL_RGBA16F, dims.x,
+    //        dims.y,
+    //                           dims.z);
+    //    }
+
+    int bounce_count = 4;
+
+    for (int i = 0; i < bounce_count; i++)
     {
-        for (int j = 0; j < count.y; j++)
+        for (int z = 0; z < dims.z; z++)
         {
-            for (int k = 0; k < count.z; k++)
+            for (int y = 0; y < dims.y; y++)
             {
-                vec3 position = origin + distance * vec3{i, j, k};
+                for (int x = 0; x < dims.x; x++)
+                {
+                    vec3 position = vec3(grid_transform * vec4{x, y, z, 1});
 
-                probes.emplace_back(generate_probe(position, queue));
+                    // Rasterize probe environment map.
+                    auto probe = generate_probe(position, queue, i != 0);
+                    probes.emplace_back(probe);
+                    // Project environment cube map on the SH basis.
+                    auto cs = sh_project(probe_env_map, probe_env_map_size.x);
+                    //                                sh_reconstruct(cs, 128);
+                    //                    logger.debug(
+                    //                        "coefficients: {}, {}, {}, {}, {},
+                    //                        {}, {}, {}, {}",
+                    //                        glm::to_string(cs[0]),
+                    //                        glm::to_string(cs[1]),
+                    //                        glm::to_string(cs[2]),
+                    //                        glm::to_string(cs[3]),
+                    //                        glm::to_string(cs[4]),
+                    //                        glm::to_string(cs[5]),
+                    //                        glm::to_string(cs[6]),
+                    //                        glm::to_string(cs[7]),
+                    //                        glm::to_string(cs[8]));
+
+                    int idx = x + y * dims.x + z * dims.x * dims.y;
+
+                    coeffs.at(idx) = vec4(cs[0], cs[7][0]);
+                    coeffs.at(idx + 1 * probe_count) = vec4(cs[1], cs[7][1]);
+                    coeffs.at(idx + 2 * probe_count) = vec4(cs[2], cs[7][2]);
+                    coeffs.at(idx + 3 * probe_count) = vec4(cs[3], cs[8][0]);
+                    coeffs.at(idx + 4 * probe_count) = vec4(cs[4], cs[8][1]);
+                    coeffs.at(idx + 5 * probe_count) = vec4(cs[5], cs[8][2]);
+                    coeffs.at(idx + 6 * probe_count) = vec4(cs[6], 0);
+                }
             }
+        }
+
+        for (int tex_idx = 0; tex_idx < texture_count; tex_idx++)
+        {
+            glTextureParameteri(sh_texs[tex_idx], GL_TEXTURE_WRAP_S,
+                                GL_CLAMP_TO_EDGE);
+            glTextureParameteri(sh_texs[tex_idx], GL_TEXTURE_WRAP_T,
+                                GL_CLAMP_TO_EDGE);
+            glTextureParameteri(sh_texs[tex_idx], GL_TEXTURE_WRAP_R,
+                                GL_CLAMP_TO_EDGE);
+
+            // Important for trilinear interpolation!
+            glTextureParameteri(sh_texs[tex_idx], GL_TEXTURE_MAG_FILTER,
+                                GL_LINEAR);
+            glTextureParameteri(sh_texs[tex_idx], GL_TEXTURE_MIN_FILTER,
+                                GL_LINEAR_MIPMAP_LINEAR);
+
+            glTextureStorage3D(sh_texs[tex_idx], 1, GL_RGBA16F, dims.x, dims.y,
+                               dims.z);
+            glTextureSubImage3D(sh_texs[tex_idx], 0, 0, 0, 0, dims.x, dims.y,
+                                dims.z, GL_RGBA, GL_FLOAT,
+                                &coeffs.at(tex_idx * probe_count));
         }
     }
 }

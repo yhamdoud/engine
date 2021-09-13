@@ -52,7 +52,7 @@ class Logger
             case LogType::error:
                 return fmt::color::red;
             case LogType::debug:
-                return fmt::color::blue;
+                return fmt::color::pink;
             }
         }();
 

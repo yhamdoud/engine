@@ -61,6 +61,14 @@ struct PostProcessingConfig
     float gamma;
 };
 
+struct DebugConfig
+{
+    bool draw_probes;
+    bool use_indirect_illumination;
+    bool use_direct_illumination;
+    bool use_base_color;
+};
+
 struct GBuffer
 {
     glm::ivec2 size;
@@ -118,8 +126,7 @@ class Renderer
     DirectionalLight sun{
         .position = glm::vec3(0.f, 15., -5.f),
         .color = glm::vec3{1.f, 0.95f, 0.95f},
-        //        .intensity = 100'000.f,
-        .intensity = 10.f,
+        .intensity = 40.f,
         .direction = glm::normalize(glm::vec3{0.2f, -1.f, 0.2f}),
     };
 
@@ -128,6 +135,13 @@ class Renderer
         .do_gamma_correct = true,
         .exposure = 1.0,
         .gamma = 2.2f,
+    };
+
+    DebugConfig debug_cfg{
+        .draw_probes = false,
+        .use_indirect_illumination = true,
+        .use_direct_illumination = true,
+        .use_base_color = true,
     };
 
     // Deferred
@@ -139,7 +153,7 @@ class Renderer
     uint debug_view_metallic;
 
     // GI
-    glm::ivec2 probe_env_map_size{512, 512};
+    glm::ivec2 probe_env_map_size{64, 64};
     GBuffer g_buf_probe;
     uint fbo_probe;
     uint probe_env_map;
@@ -166,9 +180,13 @@ class Renderer
     void render(std::vector<RenderData> &queue);
 
     IrradianceProbe generate_probe(glm::vec3 position,
-                                   std::vector<RenderData> &queue);
+                                   std::vector<RenderData> &queue,
+                                   bool use_indirect);
     void generate_probe_grid(std::vector<RenderData> &queue, glm::vec3 center,
-                             glm::vec3 dims, float distance);
+                             glm::vec3 world_dims, float distance);
+    std::vector<uint> sh_texs;
+    glm::mat4 inv_grid_transform;
+    glm::vec3 grid_dims;
 
     void resize_viewport(glm::vec2 size);
 
