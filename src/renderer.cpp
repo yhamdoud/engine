@@ -107,7 +107,7 @@ GBuffer Renderer::create_g_buffer(ivec2 size)
     glTextureParameteri(normal_metal, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     glCreateTextures(GL_TEXTURE_2D, 1, &base_color_rough);
-    glTextureStorage2D(base_color_rough, 1, GL_RGBA8, size.x, size.y);
+    glTextureStorage2D(base_color_rough, 1, GL_RGBA16F, size.x, size.y);
     glTextureParameteri(base_color_rough, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(base_color_rough, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
@@ -1066,6 +1066,12 @@ void Renderer::generate_probe_grid(std::vector<RenderData> &queue,
 
         for (int tex_idx = 0; tex_idx < texture_count; tex_idx++)
         {
+            if (i == 0)
+            {
+                glTextureStorage3D(sh_texs[tex_idx], 1, GL_RGBA16F, dims.x,
+                                   dims.y, dims.z);
+            }
+
             glTextureParameteri(sh_texs[tex_idx], GL_TEXTURE_WRAP_S,
                                 GL_CLAMP_TO_EDGE);
             glTextureParameteri(sh_texs[tex_idx], GL_TEXTURE_WRAP_T,
@@ -1079,8 +1085,6 @@ void Renderer::generate_probe_grid(std::vector<RenderData> &queue,
             glTextureParameteri(sh_texs[tex_idx], GL_TEXTURE_MIN_FILTER,
                                 GL_LINEAR_MIPMAP_LINEAR);
 
-            glTextureStorage3D(sh_texs[tex_idx], 1, GL_RGBA16F, dims.x, dims.y,
-                               dims.z);
             glTextureSubImage3D(sh_texs[tex_idx], 0, 0, 0, 0, dims.x, dims.y,
                                 dims.z, GL_RGBA, GL_FLOAT,
                                 &coeffs.at(tex_idx * probe_count));

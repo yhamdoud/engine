@@ -105,6 +105,9 @@ static Material process_material(const cgltf_material &gltf_material)
     //    material.occlusion =
     //    process_texture_view(gltf_material.occlusion_texture);
 
+    if (material.normal)
+        material.normal->sampler.use_mipmap = true;
+
     if (gltf_material.has_pbr_metallic_roughness)
     {
         const auto &gltf_pbr = gltf_material.pbr_metallic_roughness;
@@ -113,8 +116,10 @@ static Material process_material(const cgltf_material &gltf_material)
         material.metallic_roughness =
             process_texture_view(gltf_pbr.metallic_roughness_texture);
 
-        material.base_color_factor =
-            convertSRGBToLinear(make_vec4(gltf_pbr.base_color_factor));
+        // TODO:
+        if (!material.base_color)
+            material.base_color_factor = make_vec4(gltf_pbr.base_color_factor);
+
         material.metallic_factor = gltf_pbr.metallic_factor;
         material.roughness_factor = gltf_pbr.roughness_factor;
 
