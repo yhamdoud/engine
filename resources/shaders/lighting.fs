@@ -234,7 +234,6 @@ void main()
         vec3 c7 = vec3(c0.w, c1.w, c2.w);
         vec3 c8 = vec3(c3.w, c4.w, c5.w);
 
-        // Cosine kernel
         const float a0 = 1.0f;
         const float a1 = 2.0f / 3.0f;
         const float a2 = 0.25f;
@@ -242,16 +241,15 @@ void main()
         // World-space normal.
         vec3 N = mat3(u_view_inv) * n;
 
-        // Convolution is multiplication in the frequency domain.
-        irradiance = a0 * c0.rgb * 0.282095f +
-                     a1 * c1.rgb * 0.488603f * N.y +
-                     a1 * c2.rgb * 0.488603f * N.z +
-                     a1 * c3.rgb * 0.488603f * N.x +
-                     a2 * c4.rgb * 1.092548f * N.x * N.y +
-                     a2 * c5.rgb * 1.092548f * N.y * N.z +
-                     a2 * c6.rgb * 0.315392f * (3.f * N.z * N.z - 1.f) +
-                     a2 * c7.rgb * 1.092548f * N.x * N.z +
-                     a2 * c8.rgb * 0.546274f * (N.x * N.x - N.y * N.y);
+        irradiance = c0.rgb * 0.282095f +
+                     c1.rgb * 0.488603f * N.y +
+                     c2.rgb * 0.488603f * N.z +
+                     c3.rgb * 0.488603f * N.x +
+                     c4.rgb * 1.092548f * N.x * N.y +
+                     c5.rgb * 1.092548f * N.y * N.z +
+                     c6.rgb * 0.315392f * (3.f * N.z * N.z - 1.f) +
+                     c7.rgb * 1.092548f * N.x * N.z +
+                     c8.rgb * 0.546274f * (N.x * N.x - N.y * N.y);
 
 
         vec3 kS = F_Schlick(max(dot(n, v), 0.), f0);

@@ -102,7 +102,35 @@ optional<Shader> Shader::from_paths(const ShaderPaths &p)
         }
     }
 
-    return Shader::from_stages(vert, geom, frag);
+    if (p.geom.empty() && !p.frag.empty())
+        return Shader::from_stages({vert, frag});
+
+    if (!p.geom.empty() && p.frag.empty())
+        return Shader::from_stages({vert, geom});
+
+    if (!p.geom.empty() && !p.frag.empty())
+        return Shader::from_stages({vert, geom, frag});
+
+    return Shader::from_stages({vert});
+}
+
+std::optional<Shader> Shader::from_comp_path(const path &path)
+{
+    uint comp;
+
+    if (std::filesystem::exists(path))
+    {
+        comp = compile_shader_stage(utils::from_file(path), GL_COMPUTE_SHADER);
+        if (comp == invalid_shader_id)
+            return std::nullopt;
+    }
+    else
+    {
+        logger.error("Compute shader not found at path: {}", path.string());
+        return std::nullopt;
+    }
+
+    return Shader::from_stages({comp});
 }
 
 Shader::Shader(uint id, UniformMap uniforms)
@@ -112,17 +140,12 @@ Shader::Shader(uint id, UniformMap uniforms)
 
 Shader::Shader() : id{invalid_shader_id}, uniforms{UniformMap{}} {}
 
-optional<Shader> Shader::from_stages(uint vert, uint geom, uint frag)
+optional<Shader> Shader::from_stages(const std::initializer_list<uint> &stages)
 {
     unsigned int program = glCreateProgram();
 
-    glAttachShader(program, vert);
-
-    if (geom != 0)
-        glAttachShader(program, geom);
-
-    if (frag != 0)
-        glAttachShader(program, frag);
+    for (const auto &stage : stages)
+        glAttachShader(program, stage);
 
     glLinkProgram(program);
 
@@ -140,9 +163,8 @@ optional<Shader> Shader::from_stages(uint vert, uint geom, uint frag)
 
     auto uniforms = parse_uniforms(program);
 
-    glDeleteShader(vert);
-    glDeleteShader(geom);
-    glDeleteShader(frag);
+    for (const auto &stage : stages)
+        glDeleteShader(stage);
 
     return std::make_optional<Shader>(Shader{program, uniforms});
 }
@@ -165,6 +187,13 @@ void Shader::set(const std::string &name, const glm::vec3 &value)
 {
     auto uniform = uniforms.at(name);
     glProgramUniform3fv(id, uniform.location, uniform.count,
+                        glm::value_ptr(value));
+}
+
+void Shader::set(const std::string &name, const glm::ivec3 &value)
+{
+    auto uniform = uniforms.at(name);
+    glProgramUniform3iv(id, uniform.location, uniform.count,
                         glm::value_ptr(value));
 }
 

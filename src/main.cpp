@@ -201,6 +201,11 @@ int main()
         auto sphere_model = std::move(load_gltf(models_path / "sphere.glb")[0]);
 
         auto sponza = load_gltf(models_path / "sponza.glb");
+        for (const auto &m : sponza)
+        {
+            add_entity(r, Entity::Flags::casts_shadow, Transform{m.transform},
+                       m, std::nullopt, deferred_shader);
+        }
 
         //        auto duck1 = add_entity(r, Entity::Flags::casts_shadow,
         //                                Transform{vec3{0.f, 2.f, 0.f},
@@ -213,12 +218,6 @@ int main()
         //        add_entity(r, Entity::Flags::none, Transform(vec3{0, 4, -4},
         //        vec3{0.5}),
         //                   sphere_model, std::nullopt, deferred_shader);
-
-        for (const auto &m : sponza)
-        {
-            add_entity(r, Entity::Flags::casts_shadow, Transform{m.transform},
-                       m, std::nullopt, deferred_shader);
-        }
 
         //    auto helmet = add_entity(renderer, Entity::Flags::casts_shadow,
         //                             Transform{vec3{2.f, 1.f, 0.f}},
@@ -262,8 +261,13 @@ int main()
 
     auto data = generate_render_data();
     //    r.generate_probe_grid(data, vec3{2.f, 6.f, 2.f}, vec3{4, 4, 4}, 4);
-    r.generate_probe_grid(data, vec3{1.f, 5.5f, 1.f}, vec3{23.f, 8.f, 10.f},
-                          2.25f);
+
+    //    r.generate_probe_grid(data, vec3{1.f, 5.5f, 1.f},
+    //    vec3{23.f, 8.f, 10.f},
+    //                          2.f);
+
+    r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
+                              vec3{22.f, 8.f, 9.f}, 1.f);
 
     while (!glfwWindowShouldClose(window))
     {

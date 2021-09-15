@@ -1,0 +1,49 @@
+#version 460 core
+
+const int size = 96;
+
+layout(local_size_x = size, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0, rgba16f) uniform writeonly image3D t0;
+layout (binding = 1, rgba16f) uniform writeonly image3D t1;
+layout (binding = 2, rgba16f) uniform writeonly image3D t2;
+layout (binding = 3, rgba16f) uniform writeonly image3D t3;
+layout (binding = 4, rgba16f) uniform writeonly image3D t4;
+layout (binding = 5, rgba16f) uniform writeonly image3D t5;
+layout (binding = 6, rgba16f) uniform writeonly image3D t6;
+
+layout(std430, binding = 7) buffer buf { vec4 coefs[size][7]; };
+
+uniform ivec3 u_idx;
+
+const uint work_group_size = gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z;
+shared vec4 sh[size][7];
+
+void main()
+{
+	// Copy from global to shared memory.
+	sh[gl_LocalInvocationIndex] = coefs[gl_LocalInvocationIndex];
+
+	// Parallel reduction
+	for (uint stride = work_group_size / 2; stride > 0; stride /= 2)
+	{
+		barrier();
+
+		if (gl_LocalInvocationIndex < stride)
+		{
+			for (uint i = 0; i < 7; i++)
+				sh[gl_LocalInvocationIndex][i] += sh[gl_LocalInvocationIndex + stride][i];
+		}
+	}
+
+	if (gl_LocalInvocationIndex == 0)
+	{
+		imageStore(t0, u_idx, sh[0][0]);
+		imageStore(t1, u_idx, sh[0][1]);
+		imageStore(t2, u_idx, sh[0][2]);
+		imageStore(t3, u_idx, sh[0][3]);
+		imageStore(t4, u_idx, sh[0][4]);
+		imageStore(t5, u_idx, sh[0][5]);
+		imageStore(t6, u_idx, sh[0][6]);
+	}
+}

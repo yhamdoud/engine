@@ -15,6 +15,7 @@
 
 #include <Tracy.hpp>
 #include <TracyOpenGL.hpp>
+#include <numeric>
 
 using namespace glm;
 using namespace std;
@@ -663,7 +664,7 @@ void Renderer::forward_pass(const mat4 &proj, const mat4 &view)
         for (const auto &probe : probes)
         {
             const mat4 model =
-                scale(translate(mat4(1.f), probe.position), vec3(0.3f));
+                scale(translate(mat4(1.f), probe.position), vec3(0.2f));
             const mat4 model_view = view * model;
 
             probe_debug_shader.set("u_model", model);
@@ -986,10 +987,12 @@ array<vec3, 9> sh_project(uint cube_map, int size)
     return rgb_coeffs;
 }
 
-void Renderer::generate_probe_grid(std::vector<RenderData> &queue,
-                                   glm::vec3 center, glm::vec3 world_dims,
-                                   float distance)
+void Renderer::generate_probe_grid_cpu(std::vector<RenderData> &queue,
+                                       glm::vec3 center, glm::vec3 world_dims,
+                                       float distance)
 {
+    logger.info("Generating probe grid");
+
     ivec3 dims = world_dims / distance;
     int probe_count = dims.x * dims.y * dims.z;
     // We can pack the 27 coefficient into 7 4 channel textures
@@ -1013,13 +1016,6 @@ void Renderer::generate_probe_grid(std::vector<RenderData> &queue,
     sh_texs.resize(texture_count);
     glCreateTextures(GL_TEXTURE_3D, texture_count, sh_texs.data());
 
-    //    for (int tex_idx = 0; tex_idx < texture_count; tex_idx++)
-    //    {
-    //        glTextureStorage3D(sh_texs[tex_idx], 1, GL_RGBA16F, dims.x,
-    //        dims.y,
-    //                           dims.z);
-    //    }
-
     int bounce_count = 4;
 
     for (int i = 0; i < bounce_count; i++)
@@ -1034,22 +1030,11 @@ void Renderer::generate_probe_grid(std::vector<RenderData> &queue,
 
                     // Rasterize probe environment map.
                     auto probe = generate_probe(position, queue, i != 0);
-                    probes.emplace_back(probe);
+                    if (i == 0)
+                        probes.emplace_back(probe);
+
                     // Project environment cube map on the SH basis.
                     auto cs = sh_project(probe_env_map, probe_env_map_size.x);
-                    //                                sh_reconstruct(cs, 128);
-                    //                    logger.debug(
-                    //                        "coefficients: {}, {}, {}, {}, {},
-                    //                        {}, {}, {}, {}",
-                    //                        glm::to_string(cs[0]),
-                    //                        glm::to_string(cs[1]),
-                    //                        glm::to_string(cs[2]),
-                    //                        glm::to_string(cs[3]),
-                    //                        glm::to_string(cs[4]),
-                    //                        glm::to_string(cs[5]),
-                    //                        glm::to_string(cs[6]),
-                    //                        glm::to_string(cs[7]),
-                    //                        glm::to_string(cs[8]));
 
                     int idx = x + y * dims.x + z * dims.x * dims.y;
 
@@ -1090,4 +1075,126 @@ void Renderer::generate_probe_grid(std::vector<RenderData> &queue,
                                 &coeffs.at(tex_idx * probe_count));
         }
     }
+
+    logger.info("Probe grid generation finished");
+}
+
+void Renderer::generate_probe_grid_gpu(std::vector<RenderData> &queue,
+                                       glm::vec3 center, glm::vec3 world_dims,
+                                       float distance)
+{
+    ivec3 dims = world_dims / distance;
+    int probe_count = dims.x * dims.y * dims.z;
+
+    logger.info("Baking {} probes", probe_count);
+
+    // We can pack the 27 coefficient into 7 4 channel textures
+    const int texture_count = 7;
+    const ivec2 local_size{16, 16};
+    const ivec3 group_count{probe_env_map_size / local_size, 6};
+
+    const vec3 origin = center - world_dims / 2.f;
+
+    const mat4 grid_transform =
+        scale(translate(mat4(1.f), origin), vec3(distance));
+    this->inv_grid_transform = inverse(grid_transform);
+
+    this->grid_dims = dims;
+
+    sh_texs.resize(texture_count);
+    glCreateTextures(GL_TEXTURE_3D, texture_count, sh_texs.data());
+
+    auto project = *Shader::from_comp_path(shaders_path / "sh_project.comp");
+    auto reduce = *Shader::from_comp_path(shaders_path / "sh_reduce.comp");
+
+    for (int tex_idx = 0; tex_idx < texture_count; tex_idx++)
+    {
+        glTextureStorage3D(sh_texs[tex_idx], 1, GL_RGBA16F, dims.x, dims.y,
+                           dims.z);
+
+        glTextureParameteri(sh_texs[tex_idx], GL_TEXTURE_WRAP_S,
+                            GL_CLAMP_TO_EDGE);
+        glTextureParameteri(sh_texs[tex_idx], GL_TEXTURE_WRAP_T,
+                            GL_CLAMP_TO_EDGE);
+        glTextureParameteri(sh_texs[tex_idx], GL_TEXTURE_WRAP_R,
+                            GL_CLAMP_TO_EDGE);
+
+        // Important for trilinear interpolation!
+        glTextureParameteri(sh_texs[tex_idx], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(sh_texs[tex_idx], GL_TEXTURE_MIN_FILTER,
+                            GL_LINEAR_MIPMAP_LINEAR);
+    }
+
+    const int byte_size = group_count.x * group_count.y * group_count.z *
+                          texture_count * sizeof(vec4);
+
+    uint ssbo;
+    glCreateBuffers(1, &ssbo);
+    glNamedBufferStorage(ssbo, byte_size, nullptr, GL_NONE);
+
+    // Compute the final weight for integration
+    float weight_sum = 0.f;
+    for (int y = 0; y < probe_env_map_size.x; y++)
+    {
+        for (int x = 0; x < probe_env_map_size.y; x++)
+        {
+            const vec2 coords = ((vec2(x, y) + vec2(0.5f)) /
+                                 static_cast<vec2>(probe_env_map_size)) *
+                                    2.0f -
+                                1.0f;
+
+            const float tmp = 1.f + coords.s * coords.s + coords.t * coords.t;
+            weight_sum += 4.f / (sqrt(tmp) * tmp);
+        }
+    }
+
+    weight_sum = 4.f * pi<float>() / weight_sum;
+
+    int bounce_count = 3;
+
+    for (int i = 0; i < bounce_count; i++)
+    {
+        for (int z = 0; z < dims.z; z++)
+        {
+            for (int y = 0; y < dims.y; y++)
+            {
+                for (int x = 0; x < dims.x; x++)
+                {
+                    vec3 position = vec3(grid_transform * vec4{x, y, z, 1});
+                    // Rasterize probe environment map.
+                    auto probe = generate_probe(position, queue, i != 0);
+                    // FIXME
+                    if (i == 0)
+                        probes.emplace_back(probe);
+
+                    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT |
+                                    GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+                    glUseProgram(project.get_id());
+                    project.set("u_weight_sum", weight_sum);
+                    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssbo);
+                    glBindImageTexture(0, probe_env_map, 0, true, 0,
+                                       GL_READ_ONLY, GL_RGBA16F);
+
+                    glDispatchCompute(group_count.x, group_count.y,
+                                      group_count.z);
+
+                    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+                    glUseProgram(reduce.get_id());
+                    reduce.set("u_idx", ivec3{x, y, z});
+                    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, ssbo);
+                    for (int j = 0; j < texture_count; j++)
+                        glBindImageTexture(j, sh_texs[j], 0, true, 0,
+                                           GL_WRITE_ONLY, GL_RGBA16F);
+
+                    glDispatchCompute(1, 1, 1);
+                }
+            }
+        }
+
+        logger.info("Bounce {} complete.", i);
+    }
+
+    logger.info("Probe grid generation finished");
 }

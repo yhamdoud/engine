@@ -37,13 +37,17 @@ class Shader
     Shader();
     Shader(uint program, UniformMap uniforms);
     static std::optional<Shader> from_paths(const ShaderPaths &p);
-    static std::optional<Shader> from_stages(uint vert, uint geom, uint frag);
+    static std::optional<Shader>
+    from_comp_path(const std::filesystem::path &path);
+    static std::optional<Shader>
+    from_stages(const std::initializer_list<uint> &stages);
 
     uint get_id() const;
 
     void set(const std::string &name, const glm::mat4 &value);
     void set(const std::string &name, const glm::mat3 &value);
     void set(const std::string &name, const glm::vec3 &value);
+    void set(const std::string &name, const glm::ivec3 &value);
     void set(const std::string &name, float value);
     void set(const std::string &name, int value);
     void set(const std::string &name, bool value);

@@ -182,8 +182,13 @@ class Renderer
     IrradianceProbe generate_probe(glm::vec3 position,
                                    std::vector<RenderData> &queue,
                                    bool use_indirect);
-    void generate_probe_grid(std::vector<RenderData> &queue, glm::vec3 center,
-                             glm::vec3 world_dims, float distance);
+    void generate_probe_grid_gpu(std::vector<RenderData> &queue,
+                                 glm::vec3 center, glm::vec3 world_dims,
+                                 float distance);
+    void generate_probe_grid_cpu(std::vector<RenderData> &queue,
+                                 glm::vec3 center, glm::vec3 world_dims,
+                                 float distance);
+
     std::vector<uint> sh_texs;
     glm::mat4 inv_grid_transform;
     glm::vec3 grid_dims;
