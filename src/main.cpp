@@ -262,12 +262,11 @@ int main()
     auto data = generate_render_data();
     //    r.generate_probe_grid(data, vec3{2.f, 6.f, 2.f}, vec3{4, 4, 4}, 4);
 
-    //    r.generate_probe_grid(data, vec3{1.f, 5.5f, 1.f},
-    //    vec3{23.f, 8.f, 10.f},
-    //                          2.f);
+    //    r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
+    //                              vec3{22.f, 8.f, 9.f}, 1.f);
 
     r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
-                              vec3{22.f, 8.f, 9.f}, 1.f);
+                              vec3{22.f, 8.f, 9.f}, 3.f);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -287,6 +286,26 @@ int main()
                 ImGui::Checkbox("Use indirect illumination",
                                 &r.debug_cfg.use_indirect_illumination);
                 ImGui::Checkbox("Use base color", &r.debug_cfg.use_base_color);
+            }
+
+            if (ImGui::CollapsingHeader("SSAO"))
+            {
+                ImGui::SliderInt("Sample count", &r.ssao_cfg.sample_count, 0,
+                                 r.ssao_cfg.kernel_size);
+                ImGui::SliderFloat("Radius", &r.ssao_cfg.radius, 0.f, 10.f);
+                ImGui::SliderFloat("Bias", &r.ssao_cfg.bias, 0.f, 1.f);
+                ImGui::SliderFloat("Strength", &r.ssao_cfg.strength, 0.f, 5.f);
+
+                float aspect_ratio =
+                    static_cast<float>(r.viewport_size.x) / r.viewport_size.y;
+
+                ImVec2 window_size = ImGui::GetWindowSize();
+                ImVec2 texture_size{window_size.x,
+                                    window_size.x / aspect_ratio};
+
+                ImGui::Text("Depth");
+                ImGui::Image((ImTextureID)r.ssao_texture_blur, texture_size,
+                             ImVec2(0, 1), ImVec2(1, 0));
             }
 
             if (ImGui::CollapsingHeader("Post processing"))
@@ -319,9 +338,14 @@ int main()
 
             if (ImGui::CollapsingHeader("Lighting"))
             {
-                ImGui::Image((ImTextureID)r.shadow_map,
-                             ImVec2{(float)r.shadow_map_size.x,
-                                    (float)r.shadow_map_size.y},
+                float aspect_ratio = static_cast<float>(r.shadow_map_size.x) /
+                                     r.shadow_map_size.y;
+
+                ImVec2 window_size = ImGui::GetWindowSize();
+                ImVec2 texture_size{window_size.x,
+                                    window_size.x / aspect_ratio};
+
+                ImGui::Image((ImTextureID)r.shadow_map, texture_size,
                              ImVec2(0, 1), ImVec2(1, 0));
             }
 

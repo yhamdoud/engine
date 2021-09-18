@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 
@@ -46,10 +47,13 @@ class Shader
 
     void set(const std::string &name, const glm::mat4 &value);
     void set(const std::string &name, const glm::mat3 &value);
+    void set(const std::string &name, const glm::vec2 &value);
     void set(const std::string &name, const glm::vec3 &value);
     void set(const std::string &name, const glm::ivec3 &value);
+    void set(const std::string &name, const std::span<glm::vec3> values);
     void set(const std::string &name, float value);
     void set(const std::string &name, int value);
+    void set(const std::string &name, uint value);
     void set(const std::string &name, bool value);
 };
 

@@ -183,11 +183,25 @@ void Shader::set(const std::string &name, const glm::mat3 &value)
                               glm::value_ptr(value));
 }
 
+void Shader::set(const std::string &name, const glm::vec2 &value)
+{
+    auto uniform = uniforms.at(name);
+    glProgramUniform2fv(id, uniform.location, uniform.count,
+                        glm::value_ptr(value));
+}
+
 void Shader::set(const std::string &name, const glm::vec3 &value)
 {
     auto uniform = uniforms.at(name);
     glProgramUniform3fv(id, uniform.location, uniform.count,
                         glm::value_ptr(value));
+}
+
+void Shader::set(const std::string &name, const std::span<glm::vec3> values)
+{
+    auto uniform = uniforms.at(name);
+    glProgramUniform3fv(id, uniform.location, uniform.count,
+                        reinterpret_cast<float *>(values.data()));
 }
 
 void Shader::set(const std::string &name, const glm::ivec3 &value)
@@ -207,6 +221,12 @@ void Shader::set(const std::string &name, int value)
 {
     auto uniform = uniforms.at(name);
     glProgramUniform1i(id, uniform.location, value);
+}
+
+void Shader::set(const std::string &name, uint value)
+{
+    auto uniform = uniforms.at(name);
+    glProgramUniform1ui(id, uniform.location, value);
 }
 
 void Shader::set(const std::string &name, bool value)

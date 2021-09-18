@@ -8,6 +8,7 @@ uniform sampler2D u_g_depth;
 uniform sampler2D u_g_normal_metallic;
 uniform sampler2D u_g_base_color_roughness;
 uniform sampler2D u_shadow_map;
+uniform sampler2D u_ao;
 
 uniform bool u_use_irradiance;
 uniform bool u_use_direct;
@@ -174,7 +175,6 @@ void main()
 
     // View space position.
 	vec3 pos = view_ray * texture(u_g_depth, tex_coords).x;
-	vec3 world_pos = (u_view_inv * vec4(pos, 1.f)).xyz;
 	vec3 v = normalize(-pos);
 
 	// Non-metals have achromatic specular reflectance, metals use base color
@@ -207,7 +207,6 @@ void main()
             out_luminance += brdf(v, l) * light.color * attenuation;
         }
 
-
         // Directional light (sun) contribution.
         vec3 l = -u_directional_light.direction;
         vec3 luminance = brdf(v, l) * u_directional_light.intensity;
@@ -219,48 +218,40 @@ void main()
     // Indirect lighting.
     if (u_use_irradiance)
     {
+        vec3 world_pos = (u_view_inv * vec4(pos, 1.f)).xyz;
+        vec3 N = mat3(u_view_inv) * n;
+
         // Transform world position to probe grid texture coordinates.
         vec3 grid_coords = vec3(u_inv_grid_transform * vec4(world_pos, 1.f));
-        vec3 tex_coords = (grid_coords + vec3(0.5f)) / u_grid_dims;
-        vec3 irradiance = vec3(0);
+        vec3 grid_tex_coords = (grid_coords + vec3(0.5f)) / u_grid_dims;
 
-        vec4 c0 = texture(u_sh_0, tex_coords);
-        vec4 c1 = texture(u_sh_1, tex_coords);
-        vec4 c2 = texture(u_sh_2, tex_coords);
-        vec4 c3 = texture(u_sh_3, tex_coords);
-        vec4 c4 = texture(u_sh_4, tex_coords);
-        vec4 c5 = texture(u_sh_5, tex_coords);
-        vec4 c6 = texture(u_sh_6, tex_coords);
+        vec4 c0 = texture(u_sh_0, grid_tex_coords);
+        vec4 c1 = texture(u_sh_1, grid_tex_coords);
+        vec4 c2 = texture(u_sh_2, grid_tex_coords);
+        vec4 c3 = texture(u_sh_3, grid_tex_coords);
+        vec4 c4 = texture(u_sh_4, grid_tex_coords);
+        vec4 c5 = texture(u_sh_5, grid_tex_coords);
+        vec4 c6 = texture(u_sh_6, grid_tex_coords);
         vec3 c7 = vec3(c0.w, c1.w, c2.w);
         vec3 c8 = vec3(c3.w, c4.w, c5.w);
 
-        const float a0 = 1.0f;
-        const float a1 = 2.0f / 3.0f;
-        const float a2 = 0.25f;
-
-        // World-space normal.
-        vec3 N = mat3(u_view_inv) * n;
-
-        irradiance = c0.rgb * 0.282095f +
-                     c1.rgb * 0.488603f * N.y +
-                     c2.rgb * 0.488603f * N.z +
-                     c3.rgb * 0.488603f * N.x +
-                     c4.rgb * 1.092548f * N.x * N.y +
-                     c5.rgb * 1.092548f * N.y * N.z +
-                     c6.rgb * 0.315392f * (3.f * N.z * N.z - 1.f) +
-                     c7.rgb * 1.092548f * N.x * N.z +
-                     c8.rgb * 0.546274f * (N.x * N.x - N.y * N.y);
-
+        vec3 irradiance = c0.rgb * 0.282095f +
+                          c1.rgb * 0.488603f * N.y +
+                          c2.rgb * 0.488603f * N.z +
+                          c3.rgb * 0.488603f * N.x +
+                          c4.rgb * 1.092548f * N.x * N.y +
+                          c5.rgb * 1.092548f * N.y * N.z +
+                          c6.rgb * 0.315392f * (3.f * N.z * N.z - 1.f) +
+                          c7.rgb * 1.092548f * N.x * N.z +
+                          c8.rgb * 0.546274f * (N.x * N.x - N.y * N.y);
 
         vec3 kS = F_Schlick(max(dot(n, v), 0.), f0);
+        // TODO: This isn't correct, I think.
         vec3 kD = 1.0 - kS;
 
-        vec3 diffuse = irradiance * base_color * Fd_Lambert();
+        float occlusion = texture(u_ao, tex_coords).r;
 
-        // TODO: This isn't correct, I think.
-        // diffuse = (kD * diffuse);
-
-        out_luminance += diffuse;
+        out_luminance += occlusion * irradiance * base_color * Fd_Lambert();
 	}
 
 	frag_color = vec4(out_luminance, 1.);

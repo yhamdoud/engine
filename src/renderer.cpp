@@ -16,6 +16,7 @@
 #include <Tracy.hpp>
 #include <TracyOpenGL.hpp>
 #include <numeric>
+#include <random>
 
 using namespace glm;
 using namespace std;
@@ -116,6 +117,8 @@ GBuffer Renderer::create_g_buffer(ivec2 size)
     glTextureStorage2D(depth, 1, GL_DEPTH_COMPONENT24, size.x, size.y);
     glTextureParameteri(depth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(depth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTextureParameteri(depth, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(depth, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     glCreateFramebuffers(1, &fbuf);
     glNamedFramebufferTexture(fbuf, GL_COLOR_ATTACHMENT1, normal_metal, 0);
@@ -142,9 +145,11 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
                                                                skybox_texture}
 {
     // Enable error callback.
+#ifndef ENGINE_DEBUG
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(gl_message_callback, nullptr);
+#endif
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
@@ -279,6 +284,97 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
         tonemap_shader = *Shader::from_paths(ShaderPaths{
             .vert = shaders_path / "lighting.vs",
             .frag = shaders_path / "tonemap.fs",
+        });
+    }
+
+    // SSAO
+    {
+        uniform_real_distribution<float> dist1(0.f, 1.f);
+        uniform_real_distribution<float> dist2(-1.f, 1.f);
+        default_random_engine gen;
+
+        // Generate samples inside and on the unit hemisphere.
+        for (int i = 0; i < kernel.size(); i++)
+        {
+            // We want samples close to the origin, i.e., we care about
+            // occlusions close to the fragment.
+            float weight =
+                static_cast<float>(i) / static_cast<float>(kernel.size());
+            // Accelerating interpolation function.
+            weight = lerp(0.1f, 1.f, weight * weight);
+
+            kernel[i] =
+                weight * normalize(vec3(dist2(gen), dist2(gen), dist1(gen)));
+        }
+
+        // Rotation vectors oriented around the tangent-space surface normal.
+        constexpr int noise_count = 16;
+        array<vec3, noise_count> noise;
+
+        // These vectors are used to rotate the sampling kernel in an effort
+        // to minimize banding artifacts.
+        for (int i = 0; i < noise_count; i++)
+            noise[i] = normalize(vec3(dist2(gen), dist2(gen), 0.f));
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &ssao_noise_texture);
+        glTextureStorage2D(ssao_noise_texture, 1, GL_RGBA16F, 4, 4);
+        glTextureSubImage2D(ssao_noise_texture, 0, 0, 0, 4, 4, GL_RGB, GL_FLOAT,
+                            noise.data());
+        glTextureParameteri(ssao_noise_texture, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTextureParameteri(ssao_noise_texture, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &ssao_texture);
+        glTextureStorage2D(ssao_texture, 1, GL_R8, viewport_size.x,
+                           viewport_size.y);
+        glCreateTextures(GL_TEXTURE_2D, 1, &ssao_texture_blur);
+        glTextureStorage2D(ssao_texture_blur, 1, GL_R8, viewport_size.x,
+                           viewport_size.y);
+
+        uint d;
+        glCreateTextures(GL_TEXTURE_2D, 1, &d);
+        glTextureStorage2D(d, 1, GL_RGBA32F, viewport_size.x, viewport_size.y);
+
+        glCreateFramebuffers(1, &ssao_fbo);
+        glNamedFramebufferTexture(ssao_fbo, GL_COLOR_ATTACHMENT0, ssao_texture,
+                                  0);
+        glNamedFramebufferTexture(ssao_fbo, GL_COLOR_ATTACHMENT1,
+                                  ssao_texture_blur, 0);
+
+        // FIXME:
+        glNamedFramebufferTexture(ssao_fbo, GL_COLOR_ATTACHMENT2, d, 0);
+
+        array<GLenum, 3> draw_bufs{
+            GL_COLOR_ATTACHMENT0,
+            GL_COLOR_ATTACHMENT1,
+            GL_COLOR_ATTACHMENT2,
+        };
+        glNamedFramebufferDrawBuffers(ssao_fbo, 3, draw_bufs.data());
+
+        if (glCheckNamedFramebufferStatus(ssao_fbo, GL_FRAMEBUFFER) !=
+            GL_FRAMEBUFFER_COMPLETE)
+            logger.error("SSAO framebuffer incomplete");
+
+        // Clear these so they don't affect probe baking.
+        float one = 1.f;
+        glClearNamedFramebufferfv(ssao_fbo, GL_COLOR, 0, &one);
+        glClearNamedFramebufferfv(ssao_fbo, GL_COLOR, 1, &one);
+
+        array<int, 3> swizzle{GL_RED, GL_RED, GL_RED};
+
+        glGenTextures(1, &debug_view_ssao);
+        glTextureView(debug_view_ssao, GL_TEXTURE_2D, ssao_texture, GL_RGB8, 0,
+                      1, 0, 1);
+        glTextureParameteriv(debug_view_ssao, GL_TEXTURE_SWIZZLE_RGBA,
+                             swizzle.data());
+
+        ssao_shader = *Shader::from_paths(ShaderPaths{
+            .vert = shaders_path / "lighting.vs",
+            .frag = shaders_path / "ssao.fs",
+        });
+
+        ssao_blur_shader = *Shader::from_paths(ShaderPaths{
+            .vert = shaders_path / "lighting.vs",
+            .frag = shaders_path / "ssao_blur.fs",
         });
     }
 
@@ -480,6 +576,40 @@ void Renderer::render(std::vector<RenderData> &queue)
         geometry_pass(queue, proj, view);
     }
 
+    // SSAO pass
+    {
+        TracyGpuZone("SSAO pass");
+
+        glViewport(0, 0, viewport_size.x, viewport_size.y);
+        glBindFramebuffer(GL_FRAMEBUFFER, ssao_fbo);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glUseProgram(ssao_shader.get_id());
+
+        ssao_shader.set("u_proj", proj);
+        ssao_shader.set("u_proj_inv", inverse(proj));
+        ssao_shader.set("u_kernel_size",
+                        static_cast<uint>(ssao_cfg.kernel_size));
+        ssao_shader.set("u_kernel[0]", span(kernel));
+        ssao_shader.set("u_radius", ssao_cfg.radius);
+        ssao_shader.set("u_noise_scale",
+                        static_cast<vec2>(viewport_size) / 4.f);
+        ssao_shader.set("u_bias", ssao_cfg.bias);
+        ssao_shader.set("u_strength", ssao_cfg.strength);
+
+        glBindTextureUnit(0, g_buf.depth);
+        glBindTextureUnit(1, g_buf.normal_metallic);
+        glBindTextureUnit(2, ssao_noise_texture);
+
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+
+        glUseProgram(ssao_blur_shader.get_id());
+
+        glBindTextureUnit(0, ssao_texture);
+
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
+
     {
         TracyGpuZone("Lighting pass");
 
@@ -558,6 +688,7 @@ void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
     lighting_shader.set("u_g_normal_metallic", 1);
     lighting_shader.set("u_g_base_color_roughness", 2);
     lighting_shader.set("u_shadow_map", 3);
+    lighting_shader.set("u_ao", 4);
     lighting_shader.set("u_proj_inv", inverse(proj));
     lighting_shader.set("u_view_inv", inverse(view));
 
@@ -568,27 +699,28 @@ void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
     glBindTextureUnit(1, g_buf.normal_metallic);
     glBindTextureUnit(2, g_buf.base_color_roughness);
     glBindTextureUnit(3, shadow_map);
+    glBindTextureUnit(4, ssao_texture_blur);
 
-    lighting_shader.set("u_sh_0", 4);
-    lighting_shader.set("u_sh_1", 5);
-    lighting_shader.set("u_sh_2", 6);
-    lighting_shader.set("u_sh_3", 7);
-    lighting_shader.set("u_sh_4", 8);
-    lighting_shader.set("u_sh_5", 9);
-    lighting_shader.set("u_sh_6", 10);
+    lighting_shader.set("u_sh_0", 5);
+    lighting_shader.set("u_sh_1", 6);
+    lighting_shader.set("u_sh_2", 7);
+    lighting_shader.set("u_sh_3", 8);
+    lighting_shader.set("u_sh_4", 9);
+    lighting_shader.set("u_sh_5", 10);
+    lighting_shader.set("u_sh_6", 11);
 
     if (use_indirect && debug_cfg.use_indirect_illumination)
     {
         lighting_shader.set("u_inv_grid_transform", inv_grid_transform);
         lighting_shader.set("u_grid_dims", grid_dims);
 
-        glBindTextureUnit(4, sh_texs[0]);
-        glBindTextureUnit(5, sh_texs[1]);
-        glBindTextureUnit(6, sh_texs[2]);
-        glBindTextureUnit(7, sh_texs[3]);
-        glBindTextureUnit(8, sh_texs[4]);
-        glBindTextureUnit(9, sh_texs[5]);
-        glBindTextureUnit(10, sh_texs[6]);
+        glBindTextureUnit(5, sh_texs[0]);
+        glBindTextureUnit(6, sh_texs[1]);
+        glBindTextureUnit(7, sh_texs[2]);
+        glBindTextureUnit(8, sh_texs[3]);
+        glBindTextureUnit(9, sh_texs[4]);
+        glBindTextureUnit(10, sh_texs[5]);
+        glBindTextureUnit(11, sh_texs[6]);
 
         lighting_shader.set("u_use_irradiance", true);
     }

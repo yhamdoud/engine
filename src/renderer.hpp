@@ -69,6 +69,15 @@ struct DebugConfig
     bool use_base_color;
 };
 
+struct SSAOConfig
+{
+    int kernel_size;
+    int sample_count;
+    float radius;
+    float bias;
+    float strength;
+};
+
 struct GBuffer
 {
     glm::ivec2 size;
@@ -144,13 +153,23 @@ class Renderer
         .use_base_color = true,
     };
 
+    SSAOConfig ssao_cfg{
+        .kernel_size = 64,
+        .sample_count = 64,
+        .radius = 0.5f,
+        .bias = 0.01f,
+        .strength = 1,
+    };
+
     // Deferred
     GBuffer g_buf;
 
+    // Debug
     uint debug_view_base_color;
     uint debug_view_roughness;
     uint debug_view_normal;
     uint debug_view_metallic;
+    uint debug_view_ssao;
 
     // GI
     glm::ivec2 probe_env_map_size{64, 64};
@@ -164,8 +183,16 @@ class Renderer
     // Post processing
     uint hdr_screen;
     uint hdr_fbo;
-
     Shader tonemap_shader;
+
+    // SSAO
+    uint ssao_fbo;
+    std::array<glm::vec3, 64> kernel;
+    uint ssao_texture;
+    uint ssao_texture_blur;
+    uint ssao_noise_texture;
+    Shader ssao_shader;
+    Shader ssao_blur_shader;
 
     glm::ivec2 viewport_size;
     Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
