@@ -232,8 +232,10 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
 
     glTextureParameteri(shadow_map, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTextureParameteri(shadow_map, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTextureParameteri(shadow_map, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTextureParameteri(shadow_map, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTextureParameteri(shadow_map, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(shadow_map, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(shadow_map, GL_TEXTURE_COMPARE_MODE,
+                        GL_COMPARE_REF_TO_TEXTURE);
 
     // Areas beyond the coverage of the shadow map are in light.
     vec4 border_color{1.f};

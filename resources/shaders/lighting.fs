@@ -7,7 +7,7 @@ in vec3 view_ray;
 uniform sampler2D u_g_depth;
 uniform sampler2D u_g_normal_metallic;
 uniform sampler2D u_g_base_color_roughness;
-uniform sampler2DArray u_shadow_map;
+uniform sampler2DArrayShadow u_shadow_map;
 uniform sampler2D u_ao;
 
 uniform bool u_use_irradiance;
@@ -88,21 +88,22 @@ float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal, vec3 light
     // FIXME: temp
     bias = 0;
 
-	// PCF
+	float shadow = 0.;
 	vec2 scale = 1. / textureSize(u_shadow_map, 0).xy;
 
+	// PCF
 	int range = 3;
 	int sample_count = (2 * range + 1) * (2 * range + 1);
-
-	float shadow = 0.;
 
 	for (int x = -range; x <= range; x++)
 	{
 		for (int y = -range; y <= range; y++)
 		{
 			vec2 offset = vec2(x, y);
-			float depth = texture(u_shadow_map, vec3(pos.xy + scale * offset, cascade_idx)).r;
-			shadow += int(pos.z - bias > depth);
+			shadow += 1. - texture(
+                u_shadow_map,
+                vec4(pos.xy + scale * offset, cascade_idx, pos.z + bias)
+            );
 		}
 	}
 
@@ -212,7 +213,6 @@ void main()
 
 	// Luminance or radiance?
 	vec3 out_luminance = vec3(0.);
-
 
     uint cascade_idx = calculate_cascade_index(pos);
 
