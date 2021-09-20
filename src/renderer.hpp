@@ -81,6 +81,8 @@ struct SSAOConfig
 struct ShadowMapConfig
 {
     bool color_cascades;
+    bool stabilize;
+    bool filter;
 };
 
 struct CameraConfig
@@ -137,7 +139,8 @@ class Renderer
     GBuffer create_g_buffer(glm::ivec2 size);
 
   public:
-    glm::ivec2 shadow_map_size{2048, 2048};
+    // glm::ivec2 shadow_map_size{2048, 2048};
+    glm::ivec2 shadow_map_size{4096, 4096};
     constexpr static int cascade_count = 3;
     std::array<float, cascade_count> cascade_distances;
     std::array<glm::mat4, cascade_count> light_transforms;
@@ -175,6 +178,8 @@ class Renderer
 
     ShadowMapConfig shadow_cfg{
         .color_cascades = false,
+        .stabilize = true,
+        .filter = true,
     };
 
     CameraConfig camera_cfg{

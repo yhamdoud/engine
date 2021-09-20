@@ -213,7 +213,7 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
 
     // Split scheme. Source:
     // https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-10-parallel-split-shadow-maps-programmable-gpus
-    float lambda = 0.5f;
+    float lambda = 0.6f;
 
     const auto &n = camera_cfg.near;
     const auto &f = camera_cfg.far;
@@ -683,18 +683,17 @@ static constexpr vec3 homogenize(const vec4 &v) { return vec3(v) / v.w; }
 void Renderer::shadow_pass(vector<RenderData> &queue, const mat4 &view,
                            float fov, float aspect_ratio)
 {
-
-    for (int i = 0; i < cascade_count; i++)
+    for (int c_idx = 0; c_idx < cascade_count; c_idx++)
     {
-        float near = (i == 0) ? 0.1f : cascade_distances[i - 1];
-        float far = cascade_distances[i];
+        float near = (c_idx == 0) ? 0.1f : cascade_distances[c_idx - 1];
+        float far = cascade_distances[c_idx];
 
+        // Camera's projection matrix for the current cascade.
         const mat4 cascade_proj = perspective(fov, aspect_ratio, near, far);
 
-        // Calculate light transform
         const mat4 inv = inverse(cascade_proj * view);
 
-        // View frustrum corners in world space.
+        // Camera's frustrum corners in world space.
         const array<vec3, 8> frustrum_corners{
             homogenize(inv * glm::vec4{-1.f, -1.f, -1.f, 1.f}),
             homogenize(inv * glm::vec4{-1.f, -1.f, 1.f, 1.f}),
@@ -710,33 +709,65 @@ void Renderer::shadow_pass(vector<RenderData> &queue, const mat4 &view,
                                        frustrum_corners.end(), vec3(0.f)) /
                             8.f;
 
-        const mat4 light_view =
-            lookAt(center - sun.direction, center, vec3(0.f, 1.f, 0.f));
-
-        // Transform the frusturm to light space and calculate an axis alligned
-        // bounding box.
         vec3 min(numeric_limits<float>::max());
         vec3 max(numeric_limits<float>::min());
 
-        for (const auto &corner : frustrum_corners)
+        float radius = 0;
+
+        if (shadow_cfg.stabilize)
         {
-            const vec3 corner_light_space = light_view * vec4(corner, 1.f);
-            min = glm::min(min, corner_light_space);
-            max = glm::max(max, corner_light_space);
+            // Calculate the radius of the bounding sphere surrounding the
+            // frustum.
+            // TODO: We could get a tighter fit using something like:
+            // https://lxjk.github.io/2017/04/15/Calculate-Minimal-Bounding-Sphere-of-Frustum.html
+            for (const auto &corner : frustrum_corners)
+                radius = glm::max(radius, length(corner - center));
+
+            max = vec3(radius);
+            min = -max;
+        }
+        else
+        {
+            // Construct temporary view matrix.
+            mat4 view =
+                lookAt(center - sun.direction, center, vec3(0.f, 1.f, 0.f));
+
+            // Transform the frustrum to light space and calculate a tight
+            // fitting AABB.
+            for (const auto &corner : frustrum_corners)
+            {
+                const vec3 corner_light_space = view * vec4(corner, 1.f);
+                min = glm::min(min, corner_light_space);
+                max = glm::max(max, corner_light_space);
+            }
+
+            // Include geometry that might be outside the frustrum but
+            // contributes to lighting.
+            const float z_mult = 15.f;
+            const float z_mult_inv = 1 / z_mult;
+
+            min.z *= (min.z < 0) ? z_mult : z_mult_inv;
+            max.z *= (max.z < 0) ? z_mult_inv : z_mult;
         }
 
-        // Include geometry that might be outside the frustrum but contributes
-        // to lighting.
-        const float z_mult = 15.f;
-        const float z_mult_inv = 1 / z_mult;
+        mat4 light_view = lookAt(center - sun.direction * -min.z, center,
+                                 vec3(0.f, 1.f, 0.f));
 
-        min.z *= (min.z < 0) ? z_mult : z_mult_inv;
-        max.z *= (max.z < 0) ? z_mult_inv : z_mult;
+        // Snap to shadow map texels.
+        if (shadow_cfg.stabilize)
+        {
+            light_view[3].x -=
+                fmodf(light_view[3].x, (radius / shadow_map_size.x) * 2.0f);
+            light_view[3].y -=
+                fmodf(light_view[3].y, (radius / shadow_map_size.x) * 2.0f);
+            // TODO:
+            // light_view[3].z -= ...
+        }
 
-        const auto light_proj =
-            glm::ortho(min.x, max.y, min.y, max.y, min.z, max.z);
+        mat4 light_proj =
+            glm::ortho(min.x, max.y, min.y, max.y, 0.f, max.z - min.z);
 
-        light_transforms[i] = light_proj * light_view;
+        light_transforms[c_idx] = light_proj * light_view;
     }
 
     glUseProgram(shadow_shader.get_id());
@@ -758,6 +789,7 @@ void Renderer::shadow_pass(vector<RenderData> &queue, const mat4 &view,
 
     glCullFace(GL_BACK);
 }
+
 void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
                              const GBuffer &g_buf, bool use_indirect)
 {
