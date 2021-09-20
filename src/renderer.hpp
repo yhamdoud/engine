@@ -78,6 +78,17 @@ struct SSAOConfig
     float strength;
 };
 
+struct ShadowMapConfig
+{
+    bool color_cascades;
+};
+
+struct CameraConfig
+{
+    float near;
+    float far;
+};
+
 struct GBuffer
 {
     glm::ivec2 size;
@@ -127,10 +138,11 @@ class Renderer
 
   public:
     glm::ivec2 shadow_map_size{2048, 2048};
+    constexpr static int cascade_count = 3;
+    std::array<float, cascade_count> cascade_distances;
+    std::array<glm::mat4, cascade_count> light_transforms;
     uint shadow_map;
-
-    // Projection settings
-    float far_clip_distance = 50.f;
+    std::array<uint, cascade_count> debug_view_shadow_maps;
 
     DirectionalLight sun{
         .position = glm::vec3(0.f, 15., -5.f),
@@ -159,6 +171,15 @@ class Renderer
         .radius = 0.5f,
         .bias = 0.01f,
         .strength = 1,
+    };
+
+    ShadowMapConfig shadow_cfg{
+        .color_cascades = false,
+    };
+
+    CameraConfig camera_cfg{
+        .near = 0.1f,
+        .far = 50.f,
     };
 
     // Deferred
@@ -226,11 +247,10 @@ class Renderer
     void geometry_pass(std::vector<RenderData> &queue, const glm::mat4 &proj,
                        const glm::mat4 &view);
     void lighting_pass(const glm::mat4 &proj, const glm::mat4 &view,
-                       const GBuffer &g_buf, const glm::mat4 &light_transform,
-                       bool use_indirect);
+                       const GBuffer &g_buf, bool use_indirect);
     void forward_pass(const glm::mat4 &proj, const glm::mat4 &view);
-    void shadow_pass(std::vector<RenderData> &queue,
-                     const glm::mat4 &light_transform);
+    void shadow_pass(std::vector<RenderData> &queue, const glm::mat4 &view,
+                     float fov, float aspect_ratio);
 };
 
 } // namespace engine

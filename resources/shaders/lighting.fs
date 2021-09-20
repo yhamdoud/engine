@@ -7,7 +7,7 @@ in vec3 view_ray;
 uniform sampler2D u_g_depth;
 uniform sampler2D u_g_normal_metallic;
 uniform sampler2D u_g_base_color_roughness;
-uniform sampler2D u_shadow_map;
+uniform sampler2DArray u_shadow_map;
 uniform sampler2D u_ao;
 
 uniform bool u_use_irradiance;
@@ -29,8 +29,11 @@ uniform DirectionalLight u_directional_light;
 const uint light_count = 3;
 uniform Light u_lights[light_count];
 
-uniform mat4 u_light_transform;
+const uint cascade_count = 3;
+uniform mat4 u_light_transforms[cascade_count];
+uniform float u_cascade_distances[cascade_count];
 uniform mat4 u_view_inv;
+uniform bool u_color_cascades;
 
 // Diffuse GI
 uniform mat4 u_inv_grid_transform;
@@ -48,11 +51,28 @@ out vec4 frag_color;
 
 const float PI = 3.14159265359;
 
+uint calculate_cascade_index(vec3 pos)
+{
+    uint cascade_idx = cascade_count - 1;
+    for (int i = 0; i < cascade_count; i++)
+    {
+        // Sign change
+        if (-pos.z < u_cascade_distances[i])
+        {
+            cascade_idx = i;
+            break;
+        }
+    }
+
+    return cascade_idx;
+}
+
 
 // Source: https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
-float calculate_shadow(vec4 pos_light_space, vec3 normal, vec3 light_dir)
+float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal, vec3 light_dir)
 {
-	vec3 pos = pos_light_space.xyz / pos_light_space.w;
+
+    vec3 pos = light_pos.xyz / light_pos.w;
 
 	// Handle points beyond the far plane of the light's frustrum.
 	if (pos.z > 1.0)
@@ -65,9 +85,11 @@ float calculate_shadow(vec4 pos_light_space, vec3 normal, vec3 light_dir)
 	float bias_min = 0.001;
 
 	float bias = max(bias_max * (1 - dot(normal, light_dir)), bias_min);
+    // FIXME: temp
+    bias = 0;
 
 	// PCF
-	vec2 scale = 1. / textureSize(u_shadow_map, 0);
+	vec2 scale = 1. / textureSize(u_shadow_map, 0).xy;
 
 	int range = 3;
 	int sample_count = (2 * range + 1) * (2 * range + 1);
@@ -79,7 +101,7 @@ float calculate_shadow(vec4 pos_light_space, vec3 normal, vec3 light_dir)
 		for (int y = -range; y <= range; y++)
 		{
 			vec2 offset = vec2(x, y);
-			float depth = texture(u_shadow_map, pos.xy + scale * offset).r;
+			float depth = texture(u_shadow_map, vec3(pos.xy + scale * offset, cascade_idx)).r;
 			shadow += int(pos.z - bias > depth);
 		}
 	}
@@ -191,6 +213,9 @@ void main()
 	// Luminance or radiance?
 	vec3 out_luminance = vec3(0.);
 
+
+    uint cascade_idx = calculate_cascade_index(pos);
+
     // Direct lighting.
     if (u_use_direct) {
         // Point lights contribution.
@@ -210,7 +235,11 @@ void main()
         // Directional light (sun) contribution.
         vec3 l = -u_directional_light.direction;
         vec3 luminance = brdf(v, l) * u_directional_light.intensity;
-        float shadow = calculate_shadow(u_light_transform * u_view_inv * vec4(pos, 1.), n, l);
+
+        // Fragment position in light space.
+
+        vec4 light_pos = u_light_transforms[cascade_idx] * u_view_inv * vec4(pos, 1.);
+        float shadow = calculate_shadow(light_pos, cascade_idx, n, l);
 
         out_luminance += (1. - shadow) * luminance;
     }
@@ -253,6 +282,23 @@ void main()
 
         out_luminance += occlusion * irradiance * base_color * Fd_Lambert();
 	}
+
+    // Give different shadow map cascades a recognizable tint.
+    if (u_color_cascades)
+    {
+        switch (cascade_idx)
+        {
+        case 0:
+            out_luminance *= vec3(1.0, 0.2, 0.2);
+            break;
+        case 1:
+            out_luminance *= vec3(0.2, 1.0, 0.2);
+            break;
+        case 2:
+            out_luminance *= vec3(0.2, 0.2, 1.0);
+            break;
+        }
+    }
 
 	frag_color = vec4(out_luminance, 1.);
 }

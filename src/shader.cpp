@@ -176,6 +176,13 @@ void Shader::set(const std::string &name, const glm::mat4 &value)
                               glm::value_ptr(value));
 }
 
+void Shader::set(const std::string &name, const std::span<glm::mat4> values)
+{
+    auto uniform = uniforms.at(name);
+    glProgramUniformMatrix4fv(id, uniform.location, uniform.count, false,
+                              reinterpret_cast<float *>(values.data()));
+}
+
 void Shader::set(const std::string &name, const glm::mat3 &value)
 {
     auto uniform = uniforms.at(name);
@@ -215,6 +222,12 @@ void Shader::set(const std::string &name, float value)
 {
     auto uniform = uniforms.at(name);
     glProgramUniform1f(id, uniform.location, value);
+}
+
+void Shader::set(const std::string &name, std::span<float> value)
+{
+    auto uniform = uniforms.at(name);
+    glProgramUniform1fv(id, uniform.location, uniform.count, value.data());
 }
 
 void Shader::set(const std::string &name, int value)

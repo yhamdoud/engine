@@ -1,4 +1,5 @@
 #define CGLTF_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 
 #include <iostream>
 #include <memory>
@@ -9,6 +10,7 @@
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
 #include <stb_image.h>
+#include <stb_image_write.h>
 
 #include "logger.hpp"
 #include "model.hpp"

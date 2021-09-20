@@ -1,6 +1,4 @@
-#define GLM_SWIZZLE_XYZW
-
-#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <limits>
 
 #include <array>
 #include <string>
@@ -208,11 +206,29 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
 
     // Shadow mapping stuff.
 
-    shadow_shader = *Shader::from_paths(
-        ShaderPaths{.vert = shaders_path / "shadow_map.vs"});
+    shadow_shader = *Shader::from_paths(ShaderPaths{
+        .vert = shaders_path / "shadow_map.vs",
+        .geom = shaders_path / "shadow_map.geom",
+    });
+
+    // Split scheme. Source:
+    // https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-10-parallel-split-shadow-maps-programmable-gpus
+    float lambda = 0.5f;
+
+    const auto &n = camera_cfg.near;
+    const auto &f = camera_cfg.far;
+
+    for (int i = 0; i < cascade_count; i++)
+    {
+        float s_i =
+            static_cast<float>(i + 1) / static_cast<float>(cascade_count);
+        float log = n * pow(f / n, s_i);
+        float uni = n + (f - n) * s_i;
+        cascade_distances[i] = lerp(uni, log, lambda);
+    }
 
     // Depth texture rendered from light perspective.
-    glCreateTextures(GL_TEXTURE_2D, 1, &shadow_map);
+    glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &shadow_map);
 
     glTextureParameteri(shadow_map, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTextureParameteri(shadow_map, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
@@ -224,9 +240,16 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
     glTextureParameterfv(shadow_map, GL_TEXTURE_BORDER_COLOR,
                          value_ptr(border_color));
 
-    // TODO: internal format.
-    glTextureStorage2D(shadow_map, 1, GL_DEPTH_COMPONENT24, shadow_map_size.x,
-                       shadow_map_size.y);
+    glTextureStorage3D(shadow_map, 1, GL_DEPTH_COMPONENT32, shadow_map_size.x,
+                       shadow_map_size.y, cascade_count);
+
+    glGenTextures(cascade_count, debug_view_shadow_maps.data());
+
+    for (int i = 0; i < cascade_count; i++)
+    {
+        glTextureView(debug_view_shadow_maps[i], GL_TEXTURE_2D, shadow_map,
+                      GL_DEPTH_COMPONENT32, 0, 1, i, 1);
+    }
 
     glCreateFramebuffers(1, &fbo_shadow);
     glNamedFramebufferTexture(fbo_shadow, GL_DEPTH_ATTACHMENT, shadow_map, 0);
@@ -546,13 +569,9 @@ void Renderer::render(std::vector<RenderData> &queue)
     const mat4 proj = perspective(radians(90.f),
                                   static_cast<float>(viewport_size.x) /
                                       static_cast<float>(viewport_size.y),
-                                  0.1f, far_clip_distance);
+                                  camera_cfg.near, camera_cfg.far);
 
     const mat4 view = camera.get_view();
-
-    const mat4 light_transform =
-        ortho(-20.f, 20.f, -20.f, 20.f, 1.f, 20.f) *
-        lookAt(sun.position, sun.position + sun.direction, vec3{0.f, 1.f, 0.f});
 
     // Shadow mapping pass.
     {
@@ -562,7 +581,9 @@ void Renderer::render(std::vector<RenderData> &queue)
         glBindFramebuffer(GL_FRAMEBUFFER, fbo_shadow);
         glClear(GL_DEPTH_BUFFER_BIT);
 
-        shadow_pass(queue, light_transform);
+        shadow_pass(queue, view, radians(90.f),
+                    static_cast<float>(viewport_size.x) /
+                        static_cast<float>(viewport_size.y));
     }
 
     // Geometry pass
@@ -617,7 +638,7 @@ void Renderer::render(std::vector<RenderData> &queue)
         glBindFramebuffer(GL_FRAMEBUFFER, hdr_fbo);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        lighting_pass(proj, view, g_buf, light_transform, true);
+        lighting_pass(proj, view, g_buf, true);
     }
 
     //     Render skybox.
@@ -656,22 +677,80 @@ void Renderer::render(std::vector<RenderData> &queue)
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
 }
-void Renderer::shadow_pass(vector<RenderData> &queue,
-                           const mat4 &light_transform)
-{
-    glCullFace(GL_FRONT);
 
-    // Directional light.
+static constexpr vec3 homogenize(const vec4 &v) { return vec3(v) / v.w; }
+
+void Renderer::shadow_pass(vector<RenderData> &queue, const mat4 &view,
+                           float fov, float aspect_ratio)
+{
+
+    for (int i = 0; i < cascade_count; i++)
+    {
+        float near = (i == 0) ? 0.1f : cascade_distances[i - 1];
+        float far = cascade_distances[i];
+
+        const mat4 cascade_proj = perspective(fov, aspect_ratio, near, far);
+
+        // Calculate light transform
+        const mat4 inv = inverse(cascade_proj * view);
+
+        // View frustrum corners in world space.
+        const array<vec3, 8> frustrum_corners{
+            homogenize(inv * glm::vec4{-1.f, -1.f, -1.f, 1.f}),
+            homogenize(inv * glm::vec4{-1.f, -1.f, 1.f, 1.f}),
+            homogenize(inv * glm::vec4{-1.f, 1.f, -1.f, 1.f}),
+            homogenize(inv * glm::vec4{-1.f, 1.f, 1.f, 1.f}),
+            homogenize(inv * glm::vec4{1.f, -1.f, -1.f, 1.f}),
+            homogenize(inv * glm::vec4{1.f, -1.f, 1.f, 1.f}),
+            homogenize(inv * glm::vec4{1.f, 1.f, -1.f, 1.f}),
+            homogenize(inv * glm::vec4{1.f, 1.f, 1.f, 1.f}),
+        };
+
+        const vec3 center = accumulate(frustrum_corners.begin(),
+                                       frustrum_corners.end(), vec3(0.f)) /
+                            8.f;
+
+        const mat4 light_view =
+            lookAt(center - sun.direction, center, vec3(0.f, 1.f, 0.f));
+
+        // Transform the frusturm to light space and calculate an axis alligned
+        // bounding box.
+        vec3 min(numeric_limits<float>::max());
+        vec3 max(numeric_limits<float>::min());
+
+        for (const auto &corner : frustrum_corners)
+        {
+            const vec3 corner_light_space = light_view * vec4(corner, 1.f);
+            min = glm::min(min, corner_light_space);
+            max = glm::max(max, corner_light_space);
+        }
+
+        // Include geometry that might be outside the frustrum but contributes
+        // to lighting.
+        const float z_mult = 15.f;
+        const float z_mult_inv = 1 / z_mult;
+
+        min.z *= (min.z < 0) ? z_mult : z_mult_inv;
+        max.z *= (max.z < 0) ? z_mult_inv : z_mult;
+
+        const auto light_proj =
+            glm::ortho(min.x, max.y, min.y, max.y, min.z, max.z);
+
+        light_transforms[i] = light_proj * light_view;
+    }
+
     glUseProgram(shadow_shader.get_id());
-    shadow_shader.set("u_light_transform", light_transform);
+
+    shadow_shader.set("u_light_transforms[0]", span(light_transforms));
 
     glBindVertexArray(vao_entities);
+
+    glCullFace(GL_FRONT); // Peter panning.
 
     for (auto &r : queue)
     {
         if (r.flags & Entity::casts_shadow)
         {
-
             shadow_shader.set("u_model", r.model);
             render_mesh_instance(vao_entities, mesh_instances[r.mesh_index]);
         }
@@ -680,8 +759,7 @@ void Renderer::shadow_pass(vector<RenderData> &queue,
     glCullFace(GL_BACK);
 }
 void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
-                             const GBuffer &g_buf, const mat4 &light_transform,
-                             bool use_indirect)
+                             const GBuffer &g_buf, bool use_indirect)
 {
     glUseProgram(lighting_shader.get_id());
     lighting_shader.set("u_g_depth", 0);
@@ -691,9 +769,9 @@ void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
     lighting_shader.set("u_ao", 4);
     lighting_shader.set("u_proj_inv", inverse(proj));
     lighting_shader.set("u_view_inv", inverse(view));
-
     lighting_shader.set("u_use_direct", debug_cfg.use_direct_illumination);
     lighting_shader.set("u_use_base_color", debug_cfg.use_base_color);
+    lighting_shader.set("u_color_cascades", shadow_cfg.color_cascades);
 
     glBindTextureUnit(0, g_buf.depth);
     glBindTextureUnit(1, g_buf.normal_metallic);
@@ -709,7 +787,8 @@ void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
     lighting_shader.set("u_sh_5", 10);
     lighting_shader.set("u_sh_6", 11);
 
-    if (use_indirect && debug_cfg.use_indirect_illumination)
+    if (sh_texs.size() == 7 && use_indirect &&
+        debug_cfg.use_indirect_illumination)
     {
         lighting_shader.set("u_inv_grid_transform", inv_grid_transform);
         lighting_shader.set("u_grid_dims", grid_dims);
@@ -739,7 +818,9 @@ void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
         lighting_shader.set(fmt::format("u_lights[{}].color", i), light.color);
     }
 
-    lighting_shader.set("u_light_transform", light_transform);
+    lighting_shader.set("u_light_transforms[0]", span(light_transforms));
+    lighting_shader.set("u_cascade_distances[0]", span(cascade_distances));
+
     lighting_shader.set("u_directional_light.direction",
                         vec3{view * vec4{sun.direction, 0.f}});
     lighting_shader.set("u_directional_light.intensity",
@@ -886,7 +967,8 @@ IrradianceProbe Renderer::generate_probe(vec3 position,
 {
     IrradianceProbe probe{position, invalid_texture_id};
 
-    mat4 proj = perspective(radians(90.f), 1.f, 0.1f, 50.f);
+    float fov = radians(90.f);
+    mat4 proj = perspective(fov, 1.f, 0.1f, 50.f);
     array<mat4, 6> views{
         lookAt(position, position + vec3{1.f, 0.f, 0.f}, vec3{0.f, -1.f, 0.f}),
         lookAt(position, position + vec3{-1.f, 0.f, 0.f}, vec3{0.f, -1.f, 0.f}),
@@ -896,19 +978,14 @@ IrradianceProbe Renderer::generate_probe(vec3 position,
         lookAt(position, position + vec3{0.f, 0.f, -1.f}, vec3{0.f, -1.f, 0.f}),
     };
 
-    const mat4 light_transform =
-        ortho(-20.f, 20.f, -20.f, 20.f, 1.f, 20.f) *
-        lookAt(sun.position, sun.position + sun.direction, vec3{0.f, 1.f, 0.f});
-
-    glViewport(0, 0, shadow_map_size.x, shadow_map_size.y);
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo_shadow);
-    glClear(GL_DEPTH_BUFFER_BIT);
-
-    shadow_pass(queue, light_transform);
-
-    glViewport(0, 0, probe_env_map_size.x, probe_env_map_size.y);
     for (int face_idx = 0; face_idx < 6; face_idx++)
     {
+        glViewport(0, 0, shadow_map_size.x, shadow_map_size.y);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo_shadow);
+        glClear(GL_DEPTH_BUFFER_BIT);
+        shadow_pass(queue, views[face_idx], fov, 1.f);
+
+        glViewport(0, 0, probe_env_map_size.x, probe_env_map_size.y);
         glNamedFramebufferTextureLayer(fbo_probe, GL_COLOR_ATTACHMENT0,
                                        probe_env_map, 0, face_idx);
 
@@ -918,8 +995,7 @@ IrradianceProbe Renderer::generate_probe(vec3 position,
 
         glBindFramebuffer(GL_FRAMEBUFFER, fbo_probe);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        lighting_pass(proj, views[face_idx], g_buf_probe, light_transform,
-                      use_indirect);
+        lighting_pass(proj, views[face_idx], g_buf_probe, use_indirect);
         glBlitNamedFramebuffer(g_buf_probe.framebuffer, fbo_probe, 0, 0,
                                probe_env_map_size.x, probe_env_map_size.y, 0, 0,
                                probe_env_map_size.x, probe_env_map_size.y,
@@ -1127,7 +1203,7 @@ void Renderer::generate_probe_grid_cpu(std::vector<RenderData> &queue,
 
     ivec3 dims = world_dims / distance;
     int probe_count = dims.x * dims.y * dims.z;
-    // We can pack the 27 coefficient into 7 4 channel textures
+    // We can pack the 27 coefficient into 7 RGBA textures
     int texture_count = 7;
 
     vec3 origin = center - world_dims / 2.f;
