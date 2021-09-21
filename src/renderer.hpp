@@ -67,6 +67,7 @@ struct DebugConfig
     bool use_indirect_illumination;
     bool use_direct_illumination;
     bool use_base_color;
+    float leak_offset;
 };
 
 struct SSAOConfig
@@ -166,6 +167,7 @@ class Renderer
         .use_indirect_illumination = true,
         .use_direct_illumination = true,
         .use_base_color = true,
+        .leak_offset = 0.4f,
     };
 
     SSAOConfig ssao_cfg{

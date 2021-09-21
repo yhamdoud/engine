@@ -804,6 +804,7 @@ void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
     lighting_shader.set("u_proj_inv", inverse(proj));
     lighting_shader.set("u_view_inv", inverse(view));
     lighting_shader.set("u_use_direct", debug_cfg.use_direct_illumination);
+    lighting_shader.set("u_leak_offset", debug_cfg.leak_offset);
     lighting_shader.set("u_use_base_color", debug_cfg.use_base_color);
     lighting_shader.set("u_color_cascades", shadow_cfg.color_cascades);
 

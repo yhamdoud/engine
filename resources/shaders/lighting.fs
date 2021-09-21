@@ -38,6 +38,7 @@ uniform bool u_color_cascades;
 // Diffuse GI
 uniform mat4 u_inv_grid_transform;
 uniform vec3 u_grid_dims;
+uniform float u_leak_offset;
 
 uniform sampler3D u_sh_0;
 uniform sampler3D u_sh_1;
@@ -78,7 +79,7 @@ float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal, vec3 light
 	if (pos.z > 1.0)
 		return 0.;
 
-	// Transform NDC to texture space.
+	// Transform n_worldDC to texture space.
 	pos = 0.5 * pos + 0.5;
 
 	float bias_max = 0.03;
@@ -112,22 +113,22 @@ float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal, vec3 light
 
 // PBS
 
-// Normal distribution function
+// n_worldormal distribution function
 // Source: https://google.github.io/filament
-float D_GGX(float NoH, float roughness)
+float D_GGX(float n_worldoH, float roughness)
 {
-    float a = NoH * roughness;
-    float k = roughness / (1.0 - NoH * NoH + a * a);
+    float a = n_worldoH * roughness;
+    float k = roughness / (1.0 - n_worldoH * n_worldoH + a * a);
     return k * k * (1.0 / PI);
 }
 
 // Geometric shadowing
 // Source: https://google.github.io/filament
-float V_SmithGGXCorrelated(float NoV, float NoL, float roughness)
+float V_SmithGGXCorrelated(float n_worldoV, float n_worldoL, float roughness)
 {
     float a2 = roughness * roughness;
-    float GGXV = NoL * sqrt(NoV * NoV * (1.0 - a2) + a2);
-    float GGXL = NoV * sqrt(NoL * NoL * (1.0 - a2) + a2);
+    float GGXV = n_worldoL * sqrt(n_worldoV * n_worldoV * (1.0 - a2) + a2);
+    float GGXL = n_worldoV * sqrt(n_worldoL * n_worldoL * (1.0 - a2) + a2);
     return 0.5 / (GGXV + GGXL);
 }
 
@@ -153,14 +154,14 @@ vec3 brdf(vec3 v, vec3 l)
 {
 	vec3 h = normalize(v + l);
 
-    float NoV = abs(dot(n, v)) + 1e-5;
-    float NoL = clamp(dot(n, l), 0.0, 1.0);
-    float NoH = clamp(dot(n, h), 0.0, 1.0);
+    float n_worldoV = abs(dot(n, v)) + 1e-5;
+    float n_worldoL = clamp(dot(n, l), 0.0, 1.0);
+    float n_worldoH = clamp(dot(n, h), 0.0, 1.0);
     float LoH = clamp(dot(l, h), 0.0, 1.0);
 
-    float D = D_GGX(NoH, a);
+    float D = D_GGX(n_worldoH, a);
     vec3  F = F_Schlick(LoH, f0);
-    float V = V_SmithGGXCorrelated(NoV, NoL, a);
+    float V = V_SmithGGXCorrelated(n_worldoV, n_worldoL, a);
 
     // Specular BRDF component.
     // V already contains the denominator from Cook-Torrance.
@@ -170,12 +171,12 @@ vec3 brdf(vec3 v, vec3 l)
     vec3 Fd = diffuse_color * Fd_Lambert();
     // https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#coupling-diffuse-and-specular-reflection
     // https://computergraphics.stackexchange.com/questions/2285/how-to-properly-combine-the-diffuse-and-specular-terms
-    vec3 Fin = F_Schlick(NoL, f0);
-    vec3 Fout = F_Schlick(NoV, f0);
+    vec3 Fin = F_Schlick(n_worldoL, f0);
+    vec3 Fout = F_Schlick(n_worldoV, f0);
 
     // TODO: Causes black artifacts, weighing the diffuse component causes black artifacts.
-    //	out_radiance += ((1 - Fin) * (1 - Fout) * Fd + Fr) * light_radiance * NoL;
-    return (Fd + Fr) * NoL;
+    //	out_radiance += ((1 - Fin) * (1 - Fout) * Fd + Fr) * light_radiance * n_worldoL;
+    return (Fd + Fr) * n_worldoL;
 }
 
 void main()
@@ -200,7 +201,7 @@ void main()
 	vec3 pos = view_ray * texture(u_g_depth, tex_coords).x;
 	vec3 v = normalize(-pos);
 
-	// Non-metals have achromatic specular reflectance, metals use base color
+	// n_worldon-metals have achromatic specular reflectance, metals use base color
 	// as the specular color.
 	diffuse_color = (1.0 - metallic) * base_color.rgb;
 
@@ -247,11 +248,13 @@ void main()
     // Indirect lighting.
     if (u_use_irradiance)
     {
-        vec3 world_pos = (u_view_inv * vec4(pos, 1.f)).xyz;
-        vec3 N = mat3(u_view_inv) * n;
+        vec3 pos_world = (u_view_inv * vec4(pos, 1.f)).xyz;
+        vec3 n_world = mat3(u_view_inv) * n;
 
+        // Offset sample in the direction off the normal to reduce leaking.
+        vec3 sample_pos = pos_world + u_leak_offset * n_world;
         // Transform world position to probe grid texture coordinates.
-        vec3 grid_coords = vec3(u_inv_grid_transform * vec4(world_pos, 1.f));
+        vec3 grid_coords = vec3(u_inv_grid_transform * vec4(sample_pos, 1.f));
         vec3 grid_tex_coords = (grid_coords + vec3(0.5f)) / u_grid_dims;
 
         vec4 c0 = texture(u_sh_0, grid_tex_coords);
@@ -265,14 +268,14 @@ void main()
         vec3 c8 = vec3(c3.w, c4.w, c5.w);
 
         vec3 irradiance = c0.rgb * 0.282095f +
-                          c1.rgb * 0.488603f * N.y +
-                          c2.rgb * 0.488603f * N.z +
-                          c3.rgb * 0.488603f * N.x +
-                          c4.rgb * 1.092548f * N.x * N.y +
-                          c5.rgb * 1.092548f * N.y * N.z +
-                          c6.rgb * 0.315392f * (3.f * N.z * N.z - 1.f) +
-                          c7.rgb * 1.092548f * N.x * N.z +
-                          c8.rgb * 0.546274f * (N.x * N.x - N.y * N.y);
+                          c1.rgb * 0.488603f * n_world.y +
+                          c2.rgb * 0.488603f * n_world.z +
+                          c3.rgb * 0.488603f * n_world.x +
+                          c4.rgb * 1.092548f * n_world.x * n_world.y +
+                          c5.rgb * 1.092548f * n_world.y * n_world.z +
+                          c6.rgb * 0.315392f * (3.f * n_world.z * n_world.z - 1.f) +
+                          c7.rgb * 1.092548f * n_world.x * n_world.z +
+                          c8.rgb * 0.546274f * (n_world.x * n_world.x - n_world.y * n_world.y);
 
         vec3 kS = F_Schlick(max(dot(n, v), 0.), f0);
         // TODO: This isn't correct, I think.

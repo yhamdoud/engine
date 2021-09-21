@@ -262,11 +262,11 @@ int main()
     auto data = generate_render_data();
     //    r.generate_probe_grid(data, vec3{2.f, 6.f, 2.f}, vec3{4, 4, 4}, 4);
 
-    // r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
-    //                           vec3{22.f, 8.f, 9.f}, 1.f);
-
     r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
-                              vec3{22.f, 8.f, 9.f}, 3.f);
+                              vec3{22.f, 8.f, 9.f}, 1.f);
+
+    // r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
+    //                           vec3{22.f, 8.f, 9.f}, 3.f);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -286,6 +286,8 @@ int main()
                 ImGui::Checkbox("Use indirect illumination",
                                 &r.debug_cfg.use_indirect_illumination);
                 ImGui::Checkbox("Use base color", &r.debug_cfg.use_base_color);
+                ImGui::SliderFloat("Leak offset", &r.debug_cfg.leak_offset, 0,
+                                   1.f);
             }
 
             if (ImGui::CollapsingHeader("SSAO"))
