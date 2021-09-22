@@ -52,6 +52,13 @@ struct Mesh
     std::vector<std::uint32_t> indices;
 };
 
+enum class AlphaMode
+{
+    opaque,
+    mask,
+    blend,
+};
+
 struct Material
 {
     std::optional<Texture> normal;
@@ -64,6 +71,9 @@ struct Material
     glm::vec4 base_color_factor{1.f};
     float metallic_factor;
     float roughness_factor;
+
+    AlphaMode alpha_mode;
+    float alpha_cutoff;
 };
 
 struct Model

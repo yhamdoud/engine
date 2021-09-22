@@ -120,6 +120,8 @@ size_t add_entity(Renderer &renderer, Entity::Flags flags, Transform transform,
         model.material.metallic_factor,
         model.material.roughness_factor,
         model.material.base_color_factor,
+        model.material.alpha_mode,
+        model.material.alpha_cutoff,
         shader,
     });
 
@@ -145,6 +147,8 @@ vector<RenderData> generate_render_data()
             e.roughness_factor,
             e.base_color_factor,
             model,
+            e.alpha_mode,
+            e.alpha_cutoff,
             e.shader,
         });
     }

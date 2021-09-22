@@ -34,6 +34,7 @@ uniform mat4 u_light_transforms[cascade_count];
 uniform float u_cascade_distances[cascade_count];
 uniform mat4 u_view_inv;
 uniform bool u_color_cascades;
+uniform bool u_filter;
 
 // Diffuse GI
 uniform mat4 u_inv_grid_transform;
@@ -90,25 +91,34 @@ float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal, vec3 light
     bias = 0;
 
 	float shadow = 0.;
-	vec2 scale = 1. / textureSize(u_shadow_map, 0).xy;
 
 	// PCF
-	int range = 3;
-	int sample_count = (2 * range + 1) * (2 * range + 1);
+    if (u_filter)
+    {
+        int range = 3;
+        int sample_count = (2 * range + 1) * (2 * range + 1);
+        vec2 scale = 1. / textureSize(u_shadow_map, 0).xy;
 
-	for (int x = -range; x <= range; x++)
-	{
-		for (int y = -range; y <= range; y++)
-		{
-			vec2 offset = vec2(x, y);
-			shadow += 1. - texture(
-                u_shadow_map,
-                vec4(pos.xy + scale * offset, cascade_idx, pos.z + bias)
-            );
-		}
-	}
+        for (int x = -range; x <= range; x++)
+        {
+            for (int y = -range; y <= range; y++)
+            {
+                vec2 offset = vec2(x, y);
+                shadow += 1. - texture(
+                    u_shadow_map,
+                    vec4(pos.xy + scale * offset, cascade_idx, pos.z + bias)
+                );
+            }
+        }
 
-	return shadow / float(sample_count);
+        shadow /= float(sample_count);
+    }
+    else 
+    {
+        shadow += 1. - texture(u_shadow_map, vec4(pos.xy, cascade_idx, pos.z + bias));
+    }
+
+	return shadow;
 }
 
 // PBS

@@ -35,6 +35,8 @@ struct RenderData
     float roughness_factor;
     glm::vec3 base_color_factor;
     glm::mat4 model;
+    AlphaMode alpha_mode;
+    float alpha_cutoff;
     Shader &shader;
 };
 
@@ -175,7 +177,7 @@ class Renderer
         .sample_count = 64,
         .radius = 0.5f,
         .bias = 0.01f,
-        .strength = 1,
+        .strength = 2,
     };
 
     ShadowMapConfig shadow_cfg{

@@ -8,6 +8,7 @@
 #include <stb_image_write.h>
 
 #include "logger.hpp"
+#include "model.hpp"
 #include "primitives.hpp"
 #include "renderer.hpp"
 
@@ -807,6 +808,7 @@ void Renderer::lighting_pass(const mat4 &proj, const mat4 &view,
     lighting_shader.set("u_leak_offset", debug_cfg.leak_offset);
     lighting_shader.set("u_use_base_color", debug_cfg.use_base_color);
     lighting_shader.set("u_color_cascades", shadow_cfg.color_cascades);
+    lighting_shader.set("u_filter", shadow_cfg.filter);
 
     glBindTextureUnit(0, g_buf.depth);
     glBindTextureUnit(1, g_buf.normal_metallic);
@@ -951,6 +953,8 @@ void Renderer::geometry_pass(vector<RenderData> &queue, const mat4 &proj,
         r.shader.set("u_base_color_factor", r.base_color_factor);
         r.shader.set("u_metallic_factor", r.metallic_factor);
         r.shader.set("u_roughness_factor", r.roughness_factor);
+        r.shader.set("u_alpha_mask", r.alpha_mode == AlphaMode::mask);
+        r.shader.set("u_alpha_cutoff", r.alpha_cutoff);
 
         if (r.base_color_tex_id != invalid_texture_id)
         {

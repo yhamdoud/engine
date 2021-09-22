@@ -1,5 +1,7 @@
-
 #version 460 core
+
+// TODO: Use this when when using hardware depth buffer.
+// layout(early_fragment_tests) in;
 
 layout (location = 0) out vec4 g_position;
 layout (location = 1) out vec4 g_normal_metallic;
@@ -23,6 +25,9 @@ uniform float u_roughness_factor;
 uniform vec3 u_base_color_factor;
 
 uniform float u_far_clip_distance;
+
+uniform bool u_alpha_mask;
+uniform float u_alpha_cutoff;
 
 in Varying
 {
@@ -54,7 +59,15 @@ void main()
     g_base_color_roughness.rgb = u_base_color_factor;
 
 	if (u_use_sampler)
-        g_base_color_roughness.rgb *= texture(u_base_color, fs_in.tex_coords).rgb;
+    {
+        vec4 base_color_alpha = texture(u_base_color, fs_in.tex_coords);
+        if (u_alpha_mask && base_color_alpha.a < u_alpha_cutoff)
+        {
+            discard;
+        }
+
+        g_base_color_roughness.rgb *= base_color_alpha.rgb;
+    }
 
     if (u_use_normal)
     {

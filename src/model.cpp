@@ -110,6 +110,10 @@ static Material process_material(const cgltf_material &gltf_material)
     if (material.normal)
         material.normal->sampler.use_mipmap = true;
 
+    material.alpha_mode = (AlphaMode)gltf_material.alpha_mode;
+    if (material.alpha_mode == AlphaMode::mask)
+        material.alpha_cutoff = gltf_material.alpha_cutoff;
+
     if (gltf_material.has_pbr_metallic_roughness)
     {
         const auto &gltf_pbr = gltf_material.pbr_metallic_roughness;
