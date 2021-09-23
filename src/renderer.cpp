@@ -300,17 +300,54 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
         glNamedFramebufferRenderbuffer(hdr_fbo, GL_DEPTH_ATTACHMENT,
                                        GL_RENDERBUFFER, depth);
 
-        glCreateTextures(GL_TEXTURE_2D, 1, &hdr_screen);
-        glTextureStorage2D(hdr_screen, 1, GL_RGBA16F, viewport_size.x,
+        glCreateTextures(GL_TEXTURE_2D, 1, &hdr_target);
+        glTextureStorage2D(hdr_target, 1, GL_RGBA16F, viewport_size.x,
                            viewport_size.y);
-        glTextureParameteri(hdr_screen, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTextureParameteri(hdr_screen, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glNamedFramebufferTexture(hdr_fbo, GL_COLOR_ATTACHMENT0, hdr_screen, 0);
+        glTextureParameteri(hdr_target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(hdr_target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(hdr_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(hdr_target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glNamedFramebufferTexture(hdr_fbo, GL_COLOR_ATTACHMENT0, hdr_target, 0);
 
         tonemap_shader = *Shader::from_paths(ShaderPaths{
             .vert = shaders_path / "lighting.vs",
             .frag = shaders_path / "tonemap.fs",
         });
+    }
+
+    // Bloom
+    {
+        glCreateTextures(GL_TEXTURE_2D, 1, &bloom_downsample_texture);
+        glTextureStorage2D(bloom_downsample_texture, bloom_pass_count,
+                           GL_RGBA16F, viewport_size.x / 2,
+                           viewport_size.y / 2);
+        glTextureParameteri(bloom_downsample_texture, GL_TEXTURE_MAG_FILTER,
+                            GL_LINEAR);
+        glTextureParameteri(bloom_downsample_texture, GL_TEXTURE_MIN_FILTER,
+                            GL_LINEAR);
+        glTextureParameteri(bloom_downsample_texture, GL_TEXTURE_WRAP_S,
+                            GL_CLAMP_TO_EDGE);
+        glTextureParameteri(bloom_downsample_texture, GL_TEXTURE_WRAP_T,
+                            GL_CLAMP_TO_EDGE);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &bloom_upsample_texture);
+        glTextureStorage2D(bloom_upsample_texture, bloom_pass_count - 1,
+                           GL_RGBA16F, viewport_size.x / 2,
+                           viewport_size.y / 2);
+        glTextureParameteri(bloom_upsample_texture, GL_TEXTURE_MAG_FILTER,
+                            GL_LINEAR);
+        glTextureParameteri(bloom_upsample_texture, GL_TEXTURE_MIN_FILTER,
+                            GL_NEAREST_MIPMAP_LINEAR);
+        glTextureParameteri(bloom_upsample_texture, GL_TEXTURE_WRAP_S,
+                            GL_CLAMP_TO_EDGE);
+        glTextureParameteri(bloom_upsample_texture, GL_TEXTURE_WRAP_T,
+                            GL_CLAMP_TO_EDGE);
+
+        bloom_downsample_shader =
+            *Shader::from_comp_path(shaders_path / "bloom_downsample.comp");
+
+        bloom_upsample_shader =
+            *Shader::from_comp_path(shaders_path / "bloom_upsample.comp");
     }
 
     // SSAO
@@ -658,6 +695,84 @@ void Renderer::render(std::vector<RenderData> &queue)
         forward_pass(proj, view);
     }
 
+    // Bloom
+    {
+        TracyGpuZone("Bloom");
+
+        const uint upsample_count = bloom_pass_count - 1;
+
+        glUseProgram(bloom_downsample_shader.get_id());
+
+        bloom_downsample_shader.set("u_threshold", bloom_cfg.threshold);
+        glBindTextureUnit(0u, hdr_target);
+
+        for (uint i = 0u; i < bloom_pass_count; i++)
+        {
+            // Round up.
+            const uint group_count_x =
+                ((viewport_size.x >> i + 1u) + 15u) / 16u;
+            const uint group_count_y =
+                ((viewport_size.y >> i + 1u) + 15u) / 16u;
+
+            bloom_downsample_shader.set("u_level", i);
+
+            glBindImageTexture(1u, bloom_downsample_texture, i, false, 0,
+                               GL_WRITE_ONLY, GL_RGBA16F);
+            glDispatchCompute(group_count_x, group_count_y, 1);
+            glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT |
+                            GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+            if (i == 0)
+            {
+                glBindTextureUnit(0u, bloom_downsample_texture);
+                bloom_downsample_shader.set("u_threshold", 0.f);
+            }
+        }
+
+        glUseProgram(bloom_upsample_shader.get_id());
+
+        bloom_upsample_shader.set("u_intensity", 1.f);
+        bloom_upsample_shader.set("u_radius", bloom_cfg.upsample_radius);
+
+        glBindTextureUnit(0u, bloom_downsample_texture);
+        glBindTextureUnit(1u, bloom_downsample_texture);
+
+        for (int i = upsample_count - 1; i >= 0; i--)
+        {
+            const uint group_count_x =
+                ((viewport_size.x >> i + 1u) + 15u) / 16u;
+            const uint group_count_y =
+                ((viewport_size.y >> i + 1u) + 15u) / 16u;
+
+            bloom_upsample_shader.set("u_level", (uint)i + 1u);
+            bloom_upsample_shader.set("u_target_level", (uint)i);
+
+            glBindImageTexture(2u, bloom_upsample_texture, i, false, 0,
+                               GL_WRITE_ONLY, GL_RGBA16F);
+            glDispatchCompute(group_count_x, group_count_y, 1u);
+            glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT |
+                            GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+            if (i == upsample_count - 1)
+                glBindTextureUnit(0u, bloom_upsample_texture);
+        }
+
+        uint group_count_x = viewport_size.x / 16u;
+        uint group_count_y = viewport_size.y / 16u;
+
+        bloom_upsample_shader.set("u_level", 0u);
+        bloom_upsample_shader.set("u_target_level", 0u);
+        bloom_upsample_shader.set("u_intensity", bloom_cfg.intensity);
+
+        glBindTextureUnit(1u, hdr_target);
+        glBindImageTexture(2u, hdr_target, 0, false, 0, GL_READ_WRITE,
+                           GL_RGBA16F);
+
+        glDispatchCompute(group_count_x, group_count_y, 1u);
+        glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT |
+                        GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+    }
+
     // Post-processing
     {
         TracyGpuZone("Post-processing");
@@ -675,7 +790,7 @@ void Renderer::render(std::vector<RenderData> &queue)
         tonemap_shader.set("u_exposure", post_proc_cfg.exposure);
         tonemap_shader.set("u_gamma", post_proc_cfg.gamma);
 
-        glBindTextureUnit(0, hdr_screen);
+        glBindTextureUnit(0, hdr_target);
 
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
@@ -1055,8 +1170,9 @@ IrradianceProbe Renderer::generate_probe(vec3 position,
     //    GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     //    glTextureParameteri(probe.cubemap, GL_TEXTURE_WRAP_R,
     //    GL_CLAMP_TO_EDGE); glTextureParameteri(probe.cubemap,
-    //    GL_TEXTURE_MIN_FILTER, GL_LINEAR); glTextureParameteri(probe.cubemap,
-    //    GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    //    GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    //    glTextureParameteri(probe.cubemap, GL_TEXTURE_MAG_FILTER,
+    //    GL_LINEAR);
     //
     //    glUseProgram(probe_shader.get_id());
     //
@@ -1071,7 +1187,8 @@ IrradianceProbe Renderer::generate_probe(vec3 position,
     //
     //    for (int face_idx = 0; face_idx < 6; face_idx++)
     //    {
-    //        glNamedFramebufferTextureLayer(fbo_probe, GL_COLOR_ATTACHMENT0,
+    //        glNamedFramebufferTextureLayer(fbo_probe,
+    //        GL_COLOR_ATTACHMENT0,
     //                                       probe.cubemap, 0, face_idx);
     //        glBindFramebuffer(GL_FRAMEBUFFER, fbo_probe);
     //        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1093,8 +1210,8 @@ enum CubeMapFace
     negative_z,
 };
 
-// Real valued coefficients of first 3 bands of SH functions sampled at a given
-// point on the unit sphere.
+// Real valued coefficients of first 3 bands of SH functions sampled at a
+// given point on the unit sphere.
 struct SphericalHarmonics3
 {
     array<float, 9> coefficients;
@@ -1119,8 +1236,8 @@ struct SphericalHarmonics3
     }
 };
 
-// Convert a texture coordinate and cube map face to a vector directed to the
-// corresponding texel in world space.
+// Convert a texture coordinate and cube map face to a vector directed to
+// the corresponding texel in world space.
 vec3 cube_map_st_to_dir(vec2 coords, CubeMapFace face)
 {
     // Map [0, 1] to [-1, 1].

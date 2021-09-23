@@ -1,0 +1,60 @@
+#version 460 core
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(binding = 0) uniform sampler2D u_source;
+layout(binding = 1) restrict writeonly uniform image2D u_target;
+
+uniform uint u_level;
+uniform float u_threshold;
+
+const uvec2 work_group_size = gl_WorkGroupSize.xy;
+
+shared vec4 tmp[work_group_size.x + 1][work_group_size.y + 1];
+
+void main()
+{
+	const uvec2 g_id = gl_GlobalInvocationID.xy;
+	const uvec2 l_id = gl_LocalInvocationID.xy;
+
+	const ivec2 target_size = imageSize(u_target);
+	const ivec2 source_size = textureSize(u_source, 0);
+
+	vec2 tex_coords = (vec2(g_id) + vec2(0.5)) / vec2(target_size);
+
+	vec2 texel_size = vec2(1.0) / vec2(source_size);
+
+	// Perform bilinear samples and store them in shared memory.
+	// TODO: Is this really faster than the naive approach? Benchmark it!
+
+	// The target texture is a quarter of the source resolution so we are 
+	// already sampling inbetween the texels, we just have to add texel offsets
+	// to sample the corners.
+
+	// Sample top left corner.
+	tmp[l_id.x][l_id.y] =  textureLod(u_source, tex_coords - texel_size, u_level);
+
+	if (l_id.x == work_group_size.x - 1)
+		// Sample top right corner.
+		tmp[l_id.x + 1][l_id.y] = textureLod(u_source, tex_coords + vec2(texel_size.x, -texel_size.y), u_level);
+
+	if (l_id.y == work_group_size.y - 1)
+		// Sample bottom left corner.
+		tmp[l_id.x][l_id.y + 1] = textureLod(u_source, tex_coords + vec2(-texel_size.x, texel_size.y), u_level);
+
+	if (l_id.x == work_group_size.x - 1 && l_id.y == work_group_size.y - 1)
+		// Sample bottom right corner.
+		tmp[l_id.x + 1][l_id.y + 1] = textureLod(u_source, tex_coords + texel_size, u_level);
+
+	barrier();
+
+	// 16-texel average downsampling filter.
+	const vec4 value = (
+		tmp[l_id.x][l_id.y] +
+		tmp[l_id.x + 1][l_id.y] +
+		tmp[l_id.x][l_id.y + 1] +
+		tmp[l_id.x + 1][l_id.y + 1]
+	) / 4;
+
+	imageStore(u_target, ivec2(g_id), step(u_threshold, value) * value);
+}

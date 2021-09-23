@@ -94,6 +94,13 @@ struct CameraConfig
     float far;
 };
 
+struct BloomConfig
+{
+    float threshold;
+    float intensity;
+    float upsample_radius;
+};
+
 struct GBuffer
 {
     glm::ivec2 size;
@@ -191,6 +198,12 @@ class Renderer
         .far = 50.f,
     };
 
+    BloomConfig bloom_cfg{
+        .threshold = 1.f,
+        .intensity = 1.f,
+        .upsample_radius = 1.5f,
+    };
+
     // Deferred
     GBuffer g_buf;
 
@@ -211,9 +224,16 @@ class Renderer
     std::vector<IrradianceProbe> probes;
 
     // Post processing
-    uint hdr_screen;
+    uint bloom_pass_count = 5;
+    uint hdr_target;
     uint hdr_fbo;
     Shader tonemap_shader;
+
+    // Bloom
+    uint bloom_downsample_texture;
+    uint bloom_upsample_texture;
+    Shader bloom_downsample_shader;
+    Shader bloom_upsample_shader;
 
     // SSAO
     uint ssao_fbo;
