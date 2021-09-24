@@ -199,9 +199,9 @@ class Renderer
     };
 
     BloomConfig bloom_cfg{
-        .threshold = 1.f,
-        .intensity = 1.f,
-        .upsample_radius = 1.5f,
+        .threshold = 0.f,
+        .intensity = 0.05f,
+        .upsample_radius = 1.3f,
     };
 
     // Deferred
@@ -224,7 +224,7 @@ class Renderer
     std::vector<IrradianceProbe> probes;
 
     // Post processing
-    uint bloom_pass_count = 5;
+    uint bloom_pass_count = 6;
     uint hdr_target;
     uint hdr_fbo;
     Shader tonemap_shader;
@@ -233,6 +233,7 @@ class Renderer
     uint bloom_downsample_texture;
     uint bloom_upsample_texture;
     Shader bloom_downsample_shader;
+    Shader bloom_downsample_shader_hq;
     Shader bloom_upsample_shader;
 
     // SSAO

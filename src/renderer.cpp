@@ -346,6 +346,9 @@ Renderer::Renderer(glm::ivec2 viewport_size, Shader skybox,
         bloom_downsample_shader =
             *Shader::from_comp_path(shaders_path / "bloom_downsample.comp");
 
+        bloom_downsample_shader_hq =
+            *Shader::from_comp_path(shaders_path / "bloom_downsample_hq.comp");
+
         bloom_upsample_shader =
             *Shader::from_comp_path(shaders_path / "bloom_upsample.comp");
     }
@@ -699,11 +702,13 @@ void Renderer::render(std::vector<RenderData> &queue)
     {
         TracyGpuZone("Bloom");
 
+        Shader &downsample_shader = bloom_downsample_shader_hq;
+
         const uint upsample_count = bloom_pass_count - 1;
 
-        glUseProgram(bloom_downsample_shader.get_id());
+        glUseProgram(downsample_shader.get_id());
 
-        bloom_downsample_shader.set("u_threshold", bloom_cfg.threshold);
+        downsample_shader.set("u_threshold", bloom_cfg.threshold);
         glBindTextureUnit(0u, hdr_target);
 
         for (uint i = 0u; i < bloom_pass_count; i++)
@@ -714,7 +719,7 @@ void Renderer::render(std::vector<RenderData> &queue)
             const uint group_count_y =
                 ((viewport_size.y >> i + 1u) + 15u) / 16u;
 
-            bloom_downsample_shader.set("u_level", i);
+            downsample_shader.set("u_level", i);
 
             glBindImageTexture(1u, bloom_downsample_texture, i, false, 0,
                                GL_WRITE_ONLY, GL_RGBA16F);
@@ -725,7 +730,7 @@ void Renderer::render(std::vector<RenderData> &queue)
             if (i == 0)
             {
                 glBindTextureUnit(0u, bloom_downsample_texture);
-                bloom_downsample_shader.set("u_threshold", 0.f);
+                downsample_shader.set("u_threshold", 0.f);
             }
         }
 
