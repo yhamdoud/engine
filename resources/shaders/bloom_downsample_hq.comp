@@ -6,7 +6,6 @@ layout(binding = 0) uniform sampler2D u_source;
 layout(binding = 1) restrict writeonly uniform image2D u_target;
 
 uniform uint u_level;
-uniform float u_threshold;
 
 const uvec2 work_group_size = gl_WorkGroupSize.xy;
 
@@ -116,5 +115,5 @@ void main()
         ? jiminez_13_tap_karis(u_source, u_level, tex_coords, texel_size)
         : jiminez_13_tap(u_source, u_level, tex_coords, texel_size);
 
-	imageStore(u_target, ivec2(g_id), step(u_threshold, value) * value);
+	imageStore(u_target, ivec2(g_id), value);
 }

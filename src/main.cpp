@@ -42,6 +42,68 @@ using namespace glm;
 
 using namespace engine;
 
+void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
+                         GLsizei length, GLchar const *message,
+                         void const *user_param)
+{
+    const string source_string{[&source]
+                               {
+                                   switch (source)
+                                   {
+                                   case GL_DEBUG_SOURCE_API:
+                                       return "API";
+                                   case GL_DEBUG_SOURCE_WINDOW_SYSTEM:
+                                       return "Window system";
+                                   case GL_DEBUG_SOURCE_SHADER_COMPILER:
+                                       return "Shader compiler";
+                                   case GL_DEBUG_SOURCE_THIRD_PARTY:
+                                       return "Third party";
+                                   case GL_DEBUG_SOURCE_APPLICATION:
+                                       return "Application";
+                                   case GL_DEBUG_SOURCE_OTHER:
+                                       return "";
+                                   }
+                               }()};
+
+    const string type_string{[&type]
+                             {
+                                 switch (type)
+                                 {
+                                 case GL_DEBUG_TYPE_ERROR:
+                                     return "Error";
+                                 case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
+                                     return "Deprecated behavior";
+                                 case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
+                                     return "Undefined behavior";
+                                 case GL_DEBUG_TYPE_PORTABILITY:
+                                     return "Portability";
+                                 case GL_DEBUG_TYPE_PERFORMANCE:
+                                     return "Performance";
+                                 case GL_DEBUG_TYPE_MARKER:
+                                     return "Marker";
+                                 case GL_DEBUG_TYPE_OTHER:
+                                     return "";
+                                 }
+                             }()};
+
+    const auto log_type = [&severity]
+    {
+        switch (severity)
+        {
+        case GL_DEBUG_SEVERITY_NOTIFICATION:
+            return LogType::info;
+        case GL_DEBUG_SEVERITY_LOW:
+            return LogType::warning;
+        case GL_DEBUG_SEVERITY_MEDIUM:
+        case GL_DEBUG_SEVERITY_HIGH:
+            return LogType::error;
+        }
+    }();
+
+    logger.log(log_type, "OpenGL {0} {1}: {3}", type_string, source_string, id,
+               message);
+}
+
 struct SceneGraphNode
 {
     static constexpr size_t root_index = (size_t)-1;
@@ -173,10 +235,10 @@ int main()
         return EXIT_FAILURE;
     }
 
-    auto skybox_shader = *Shader::from_paths(ShaderPaths{
-        .vert = shaders_path / "skybox.vs",
-        .frag = shaders_path / "skybox.fs",
-    });
+    // Enable error callback.
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(gl_message_callback, nullptr);
 
     const path skybox_path = textures_path / "skybox-1";
     auto skybox_texture =
@@ -187,7 +249,7 @@ int main()
     if (skybox_texture == invalid_texture_id)
         return EXIT_FAILURE;
 
-    Renderer r(ivec2{1600, 900}, skybox_shader, skybox_texture);
+    Renderer r(ivec2{1600, 900}, skybox_texture);
     glfwSetWindowUserPointer(window, &r);
 
     auto deferred_shader = *Shader::from_paths(ShaderPaths{
@@ -263,11 +325,13 @@ int main()
 
     FrameMarkEnd("Loading");
 
+    int bounce_count = 1;
+    float distance = 1.f;
     auto data = generate_render_data();
     //    r.generate_probe_grid(data, vec3{2.f, 6.f, 2.f}, vec3{4, 4, 4}, 4);
 
-    r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
-                              vec3{22.f, 8.f, 9.f}, 1.f);
+    // r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
+    //                           vec3{22.f, 8.f, 9.f}, 1.f);
 
     // r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
     //                           vec3{22.f, 8.f, 9.f}, 3.f);
@@ -280,69 +344,79 @@ int main()
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        float viuewport_aspect_ratio =
+            static_cast<float>(r.ctx_v.size.x) / r.ctx_v.size.y;
+
         ImGui::Begin("Renderer");
         {
-            if (ImGui::CollapsingHeader("Debug"))
+            if (ImGui::CollapsingHeader("GI"))
             {
-                ImGui::Checkbox("Draw probes", &r.debug_cfg.draw_probes);
-                ImGui::Checkbox("Use direct illumination",
-                                &r.debug_cfg.use_direct_illumination);
-                ImGui::Checkbox("Use indirect illumination",
-                                &r.debug_cfg.use_indirect_illumination);
-                ImGui::Checkbox("Use base color", &r.debug_cfg.use_base_color);
-                ImGui::SliderFloat("Leak offset", &r.debug_cfg.leak_offset, 0,
-                                   1.f);
+                ImGui::SliderInt("Bounces", &bounce_count, 0, 10);
+                ImGui::SliderFloat("Distance", &distance, 1.f, 5.f);
+
+                if (ImGui::Button("Bake"))
+                    r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
+                                              vec3{22.f, 8.f, 9.f}, distance,
+                                              bounce_count);
             }
 
             if (ImGui::CollapsingHeader("SSAO"))
             {
-                ImGui::SliderInt("Sample count", &r.ssao_cfg.sample_count, 0,
-                                 r.ssao_cfg.kernel_size);
-                ImGui::SliderFloat("Radius", &r.ssao_cfg.radius, 0.f, 10.f);
-                ImGui::SliderFloat("Bias", &r.ssao_cfg.bias, 0.f, 1.f);
-                ImGui::SliderFloat("Strength", &r.ssao_cfg.strength, 0.f, 5.f);
-
-                float aspect_ratio =
-                    static_cast<float>(r.viewport_size.x) / r.viewport_size.y;
+                if (ImGui::SliderInt("Sample count", &r.ssao.sample_count, 0,
+                                     r.ssao.sample_count) |
+                    ImGui::SliderFloat("Radius", &r.ssao.radius, 0.f, 10.f) |
+                    ImGui::SliderFloat("Bias", &r.ssao.bias, 0.f, 1.f) |
+                    ImGui::SliderFloat("Strength", &r.ssao.strength, 0.f, 5.f))
+                    r.ssao.parse_parameters();
 
                 ImVec2 window_size = ImGui::GetWindowSize();
                 ImVec2 texture_size{window_size.x,
-                                    window_size.x / aspect_ratio};
+                                    window_size.x / viuewport_aspect_ratio};
 
                 ImGui::Text("Depth");
-                ImGui::Image((ImTextureID)r.ssao_texture_blur, texture_size,
+                ImGui::Image((ImTextureID)r.ctx_v.ao_tex, texture_size,
                              ImVec2(0, 1), ImVec2(1, 0));
+            }
+
+            if (ImGui::CollapsingHeader("Lighting"))
+            {
+                if (ImGui::Checkbox("Direct lighting",
+                                    &r.lighting.direct_light);
+                    ImGui::Checkbox("Indirect lighting",
+                                    &r.lighting.indirect_light) |
+                    ImGui::Checkbox("Base color", &r.lighting.use_base_color) |
+                    ImGui::Checkbox("Color shadow cascades",
+                                    &r.lighting.color_shadow_cascades) |
+                    ImGui::Checkbox("Filter shadows",
+                                    &r.lighting.filter_shadows) |
+                    ImGui::SliderFloat("Leak offset ", &r.lighting.leak_offset,
+                                       0, 1.f))
+                    r.lighting.parse_parameters();
+            }
+
+            if (ImGui::CollapsingHeader("Forward"))
+            {
+                if (ImGui::Checkbox("Draw probes", &r.forward.draw_probes))
+                    r.forward.parse_parameters();
             }
 
             if (ImGui::CollapsingHeader("Bloom"))
             {
-                ImGui::SliderFloat("Intensity", &r.bloom_cfg.intensity, 0.f,
-                                   5.f);
-                ImGui::SliderFloat("Threshold", &r.bloom_cfg.threshold, 0.f,
-                                   10.f);
-                ImGui::SliderFloat("Upsample radius",
-                                   &r.bloom_cfg.upsample_radius, 0.f, 3.f);
-
-                float aspect_ratio =
-                    static_cast<float>(r.viewport_size.x) / r.viewport_size.y;
-
-                ImVec2 window_size = ImGui::GetWindowSize();
-                ImVec2 texture_size{window_size.x,
-                                    window_size.x / aspect_ratio};
-
-                ImGui::Text("Depth");
-                ImGui::Image((ImTextureID)r.bloom_downsample_texture,
-                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
+                if (ImGui::SliderFloat("Intensity", &r.bloom.cfg.intensity, 0.f,
+                                       5.f),
+                    ImGui::SliderFloat("Upsample radius",
+                                       &r.bloom.cfg.upsample_radius, 0.f, 3.f))
+                    ;
             }
 
-            if (ImGui::CollapsingHeader("Post processing"))
+            if (ImGui::CollapsingHeader("Tone map"))
             {
-                ImGui::Checkbox("Gamma correction",
-                                &r.post_proc_cfg.do_gamma_correct);
-
-                ImGui::Checkbox("Tonemapping", &r.post_proc_cfg.do_tonemap);
-                ImGui::InputFloat("Gamma", &r.post_proc_cfg.gamma);
-                ImGui::InputFloat("Exposure", &r.post_proc_cfg.exposure);
+                if (ImGui::Checkbox("Gamma correction",
+                                    &r.tone_map.do_gamma_correct) |
+                    ImGui::Checkbox("Tone mapping", &r.tone_map.do_tone_map) |
+                    ImGui::InputFloat("Gamma", &r.tone_map.gamma) |
+                    ImGui::InputFloat("Exposure", &r.tone_map.exposure))
+                    r.tone_map.parse_parameters();
             }
 
             if (ImGui::CollapsingHeader("Viewport"))
@@ -365,18 +439,16 @@ int main()
 
             if (ImGui::CollapsingHeader("Shadow mapping"))
             {
-                ImGui::Checkbox("Color cascades", &r.shadow_cfg.color_cascades);
-                ImGui::Checkbox("Stabilize", &r.shadow_cfg.stabilize);
-                ImGui::Checkbox("Filtering", &r.shadow_cfg.filter);
+                ImGui::Checkbox("Stabilize", &r.shadow.stabilize);
 
-                float aspect_ratio = static_cast<float>(r.shadow_map_size.x) /
-                                     r.shadow_map_size.y;
+                float aspect_ratio =
+                    static_cast<float>(r.shadow.size.x) / r.shadow.size.y;
 
                 ImVec2 window_size = ImGui::GetWindowSize();
                 ImVec2 texture_size{window_size.x,
                                     window_size.x / aspect_ratio};
 
-                for (const auto &v : r.debug_view_shadow_maps)
+                for (const auto &v : r.shadow.debug_views)
                 {
                     ImGui::Image((ImTextureID)v, texture_size, ImVec2(0, 1),
                                  ImVec2(1, 0));
@@ -385,33 +457,30 @@ int main()
 
             if (ImGui::CollapsingHeader("G-buffer"))
             {
-                float aspect_ratio =
-                    static_cast<float>(r.viewport_size.x) / r.viewport_size.y;
-
                 ImGui::BeginChild("Stuff");
                 ImVec2 window_size = ImGui::GetWindowSize();
                 ImVec2 texture_size{window_size.x,
-                                    window_size.x / aspect_ratio};
+                                    window_size.x / viuewport_aspect_ratio};
 
                 ImGui::Text("Depth");
-                ImGui::Image((ImTextureID)r.g_buf.depth, texture_size,
+                ImGui::Image((ImTextureID)r.ctx_v.g_buf.depth, texture_size,
                              ImVec2(0, 1), ImVec2(1, 0));
 
                 ImGui::Text("Base color");
-                ImGui::Image((ImTextureID)r.debug_view_base_color, texture_size,
-                             ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)r.geometry.debug_view_base_color,
+                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
 
                 ImGui::Text("Normal");
-                ImGui::Image((ImTextureID)r.debug_view_normal, texture_size,
-                             ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)r.geometry.debug_view_normal,
+                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
 
                 ImGui::Text("Metallic");
-                ImGui::Image((ImTextureID)r.debug_view_metallic, texture_size,
-                             ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)r.geometry.debug_view_metallic,
+                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
 
                 ImGui::Text("Roughness");
-                ImGui::Image((ImTextureID)r.debug_view_roughness, texture_size,
-                             ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)r.geometry.debug_view_roughness,
+                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
 
                 ImGui::EndChild();
             }

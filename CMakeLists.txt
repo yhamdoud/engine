@@ -19,7 +19,7 @@ set(IMGUI_DIR "${EXTERN_DIR}/imgui")
 set(GLFW_DIR "${EXTERN_DIR}/glfw")
 set(GLM_DIR "${EXTERN_DIR}/glm")
 
-file(GLOB SRC_FILES "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.hpp")
+file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.hpp")
 add_executable(${PROJECT_NAME} ${SRC_FILES})
 
 # glad

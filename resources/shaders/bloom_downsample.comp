@@ -6,7 +6,6 @@ layout(binding = 0) uniform sampler2D u_source;
 layout(binding = 1) restrict writeonly uniform image2D u_target;
 
 uniform uint u_level;
-uniform float u_threshold;
 
 const uvec2 work_group_size = gl_WorkGroupSize.xy;
 
@@ -48,13 +47,15 @@ void main()
 
 	barrier();
 
-	// 16-texel average downsampling filter.
-	const vec4 value = (
-		tmp[l_id.x][l_id.y] +
-		tmp[l_id.x + 1][l_id.y] +
-		tmp[l_id.x][l_id.y + 1] +
-		tmp[l_id.x + 1][l_id.y + 1]
-	) / 4;
-
-	imageStore(u_target, ivec2(g_id), step(u_threshold, value) * value);
+	imageStore(
+		u_target,
+		ivec2(g_id), 
+		// 16-texel average downsampling filter.
+		(
+			tmp[l_id.x][l_id.y] +
+			tmp[l_id.x + 1][l_id.y] +
+			tmp[l_id.x][l_id.y + 1] +
+			tmp[l_id.x + 1][l_id.y + 1]
+		) / 4
+	);
 }
