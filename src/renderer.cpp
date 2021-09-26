@@ -155,6 +155,13 @@ Renderer::Renderer(glm::ivec2 viewport_size, uint skybox_texture)
     lighting.initialize(ctx_v);
     bloom.initialize(ctx_v);
     tone_map.initialize(ctx_v);
+
+    // TODO: move
+
+    probe_view.shadow.initialize(probe_view.ctx);
+    probe_view.geometry.initialize(probe_view.ctx);
+    probe_view.lighting.initialize(probe_view.ctx);
+    probe_view.forward.initialize(probe_view.ctx);
 }
 
 Renderer::~Renderer()
@@ -299,7 +306,6 @@ void Renderer::resize_viewport(glm::vec2 size)
 {
     ctx_v.size = size;
     // TODO: clean up buffers
-    // ctx.g_buf = create_g_buffer(size);
 }
 
 IrradianceProbe Renderer::generate_probe(vec3 position)
@@ -341,10 +347,8 @@ void Renderer::generate_probe_grid_gpu(std::vector<RenderData> &queue,
 {
     ctx_r.queue = std::move(queue);
 
-    probe_view.shadow.initialize(probe_view.ctx);
-    probe_view.geometry.initialize(probe_view.ctx);
-    probe_view.lighting.initialize(probe_view.ctx);
-    probe_view.forward.initialize(probe_view.ctx);
+    // FIXME:
+    probe_view.ctx.ao_tex = ctx_v.ao_tex;
 
     ivec3 dims = world_dims / distance;
     int probe_count = dims.x * dims.y * dims.z;
@@ -352,7 +356,8 @@ void Renderer::generate_probe_grid_gpu(std::vector<RenderData> &queue,
     logger.info("Baking {} probes", probe_count);
 
     // We can pack the 27 coefficient into 7 4 channel textures
-    const int texture_count = 7;
+    const int texture_count = ctx_r.sh_texs.size();
+
     const ivec2 local_size{16, 16};
     const ivec3 group_count{probe_view.ctx.size / local_size, 6};
 
@@ -364,11 +369,8 @@ void Renderer::generate_probe_grid_gpu(std::vector<RenderData> &queue,
 
     ctx_r.grid_dims = dims;
 
-    ctx_r.sh_texs.resize(texture_count);
+    glDeleteTextures(texture_count, ctx_r.sh_texs.data());
     glCreateTextures(GL_TEXTURE_3D, texture_count, ctx_r.sh_texs.data());
-
-    auto project = *Shader::from_comp_path(shaders_path / "sh_project.comp");
-    auto reduce = *Shader::from_comp_path(shaders_path / "sh_reduce.comp");
 
     for (int tex_idx = 0; tex_idx < texture_count; tex_idx++)
     {
@@ -389,12 +391,12 @@ void Renderer::generate_probe_grid_gpu(std::vector<RenderData> &queue,
                             GL_LINEAR_MIPMAP_LINEAR);
     }
 
-    const int byte_size = group_count.x * group_count.y * group_count.z *
-                          texture_count * sizeof(vec4);
-
     uint ssbo;
     glCreateBuffers(1, &ssbo);
-    glNamedBufferStorage(ssbo, byte_size, nullptr, GL_NONE);
+    glNamedBufferStorage(ssbo,
+                         group_count.x * group_count.y * group_count.z *
+                             texture_count * sizeof(vec4),
+                         nullptr, GL_NONE);
 
     // Compute the final weight for integration
     float weight_sum = 0.f;
@@ -416,10 +418,7 @@ void Renderer::generate_probe_grid_gpu(std::vector<RenderData> &queue,
 
     for (int i = 0; i < bounce_count; i++)
     {
-        if (i == 0)
-            probe_view.lighting.indirect_light = false;
-        else if (i == 1)
-            probe_view.lighting.indirect_light = true;
+        probe_view.lighting.indirect_light = i != 0;
 
         for (int z = 0; z < dims.z; z++)
         {
@@ -428,10 +427,9 @@ void Renderer::generate_probe_grid_gpu(std::vector<RenderData> &queue,
                 for (int x = 0; x < dims.x; x++)
                 {
                     vec3 position = vec3(grid_transform * vec4{x, y, z, 1});
-                    // Rasterize probe environment map.
 
                     auto probe = generate_probe(position);
-                    // FIXME
+                    // FIXME:
                     if (i == 0)
                         ctx_r.probes.emplace_back(probe);
 
@@ -494,7 +492,7 @@ struct SphericalHarmonics3
               0.488603f * s.x,
               // Band 2
               1.092548f * s.x * s.y,
-              1.092548f * s.y * s.z,
+              //   1.092548f * s.y * s.z,
               0.315392f * (3.0f * s.z * s.z - 1.0f),
               1.092548f * s.x * s.z,
               0.546274f * (s.x * s.x - s.y * s.y),

@@ -33,8 +33,6 @@ class SsaoPass
     float bias;
     float strength;
 
-    uint debug_view_ssao;
-
     SsaoPass(SsaoConfig cfg);
 
     void parse_parameters();

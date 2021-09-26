@@ -18,6 +18,9 @@ SsaoPass::SsaoPass(SsaoConfig cfg)
     glCreateTextures(GL_TEXTURE_2D, 1, &ao_tex);
     glCreateTextures(GL_TEXTURE_2D, 1, &ao_blurred_tex);
 
+    glTextureParameteri(ao_tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(ao_tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
     uniform_real_distribution<float> dist1(0.f, 1.f);
     uniform_real_distribution<float> dist2(-1.f, 1.f);
     default_random_engine gen;
@@ -79,6 +82,7 @@ void SsaoPass::initialize(ViewportContext &ctx)
     glTextureStorage2D(ao_blurred_tex, 1, GL_R8, ctx.size.x, ctx.size.y);
 
     glCreateFramebuffers(1, &frame_buf);
+
     glNamedFramebufferTexture(frame_buf, GL_COLOR_ATTACHMENT0, ao_tex, 0);
     glNamedFramebufferTexture(frame_buf, GL_COLOR_ATTACHMENT1, ao_blurred_tex,
                               0);
@@ -99,13 +103,6 @@ void SsaoPass::initialize(ViewportContext &ctx)
     glClearNamedFramebufferfv(frame_buf, GL_COLOR, 0, &one);
     glClearNamedFramebufferfv(frame_buf, GL_COLOR, 1, &one);
 
-    array<int, 3> swizzle{GL_RED, GL_RED, GL_RED};
-
-    glGenTextures(1, &debug_view_ssao);
-    glTextureView(debug_view_ssao, GL_TEXTURE_2D, ao_tex, GL_RGB8, 0, 1, 0, 1);
-    glTextureParameteriv(debug_view_ssao, GL_TEXTURE_SWIZZLE_RGBA,
-                         swizzle.data());
-
     ctx.ao_tex = ao_blurred_tex;
 }
 
@@ -113,7 +110,8 @@ void SsaoPass::render(ViewportContext &ctx)
 {
     glViewport(0, 0, ctx.size.x, ctx.size.y);
     glBindFramebuffer(GL_FRAMEBUFFER, frame_buf);
-    glClear(GL_COLOR_BUFFER_BIT);
+    // FIXME: Causes artifacts, why?
+    // glClear(GL_COLOR_BUFFER_BIT);
 
     ssao.set("u_proj", ctx.proj);
     ssao.set("u_proj_inv", inverse(ctx.proj));

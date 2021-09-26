@@ -41,7 +41,7 @@ struct ProbeViewport
         .use_base_color = true,
         .color_shadow_cascades = false,
         .filter_shadows = false,
-        .leak_offset = 0.0f,
+        .leak_offset = 0.4f,
     }};
 
     ForwardPass forward{{
@@ -67,6 +67,9 @@ class Renderer
     static void render_mesh_instance(unsigned int vao,
                                      const MeshInstance &mesh);
     void render(std::vector<RenderData> &queue);
+
+    Shader project = *Shader::from_comp_path(shaders_path / "sh_project.comp");
+    Shader reduce = *Shader::from_comp_path(shaders_path / "sh_reduce.comp");
 
     IrradianceProbe generate_probe(glm::vec3 position);
     void generate_probe_grid_gpu(std::vector<RenderData> &queue,

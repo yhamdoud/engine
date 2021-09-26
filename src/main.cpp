@@ -327,7 +327,6 @@ int main()
 
     int bounce_count = 1;
     float distance = 1.f;
-    auto data = generate_render_data();
     //    r.generate_probe_grid(data, vec3{2.f, 6.f, 2.f}, vec3{4, 4, 4}, 4);
 
     // r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
@@ -355,9 +354,12 @@ int main()
                 ImGui::SliderFloat("Distance", &distance, 1.f, 5.f);
 
                 if (ImGui::Button("Bake"))
+                {
+                    auto data = generate_render_data();
                     r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
                                               vec3{22.f, 8.f, 9.f}, distance,
                                               bounce_count);
+                }
             }
 
             if (ImGui::CollapsingHeader("SSAO"))
