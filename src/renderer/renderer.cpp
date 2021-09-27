@@ -1,6 +1,7 @@
 #include <limits>
 
 #include <array>
+#include <numeric>
 #include <string>
 
 #include <glm/ext.hpp>
@@ -11,12 +12,10 @@
 #include "logger.hpp"
 #include "model.hpp"
 #include "primitives.hpp"
-#include "render_context.hpp"
 #include "renderer.hpp"
 
 #include <Tracy.hpp>
 #include <TracyOpenGL.hpp>
-#include <numeric>
 
 using namespace glm;
 using namespace std;

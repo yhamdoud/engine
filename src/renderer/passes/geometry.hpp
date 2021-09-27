@@ -1,9 +1,7 @@
 #pragma once
 
-#include "../constants.hpp"
-#include "../pass.hpp"
-#include "../render_context.hpp"
-#include "../shader.hpp"
+#include "renderer/context.hpp"
+#include "renderer/pass.hpp"
 
 namespace engine
 {

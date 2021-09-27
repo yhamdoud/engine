@@ -1,5 +1,5 @@
 #include "forward.hpp"
-#include "../renderer.hpp"
+#include "renderer/renderer.hpp"
 
 using namespace std;
 using namespace glm;

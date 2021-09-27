@@ -1,10 +1,10 @@
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
 
-#include "../logger.hpp"
-#include "../model.hpp"
-#include "../renderer.hpp"
 #include "geometry.hpp"
+#include "logger.hpp"
+#include "model.hpp"
+#include "renderer/renderer.hpp"
 
 using namespace std;
 using namespace glm;

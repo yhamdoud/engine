@@ -3,7 +3,7 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 
-#include "../logger.hpp"
+#include "logger.hpp"
 #include "ssao.hpp"
 
 using namespace std;

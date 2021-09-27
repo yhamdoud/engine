@@ -1,7 +1,7 @@
 #include <iostream>
 
 #include "logger.hpp"
-#include "renderer.hpp"
+#include "renderer/renderer.hpp"
 #include "window.hpp"
 
 using namespace std;

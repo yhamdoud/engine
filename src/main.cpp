@@ -23,7 +23,7 @@
 #include "entity.hpp"
 #include "logger.hpp"
 #include "model.hpp"
-#include "renderer.hpp"
+#include "renderer/renderer.hpp"
 #include "shader.hpp"
 #include "transform.hpp"
 #include "window.hpp"

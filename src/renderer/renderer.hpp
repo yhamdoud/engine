@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 
 #include "camera.hpp"
+#include "context.hpp"
 #include "passes/bloom.hpp"
 #include "passes/forward.hpp"
 #include "passes/geometry.hpp"
@@ -14,7 +15,6 @@
 #include "passes/shadow.hpp"
 #include "passes/ssao.hpp"
 #include "passes/tone_map.hpp"
-#include "render_context.hpp"
 
 namespace engine
 {

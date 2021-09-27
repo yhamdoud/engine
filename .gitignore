@@ -36,3 +36,5 @@
 .vscode/
 .idea/
 compile_commands.json
+*build*/
+vgcore.*

@@ -1,10 +1,10 @@
-#include "shadow.hpp"
-#include "../render_context.hpp"
-#include "../renderer.hpp"
-
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
 #include <numeric>
+
+#include "renderer/context.hpp"
+#include "renderer/renderer.hpp"
+#include "shadow.hpp"
 
 using namespace std;
 using namespace glm;

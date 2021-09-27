@@ -21,6 +21,7 @@ set(GLM_DIR "${EXTERN_DIR}/glm")
 
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.hpp")
 add_executable(${PROJECT_NAME} ${SRC_FILES})
+include_directories(${SRC_DIR})
 
 # glad
 add_library(glad STATIC "${GLAD_DIR}/src/glad.c")
