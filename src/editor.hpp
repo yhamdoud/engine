@@ -8,13 +8,13 @@ namespace engine
 
 class Editor
 {
-    GLFWwindow &window;
+    Window &window;
     Renderer &renderer;
     int bounce_count = 1;
     float distance = 1.f;
 
   public:
-    Editor(GLFWwindow &window, Renderer &r);
+    Editor(Window &window, Renderer &renderer);
     ~Editor();
 
     Editor(const Editor &) = delete;

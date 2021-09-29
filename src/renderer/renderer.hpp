@@ -142,15 +142,15 @@ class Renderer
         .gamma = 2.2f,
     }};
 
-    Renderer(glm::ivec2 viewport_size, uint skybox_texture);
+    Renderer(glm::ivec2 viewport_size);
     ~Renderer();
 
-    Renderer(Renderer &&) = delete;
+    Renderer(const Renderer &) = delete;
     Renderer &operator=(const Renderer &) = delete;
+    Renderer(Renderer &&) = delete;
+    Renderer &operator=(Renderer &&) = delete;
 
     void render(std::vector<RenderData> &queue);
-
-    Renderer &operator=(Renderer &&) = delete;
 
     size_t register_mesh(const Mesh &mesh);
     static void render_mesh_instance(unsigned int vao,

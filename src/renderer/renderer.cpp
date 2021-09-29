@@ -37,10 +37,9 @@ int attrib_normals = 1;
 int attrib_tex_coords = 2;
 int attrib_tangents = 3;
 
-Renderer::Renderer(glm::ivec2 viewport_size, uint skybox_texture)
+Renderer::Renderer(glm::ivec2 viewport_size)
 {
     ctx_v.size = viewport_size;
-    ctx_r.skybox_tex = skybox_texture;
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);

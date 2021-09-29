@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <variant>
 
@@ -12,13 +13,27 @@
 namespace engine
 {
 
-struct Window
+class Window
 {
-    uint width;
-    uint height;
-};
+    glm::ivec2 size;
 
-extern Window window_data;
+  public:
+    // TODO: Wrap this behind an interface completely, eventually.
+    GLFWwindow *impl;
+
+    Window(glm::ivec2 size, const char *title);
+    ~Window();
+
+    Window(const Window &) = delete;
+    Window &operator=(const Window &) = delete;
+    Window(Window &&) = delete;
+    Window &operator=(Window &&) = delete;
+
+    void run(const std::function<void()> &main_loop);
+    glm::vec2 get_cursor_position();
+
+    static bool load_gl();
+};
 
 std::optional<GLFWwindow *> init_glfw(uint width, uint height);
 
@@ -32,7 +47,5 @@ static void scroll_callback(GLFWwindow *window, double x_offset,
 
 static void framebuffer_size_callback(GLFWwindow *window, int width,
                                       int height);
-
-glm::vec2 get_cursor_position(GLFWwindow *window);
 
 } // namespace engine

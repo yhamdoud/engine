@@ -1,16 +1,6 @@
-#define GLFW_INCLUDE_NONE
-
-#include <array>
-#include <cstdlib>
-#include <exception>
 #include <filesystem>
-#include <optional>
-#include <string_view>
-#include <variant>
 
-#include <GLFW/glfw3.h>
 #include <glad/glad.h>
-#include <glm/ext.hpp>
 #include <glm/glm.hpp>
 
 #include <Tracy.hpp>
@@ -26,83 +16,11 @@
 #include "transform.hpp"
 #include "window.hpp"
 
-using std::array;
-using std::optional;
-using std::shared_ptr;
-using std::string;
-using std::string_view;
-using std::tuple;
-using std::unique_ptr;
-using std::vector;
 using std::filesystem::path;
 
 using namespace glm;
-
+using namespace std;
 using namespace engine;
-
-void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
-                         GLsizei length, GLchar const *message,
-                         void const *user_param)
-{
-    const string source_string{[&source]
-                               {
-                                   switch (source)
-                                   {
-                                   case GL_DEBUG_SOURCE_API:
-                                       return "API";
-                                   case GL_DEBUG_SOURCE_WINDOW_SYSTEM:
-                                       return "Window system";
-                                   case GL_DEBUG_SOURCE_SHADER_COMPILER:
-                                       return "Shader compiler";
-                                   case GL_DEBUG_SOURCE_THIRD_PARTY:
-                                       return "Third party";
-                                   case GL_DEBUG_SOURCE_APPLICATION:
-                                       return "Application";
-                                   case GL_DEBUG_SOURCE_OTHER:
-                                       return "";
-                                   }
-                               }()};
-
-    const string type_string{[&type]
-                             {
-                                 switch (type)
-                                 {
-                                 case GL_DEBUG_TYPE_ERROR:
-                                     return "Error";
-                                 case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
-                                     return "Deprecated behavior";
-                                 case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
-                                     return "Undefined behavior";
-                                 case GL_DEBUG_TYPE_PORTABILITY:
-                                     return "Portability";
-                                 case GL_DEBUG_TYPE_PERFORMANCE:
-                                     return "Performance";
-                                 case GL_DEBUG_TYPE_MARKER:
-                                     return "Marker";
-                                 case GL_DEBUG_TYPE_OTHER:
-                                     return "";
-                                 }
-                             }()};
-
-    const auto log_type = [&severity]
-    {
-        switch (severity)
-        {
-        case GL_DEBUG_SEVERITY_NOTIFICATION:
-            return LogType::info;
-        case GL_DEBUG_SEVERITY_LOW:
-            return LogType::warning;
-        case GL_DEBUG_SEVERITY_MEDIUM:
-        case GL_DEBUG_SEVERITY_HIGH:
-            return LogType::error;
-        }
-    }();
-
-    logger.log(log_type, "OpenGL {0} {1}: {3}", type_string, source_string, id,
-               message);
-}
-
-// TODO: move
 
 vector<Entity> entities;
 vector<SceneGraphNode> scene_graph;
@@ -205,37 +123,30 @@ int main()
 {
     FrameMarkStart("Loading");
 
-    GLFWwindow *window;
+    ivec2 size{1600, 900};
 
-    if (auto maybe_window = init_glfw(1600, 900))
-        window = *maybe_window;
-    else
-        return EXIT_FAILURE;
-
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    Window window(size, "engine");
+    if (!window.load_gl())
     {
         logger.error("OpenGL initialization failed");
         return EXIT_FAILURE;
     }
 
-    // Enable error callback.
-    glEnable(GL_DEBUG_OUTPUT);
-    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageCallback(gl_message_callback, nullptr);
+    Renderer renderer(size);
+    Editor editor(window, renderer);
+
+    glfwSetWindowUserPointer(window.impl, &renderer);
 
     const path skybox_path = textures_path / "skybox-1";
-    auto skybox_texture =
+    auto skybox_tex =
         upload_cube_map({skybox_path / "right.jpg", skybox_path / "left.jpg",
                          skybox_path / "top.jpg", skybox_path / "bottom.jpg",
                          skybox_path / "front.jpg", skybox_path / "back.jpg"});
 
-    if (skybox_texture == invalid_texture_id)
+    if (skybox_tex == invalid_texture_id)
         return EXIT_FAILURE;
 
-    Renderer renderer(ivec2{1600, 900}, skybox_texture);
-    glfwSetWindowUserPointer(window, &renderer);
-
-    Editor editor(*window, renderer);
+    renderer.ctx_r.skybox_tex = skybox_tex;
 
     auto deferred_shader = *Shader::from_paths(ShaderPaths{
         .vert = shaders_path / "geometry.vs",
@@ -271,49 +182,38 @@ int main()
     }
 
     double last_time = glfwGetTime();
-    vec2 cursor_pos = get_cursor_position(window);
-
-    // Enable profiling.
-    TracyGpuContext;
+    vec2 cursor_pos = window.get_cursor_position();
 
     FrameMarkEnd("Loading");
 
-    while (!glfwWindowShouldClose(window))
-    {
-        // Timestep.
-        float time = glfwGetTime();
-        float delta_time = time - last_time;
-        last_time = time;
-
-        vec2 new_cursor_pos = get_cursor_position(window);
-
-        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
+    window.run(
+        [&]()
         {
-            auto delta = cursor_pos - new_cursor_pos;
+            // Timestep.
+            float time = glfwGetTime();
+            float delta_time = time - last_time;
+            last_time = time;
 
-            if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-                renderer.camera.pan(delta);
-            else
-                renderer.camera.rotate(delta);
-        }
+            vec2 new_cursor_pos = window.get_cursor_position();
 
-        cursor_pos = new_cursor_pos;
+            if (glfwGetMouseButton(window.impl, GLFW_MOUSE_BUTTON_MIDDLE) ==
+                GLFW_PRESS)
+            {
+                auto delta = cursor_pos - new_cursor_pos;
 
-        auto data = generate_render_data();
+                if (glfwGetKey(window.impl, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+                    renderer.camera.pan(delta);
+                else
+                    renderer.camera.rotate(delta);
+            }
 
-        renderer.render(data);
-        editor.draw();
+            cursor_pos = new_cursor_pos;
 
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+            auto data = generate_render_data();
+            renderer.render(data);
 
-        TracyGpuCollect;
-
-        FrameMark
-    }
-
-    glfwDestroyWindow(window);
-    glfwTerminate();
+            editor.draw();
+        });
 
     return EXIT_SUCCESS;
 }

@@ -20,12 +20,12 @@ Editor::~Editor()
     ImGui::DestroyContext();
 }
 
-Editor::Editor(GLFWwindow &w, Renderer &r) : window(w), renderer(r)
+Editor::Editor(Window &w, Renderer &r) : window(w), renderer(r)
 {
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
 
-    ImGui_ImplGlfw_InitForOpenGL(&w, true);
+    ImGui_ImplGlfw_InitForOpenGL(w.impl, true);
     ImGui_ImplOpenGL3_Init("#version 460");
 }
 
@@ -133,7 +133,7 @@ void Editor::draw()
             if (ImGui::Button("Set"))
             {
                 const auto &res = resolutions[cur_idx];
-                glfwSetWindowSize(&window, res.x, res.y);
+                // TODO: resize window
                 renderer.resize_viewport(res);
             }
         }
