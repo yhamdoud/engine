@@ -1,3 +1,4 @@
+#include <Tracy.hpp>
 #include <glad/glad.h>
 
 #include "tone_map.hpp"
@@ -29,6 +30,8 @@ void ToneMapPass::initialize(ViewportContext &ctx) {}
 
 void ToneMapPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 {
+    ZoneScoped;
+
     glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.ldr_framebuf);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

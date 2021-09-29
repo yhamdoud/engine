@@ -4,18 +4,19 @@
 #include <numeric>
 #include <string>
 
+#include <glad/glad.h>
 #include <glm/ext.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <stb_image_write.h>
+
+#include <Tracy.hpp>
+#include <TracyOpenGL.hpp>
 
 #include "constants.hpp"
 #include "logger.hpp"
 #include "model.hpp"
 #include "primitives.hpp"
 #include "renderer.hpp"
-
-#include <Tracy.hpp>
-#include <TracyOpenGL.hpp>
 
 using namespace glm;
 using namespace std;
@@ -145,7 +146,8 @@ Renderer::Renderer(glm::ivec2 viewport_size, uint skybox_texture)
     }
 
     // Setup state for displaying probe.
-    auto sphere_model = std::move(load_gltf(models_path / "sphere.glb")[0]);
+    auto sphere_model =
+        move(get<vector<Model>>(load_gltf(models_path / "sphere.glb"))[0]);
     ctx_r.probe_mesh_idx = register_mesh(*sphere_model.mesh);
 
     shadow.initialize(ctx_v);
@@ -168,29 +170,144 @@ Renderer::~Renderer()
     // TODO: clean up mesh instances.
 }
 
+// Source: GLI manual.
 variant<uint, Renderer::Error>
-Renderer::register_texture(const Texture &texture)
+Renderer::register_texture(const CompressedTexture &tex)
+{
+    gli::gl gl(gli::gl::PROFILE_GL33);
+    const gli::gl::format fmt = gl.translate(tex.format(), tex.swizzles());
+    GLenum target = gl.translate(tex.target());
+
+    GLuint id = 0;
+    glGenTextures(1, &id);
+    glBindTexture(target, id);
+    glTexParameteri(target, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(target, GL_TEXTURE_MAX_LEVEL,
+                    static_cast<GLint>(tex.levels() - 1));
+    glTexParameteri(target, GL_TEXTURE_SWIZZLE_R, fmt.Swizzles[0]);
+    glTexParameteri(target, GL_TEXTURE_SWIZZLE_G, fmt.Swizzles[1]);
+    glTexParameteri(target, GL_TEXTURE_SWIZZLE_B, fmt.Swizzles[2]);
+    glTexParameteri(target, GL_TEXTURE_SWIZZLE_A, fmt.Swizzles[3]);
+
+    const tvec3<GLsizei> extent(tex.extent());
+    const GLsizei face_count = static_cast<GLsizei>(tex.layers() * tex.faces());
+
+    switch (tex.target())
+    {
+    case gli::TARGET_1D:
+        glTexStorage1D(target, static_cast<GLint>(tex.levels()), fmt.Internal,
+                       extent.x);
+        break;
+    case gli::TARGET_1D_ARRAY:
+    case gli::TARGET_2D:
+    case gli::TARGET_CUBE:
+        glTexStorage2D(target, static_cast<GLint>(tex.levels()), fmt.Internal,
+                       extent.x,
+                       tex.target() == gli::TARGET_2D ? extent.y : face_count);
+        break;
+    case gli::TARGET_2D_ARRAY:
+    case gli::TARGET_3D:
+    case gli::TARGET_CUBE_ARRAY:
+        glTexStorage3D(target, static_cast<GLint>(tex.levels()), fmt.Internal,
+                       extent.x, extent.y,
+                       tex.target() == gli::TARGET_3D ? extent.z : face_count);
+        break;
+    default:
+        assert(0);
+        break;
+    }
+
+    for (std::size_t layer = 0; layer < tex.layers(); ++layer)
+        for (std::size_t face = 0; face < tex.faces(); ++face)
+            for (std::size_t level = 0; level < tex.levels(); ++level)
+            {
+                GLsizei const layer_gl = static_cast<GLsizei>(layer);
+                glm::tvec3<GLsizei> extent(tex.extent(level));
+                target = gli::is_target_cube(tex.target())
+                             ? static_cast<GLenum>(
+                                   GL_TEXTURE_CUBE_MAP_POSITIVE_X + face)
+                             : target;
+
+                switch (tex.target())
+                {
+                case gli::TARGET_1D:
+                    if (gli::is_compressed(tex.format()))
+                        glCompressedTexSubImage1D(
+                            target, static_cast<GLint>(level), 0, extent.x,
+                            fmt.Internal, static_cast<GLsizei>(tex.size(level)),
+                            tex.data(layer, face, level));
+                    else
+                        glTexSubImage1D(target, static_cast<GLint>(level), 0,
+                                        extent.x, fmt.External, fmt.Type,
+                                        tex.data(layer, face, level));
+                    break;
+                case gli::TARGET_1D_ARRAY:
+                case gli::TARGET_2D:
+                case gli::TARGET_CUBE:
+                    if (gli::is_compressed(tex.format()))
+                        glCompressedTexSubImage2D(
+                            target, static_cast<GLint>(level), 0, 0, extent.x,
+                            tex.target() == gli::TARGET_1D_ARRAY ? layer_gl
+                                                                 : extent.y,
+                            fmt.Internal, static_cast<GLsizei>(tex.size(level)),
+                            tex.data(layer, face, level));
+                    else
+                        glTexSubImage2D(
+                            target, static_cast<GLint>(level), 0, 0, extent.x,
+                            tex.target() == gli::TARGET_1D_ARRAY ? layer_gl
+                                                                 : extent.y,
+                            fmt.External, fmt.Type,
+                            tex.data(layer, face, level));
+                    break;
+                case gli::TARGET_2D_ARRAY:
+                case gli::TARGET_3D:
+                case gli::TARGET_CUBE_ARRAY:
+                    if (gli::is_compressed(tex.format()))
+                        glCompressedTexSubImage3D(
+                            target, static_cast<GLint>(level), 0, 0, 0,
+                            extent.x, extent.y,
+                            tex.target() == gli::TARGET_3D ? extent.z
+                                                           : layer_gl,
+                            fmt.Internal, static_cast<GLsizei>(tex.size(level)),
+                            tex.data(layer, face, level));
+                    else
+                        glTexSubImage3D(target, static_cast<GLint>(level), 0, 0,
+                                        0, extent.x, extent.y,
+                                        tex.target() == gli::TARGET_3D
+                                            ? extent.z
+                                            : layer_gl,
+                                        fmt.External, fmt.Type,
+                                        tex.data(layer, face, level));
+                    break;
+                default:
+                    assert(0);
+                    break;
+                }
+            }
+
+    return id;
+}
+
+variant<uint, Renderer::Error> Renderer::register_texture(const Texture &tex)
 {
     uint id;
     glCreateTextures(GL_TEXTURE_2D, 1, &id);
 
-    glTextureParameteri(id, GL_TEXTURE_MAG_FILTER,
-                        texture.sampler.magnify_filter);
-    glTextureParameteri(id, GL_TEXTURE_MIN_FILTER,
-                        texture.sampler.minify_filter);
-    glTextureParameteri(id, GL_TEXTURE_WRAP_S, texture.sampler.wrap_s);
-    glTextureParameteri(id, GL_TEXTURE_WRAP_T, texture.sampler.wrap_t);
+    glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, tex.sampler.magnify_filter);
+    glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, tex.sampler.minify_filter);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_S, tex.sampler.wrap_s);
+    glTextureParameteri(id, GL_TEXTURE_WRAP_T, tex.sampler.wrap_t);
 
     GLenum internal_format, format;
 
-    switch (texture.component_count)
+    switch (tex.component_count)
     {
     case 3:
-        internal_format = (texture.sampler.is_srgb) ? GL_SRGB8 : GL_RGB8;
+        internal_format = (tex.sampler.is_srgb) ? GL_SRGB8 : GL_RGB8;
         format = GL_RGB;
         break;
     case 4:
-        internal_format = (texture.sampler.is_srgb) ? GL_SRGB8_ALPHA8 : GL_RGB8;
+        internal_format = (tex.sampler.is_srgb) ? GL_SRGB8_ALPHA8 : GL_RGB8;
         format = GL_RGBA;
         break;
     default:
@@ -199,20 +316,18 @@ Renderer::register_texture(const Texture &texture)
 
     int level_count = 1;
 
-    if (texture.sampler.use_mipmap)
+    if (tex.sampler.use_mipmap)
     {
-        level_count =
-            1 + floor(std::log2(std::max(texture.width, texture.height)));
+        level_count = 1 + floor(std::log2(std::max(tex.width, tex.height)));
         glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     }
 
     glTextureParameteri(id, GL_TEXTURE_MAX_LEVEL, level_count);
     glTextureParameteri(id, GL_TEXTURE_BASE_LEVEL, 0);
 
-    glTextureStorage2D(id, level_count, internal_format, texture.width,
-                       texture.height);
-    glTextureSubImage2D(id, 0, 0, 0, texture.width, texture.height, format,
-                        GL_UNSIGNED_BYTE, texture.data.get());
+    glTextureStorage2D(id, level_count, internal_format, tex.width, tex.height);
+    glTextureSubImage2D(id, 0, 0, 0, tex.width, tex.height, format,
+                        GL_UNSIGNED_BYTE, tex.data.get());
 
     glGenerateTextureMipmap(id);
 
@@ -283,6 +398,8 @@ void Renderer::render_mesh_instance(unsigned int vao, const MeshInstance &m)
 
 void Renderer::render(std::vector<RenderData> &queue)
 {
+    ZoneScoped;
+
     ctx_v.proj = perspective(ctx_v.fov,
                              static_cast<float>(ctx_v.size.x) /
                                  static_cast<float>(ctx_v.size.y),
@@ -292,13 +409,34 @@ void Renderer::render(std::vector<RenderData> &queue)
 
     ctx_r.queue = std::move(queue);
 
-    shadow.render(ctx_v, ctx_r);
-    geometry.render(ctx_v, ctx_r);
-    ssao.render(ctx_v);
-    lighting.render(ctx_v, ctx_r);
-    forward.render(ctx_v, ctx_r);
-    bloom.render(ctx_v, ctx_r);
-    tone_map.render(ctx_v, ctx_r);
+    {
+        TracyGpuZone("Shadow pass");
+        shadow.render(ctx_v, ctx_r);
+    }
+    {
+        TracyGpuZone("Geometry pass");
+        geometry.render(ctx_v, ctx_r);
+    }
+    {
+        TracyGpuZone("SSAO pass");
+        ssao.render(ctx_v);
+    }
+    {
+        TracyGpuZone("Lighting pass");
+        lighting.render(ctx_v, ctx_r);
+    }
+    {
+        TracyGpuZone("Forward pass");
+        forward.render(ctx_v, ctx_r);
+    }
+    {
+        TracyGpuZone("Bloom pass");
+        bloom.render(ctx_v, ctx_r);
+    }
+    {
+        TracyGpuZone("Tone map pass");
+        tone_map.render(ctx_v, ctx_r);
+    }
 }
 
 void Renderer::resize_viewport(glm::vec2 size)

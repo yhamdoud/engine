@@ -1,3 +1,4 @@
+#include <Tracy.hpp>
 #include <glad/glad.h>
 
 #include "bloom.hpp"
@@ -37,6 +38,8 @@ void BloomPass::initialize(ViewportContext &ctx)
 
 void BloomPass::render(ViewportContext &ctx_v, RenderContext &r_ctx)
 {
+    ZoneScoped;
+
     Shader &downsample_shader = downsample_hq;
 
     const uint upsample_count = cfg.pass_count - 1;

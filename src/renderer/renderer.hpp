@@ -82,6 +82,8 @@ class Renderer
     void resize_viewport(glm::vec2 size);
 
     std::variant<uint, Error> register_texture(const Texture &texture);
+    std::variant<uint, Error>
+    register_texture(const CompressedTexture &texture);
 
     ProbeViewport probe_view;
 

@@ -51,6 +51,11 @@ mat3 calculate_tbn_matrix(vec4 tangent_sign, vec3 normal)
     return mat3(tangent, bitangent, normal);
 }
 
+float saturate(float x)
+{
+    return clamp(x, 0., 1.);
+}
+
 void main()
 {
     float depth = -fs_in.position.z / u_far_clip_distance;
@@ -63,7 +68,7 @@ void main()
         vec4 base_color_alpha = texture(u_base_color, fs_in.tex_coords);
         if (u_alpha_mask && base_color_alpha.a < u_alpha_cutoff)
         {
-            discard;
+            discard; // FIXME: Bad.
         }
 
         g_base_color_roughness.rgb *= base_color_alpha.rgb;
@@ -72,7 +77,11 @@ void main()
     if (u_use_normal)
     {
         mat3 tbn = calculate_tbn_matrix(fs_in.tangent, fs_in.normal);
-        vec3 normal_tangent = texture(u_normal, fs_in.tex_coords).xyz * 2. -1.;
+        vec3 normal_tangent = vec3(texture(u_normal, fs_in.tex_coords).xy * 2. -1., 0);
+        // Reconstruct z-component of normal.
+        // TODO: Maybe disable this when loading uncompressed textures.
+        normal_tangent.z = sqrt(saturate(1. - dot(normal_tangent.x, normal_tangent.z)));
+
         g_normal_metallic.xyz = tbn * normal_tangent;
     }
     else

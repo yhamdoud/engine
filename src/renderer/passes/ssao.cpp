@@ -1,5 +1,6 @@
 #include <random>
 
+#include <Tracy.hpp>
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 
@@ -108,6 +109,8 @@ void SsaoPass::initialize(ViewportContext &ctx)
 
 void SsaoPass::render(ViewportContext &ctx)
 {
+    ZoneScoped;
+
     glViewport(0, 0, ctx.size.x, ctx.size.y);
     glBindFramebuffer(GL_FRAMEBUFFER, frame_buf);
     // FIXME: Causes artifacts, why?

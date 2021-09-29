@@ -1,6 +1,8 @@
+#include <numeric>
+
+#include <Tracy.hpp>
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
-#include <numeric>
 
 #include "renderer/context.hpp"
 #include "renderer/renderer.hpp"
@@ -79,6 +81,8 @@ void ShadowPass::initialize(ViewportContext &ctx)
 
 void ShadowPass::render(ViewportContext &ctx, RenderContext &ctx_r)
 {
+    ZoneScoped;
+
     glViewport(0, 0, size.x, size.y);
     glBindFramebuffer(GL_FRAMEBUFFER, frame_buf);
     glClear(GL_DEPTH_BUFFER_BIT);

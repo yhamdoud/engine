@@ -1,11 +1,16 @@
 #define CGLTF_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 
+#include <cstddef>
+#include <filesystem>
+#include <variant>
+
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <vector>
 
+#include "gli/format.hpp"
 #include <cgltf.h>
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
@@ -16,11 +21,12 @@
 #include "model.hpp"
 
 using namespace std;
-using namespace glm;
 
 using filesystem::path;
 
 using namespace engine;
+
+path gltf_folder;
 
 vector<uint32_t> process_index_accessor(const cgltf_accessor &accessor)
 {
@@ -42,14 +48,14 @@ vector<uint32_t> process_index_accessor(const cgltf_accessor &accessor)
 
     if (accessor.component_type == cgltf_component_type_r_32u)
     {
-        uint32_t *data = (uint32_t *)((uint8_t *)buffer->data + offset);
+        auto *data = (uint32_t *)((uint8_t *)buffer->data + offset);
         vector<uint32_t> indices(data, data + accessor.count);
         return indices;
     }
     else if (accessor.component_type == cgltf_component_type_r_16u)
     {
         // FIXME: Offset is in bytes.
-        uint16_t *data = (uint16_t *)((uint8_t *)buffer->data + offset);
+        auto *data = (uint16_t *)((uint8_t *)buffer->data + offset);
         vector<uint32_t> indices(data, data + accessor.count);
         return indices;
     }
@@ -65,14 +71,26 @@ static Sampler process_sampler(const cgltf_sampler &sampler)
                    sampler.wrap_t};
 }
 
-static optional<Texture>
+static OptionalTexture
 process_texture_view(const cgltf_texture_view &texture_view)
 {
     if (texture_view.texture == nullptr)
-        return std::nullopt;
+        return std::monostate();
 
     const auto &texture = *texture_view.texture;
     const auto &image = *texture.image;
+
+    bool find_dds = true;
+
+    if (image.uri && find_dds)
+    {
+        auto tex = gli::load(
+            gltf_folder / "dds" /
+            path(image.uri).filename().replace_extension("dds").c_str());
+
+        if (!tex.empty())
+            return tex;
+    }
 
     auto sampler = texture.sampler == nullptr
                        ? Sampler{}
@@ -83,18 +101,17 @@ process_texture_view(const cgltf_texture_view &texture_view)
         const auto &buffer_view = *image.buffer_view;
         auto const &buffer = *buffer_view.buffer;
 
-        int x, y, c;
         uint8_t *buffer_data = (uint8_t *)buffer.data + buffer_view.offset;
 
-        return Texture::from_memory(
+        return *Texture::from_memory(
             buffer_data, static_cast<int>(buffer_view.size), sampler);
     }
     else
     {
-        logger.warn("Texture data is in file.");
+        return *Texture::from_file(path(gltf_folder / image.uri), sampler);
     }
 
-    return std::nullopt;
+    return std::monostate();
 }
 
 static Material process_material(const cgltf_material &gltf_material)
@@ -107,8 +124,8 @@ static Material process_material(const cgltf_material &gltf_material)
     //    material.occlusion =
     //    process_texture_view(gltf_material.occlusion_texture);
 
-    if (material.normal)
-        material.normal->sampler.use_mipmap = true;
+    if (const auto normal = std::get_if<Texture>(&material.normal))
+        normal->sampler.use_mipmap = true;
 
     material.alpha_mode = (AlphaMode)gltf_material.alpha_mode;
     if (material.alpha_mode == AlphaMode::mask)
@@ -123,21 +140,21 @@ static Material process_material(const cgltf_material &gltf_material)
             process_texture_view(gltf_pbr.metallic_roughness_texture);
 
         // TODO:
-        if (!material.base_color)
-            material.base_color_factor = make_vec4(gltf_pbr.base_color_factor);
+        if (holds_alternative<std::monostate>(material.base_color))
+            material.base_color_factor =
+                glm::make_vec4(gltf_pbr.base_color_factor);
 
         material.metallic_factor = gltf_pbr.metallic_factor;
         material.roughness_factor = gltf_pbr.roughness_factor;
 
-        // FIXME:
-        if (material.metallic_roughness)
-            material.metallic_roughness->sampler.use_mipmap = true;
+        if (const auto m_r = std::get_if<Texture>(&material.metallic_roughness))
+            m_r->sampler.use_mipmap = true;
 
-        if (auto &texture = material.base_color)
+        if (const auto b_c = std::get_if<Texture>(&material.base_color))
         {
-            texture->sampler.use_mipmap = true;
+            b_c->sampler.use_mipmap = true;
             // Assumption.
-            texture->sampler.is_srgb = true;
+            b_c->sampler.is_srgb = true;
         }
     }
     else if (gltf_material.has_pbr_specular_glossiness)
@@ -161,10 +178,10 @@ void process_attribute_accessor(const cgltf_accessor &accessor, vector<T> &vec)
 
 static Model process_triangles(const cgltf_primitive &triangles)
 {
-    vector<vec3> positions;
-    vector<vec3> normals;
-    vector<vec2> tex_coords;
-    vector<vec4> tangents;
+    vector<glm::vec3> positions;
+    vector<glm::vec3> normals;
+    vector<glm::vec2> tex_coords;
+    vector<glm::vec4> tangents;
 
     for (size_t i = 0; i < triangles.attributes_count; i++)
     {
@@ -222,7 +239,7 @@ static Model process_triangles(const cgltf_primitive &triangles)
 }
 
 static void process_mesh(const cgltf_mesh &mesh, vector<Model> &models,
-                         const mat4 transform)
+                         const glm::mat4 transform)
 {
     for (size_t i = 0; i < mesh.primitives_count; i++)
     {
@@ -251,7 +268,7 @@ static void process_mesh(const cgltf_mesh &mesh, vector<Model> &models,
 
 static void process_node(const cgltf_node &node, vector<Model> &meshes)
 {
-    mat4 local_transform;
+    glm::mat4 local_transform;
     // FIXME:
     cgltf_node_transform_world(&node, glm::value_ptr(local_transform));
 
@@ -268,8 +285,13 @@ static void process_scene(const cgltf_scene &scene, vector<Model> &models)
         process_node(*scene.nodes[i], models);
 }
 
-vector<Model> engine::load_gltf(const path &path)
+variant<vector<Model>, ImportError> engine::load_gltf(const path &path)
 {
+    if (!filesystem::exists(path))
+        return ImportError::invalid_path;
+
+    gltf_folder = path.parent_path();
+
     logger.info("Loading model at path: {}", path.string());
 
     vector<Model> models;

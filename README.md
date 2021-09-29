@@ -28,6 +28,7 @@ https://user-images.githubusercontent.com/18217298/134210414-40b6ae4c-4609-4e9a-
     -   Direct state access (DSA)
 -   GPU probe baking
 -   glTF model loading
+-   Support for compressed texture formats.
 -   Transform hierarchy
 
 ## Planned features
@@ -45,8 +46,9 @@ All other dependencies are vendored directly or as submodules:
 -   [glad](https://github.com/Dav1dde/glad): for loading OpenGL functions at runtime.
 -   [GLFW](https://github.com/glfw/glfw): for windowing and input.
 -   [GLM](https://github.com/g-truc/glm): for linear algebra and other math.
+-   [GLI](https://github.com/g-truc/gli): for (compressed) DDS image loading.
 -   [cgtlf](https://github.com/jkuhlmann/cgltf): for glTF model loading.
--   [stb](https://github.com/nothings/stb): for image loading.
+-   [stb](https://github.com/nothings/stb): for PNG and JPEG image loading.
 -   [Dear ImGui](https://github.com/ocornut/imgui): for user interface.
 -   [fmt](https://github.com/fmtlib/fmt): for hassle-free string formatting.
 -   [Tracy](https://github.com/fmtlib/fmt): for CPU and GPU profiling.

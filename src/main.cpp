@@ -151,21 +151,22 @@ size_t add_entity(Renderer &renderer, Entity::Flags flags, Transform transform,
                   const Model &model, optional<Entity> parent, Shader &shader)
 {
     size_t mesh_idx = renderer.register_mesh(*model.mesh);
-    auto base_color_tex_id = invalid_texture_id;
-    auto normal_tex_id = invalid_texture_id;
-    auto metallic_roughness_tex_id = invalid_texture_id;
 
     size_t sg_idx;
 
-    if (const auto &texture = model.material.base_color)
-        base_color_tex_id = std::get<uint>(renderer.register_texture(*texture));
+    auto reg = [&renderer](const OptionalTexture *maybe_tex)
+    {
+        if (const auto &tex = get_if<Texture>(maybe_tex))
+            return std::get<uint>(renderer.register_texture(*tex));
+        else if (const auto &tex = get_if<CompressedTexture>(maybe_tex))
+            return std::get<uint>(renderer.register_texture(*tex));
+        else
+            return invalid_texture_id;
+    };
 
-    if (const auto &texture = model.material.normal)
-        normal_tex_id = std::get<uint>(renderer.register_texture(*texture));
-
-    if (const auto &texture = model.material.metallic_roughness)
-        metallic_roughness_tex_id =
-            std::get<uint>(renderer.register_texture(*texture));
+    uint base_color_tex_id = reg(&model.material.base_color);
+    uint normal_tex_id = reg(&model.material.normal);
+    uint metallic_roughness_tex_id = reg(&model.material.metallic_roughness);
 
     if (parent)
         sg_idx = scene_graph_insert(transform, parent->scene_graph_index);
@@ -192,6 +193,8 @@ size_t add_entity(Renderer &renderer, Entity::Flags flags, Transform transform,
 
 vector<RenderData> generate_render_data()
 {
+    ZoneScoped;
+
     vector<RenderData> data;
     data.reserve(entities.size());
 
@@ -220,9 +223,9 @@ vector<RenderData> generate_render_data()
 
 int main()
 {
-    FrameMarkStart("Loading")
+    FrameMarkStart("Loading");
 
-        GLFWwindow *window;
+    GLFWwindow *window;
 
     if (auto maybe_window = init_glfw(1600, 900))
         window = *maybe_window;
@@ -257,58 +260,32 @@ int main()
         .frag = shaders_path / "geometry.fs",
     });
 
+    // {
+    //     auto maybe_bistro = load_gltf(models_path /
+    //     "bistro/gltf/bistro.gltf");
+
+    //     if (auto bistro = std::get_if<std::vector<Model>>(&maybe_bistro))
+    //     {
+    //         for (const auto &m : *bistro)
+    //         {
+    //             add_entity(r, Entity::Flags::casts_shadow,
+    //                        Transform{m.transform}, m, std::nullopt,
+    //                        deferred_shader);
+    //         }
+    //     }
+    // }
+
     {
-
-        //    auto helmet_model =
-        //        std::move(load_gltf(models_path / "damaged_helmet.glb")[0]);
-
-        auto duck_model = std::move(load_gltf(models_path / "duck.glb")[0]);
-
-        auto sphere_model = std::move(load_gltf(models_path / "sphere.glb")[0]);
-
-        auto sponza = load_gltf(models_path / "sponza.glb");
-        for (const auto &m : sponza)
+        auto maybe_sponza = load_gltf(models_path / "sponza/Sponza.gltf");
+        if (auto sponza = std::get_if<std::vector<Model>>(&maybe_sponza))
         {
-            add_entity(r, Entity::Flags::casts_shadow, Transform{m.transform},
-                       m, std::nullopt, deferred_shader);
+            for (const auto &m : *sponza)
+            {
+                add_entity(r, Entity::Flags::casts_shadow,
+                           Transform{m.transform}, m, std::nullopt,
+                           deferred_shader);
+            }
         }
-
-        //        auto duck1 = add_entity(r, Entity::Flags::casts_shadow,
-        //                                Transform{vec3{0.f, 2.f, 0.f},
-        //                                vec3{0.01f}}, duck_model,
-        //                                std::nullopt, deferred_shader);
-
-        //        add_entity(r, Entity::Flags::none, Transform(vec3{0, 4, 2}),
-        //                   sphere_model, std::nullopt, deferred_shader);
-        //
-        //        add_entity(r, Entity::Flags::none, Transform(vec3{0, 4, -4},
-        //        vec3{0.5}),
-        //                   sphere_model, std::nullopt, deferred_shader);
-
-        //    auto helmet = add_entity(renderer, Entity::Flags::casts_shadow,
-        //                             Transform{vec3{2.f, 1.f, 0.f}},
-        //                             helmet_model, std::nullopt,
-        //                             deferred_shader);
-
-        //    add_entity(renderer, Entity::Flags::none,
-        //    Transform{vec3{100.f, 5.f, 0.f}},
-        //               duck_model,
-        //               std::make_optional<Entity>(entities[duck1]),
-        //               deferred_shader);
-        //
-        //    add_entity(renderer, Entity::Flags::casts_shadow,
-        //               Transform(vec3{0.f}, vec3{10.f}),
-        //               load_gltf(models_path / "plane.gltf")[0], std::nullopt,
-        //               deferred_shader);
-
-        // auto gi_test = load_gltf(models_path / "gi_test.glb");
-        // for (const auto &m : gi_test)
-        //     add_entity(r, Entity::Flags::casts_shadow, Transform(vec3{0.f}),
-        //     m,
-        //                std::nullopt, deferred_shader);
-
-        // add_entity(r, Entity::Flags::none, Transform(r.sun.position),
-        //            sphere_model, std::nullopt, deferred_shader);
     }
 
     double last_time = glfwGetTime();
@@ -327,7 +304,8 @@ int main()
 
     int bounce_count = 1;
     float distance = 1.f;
-    //    r.generate_probe_grid(data, vec3{2.f, 6.f, 2.f}, vec3{4, 4, 4}, 4);
+    //    r.generate_probe_grid(data, vec3{2.f, 6.f, 2.f}, vec3{4, 4, 4},
+    //    4);
 
     // r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
     //                           vec3{22.f, 8.f, 9.f}, 1.f);
@@ -337,7 +315,6 @@ int main()
 
     while (!glfwWindowShouldClose(window))
     {
-        TracyGpuZone("Render");
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -508,17 +485,15 @@ int main()
 
         cursor_pos = new_cursor_pos;
 
-        //        {
-        //            scene_graph[entities[duck1].scene_graph_index].set_position(
-        //                vec3(0.f, sin(glfwGetTime()), 0.f));
-        //        }
-
         auto data = generate_render_data();
 
         r.render(data);
 
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        {
+            TracyGpuZone("GUI");
+            ImGui::Render();
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        }
 
         glfwSwapBuffers(window);
         glfwPollEvents();

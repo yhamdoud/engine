@@ -3,15 +3,24 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <variant>
 #include <vector>
 
 #include <glad/glad.h>
+#include <gli/gli.hpp>
 #include <glm/glm.hpp>
 
 #include "constants.hpp"
+#include "gli/texture.hpp"
 
 namespace engine
 {
+
+enum class ImportError
+{
+    invalid_path,
+    missing_texture,
+};
 
 struct Sampler
 {
@@ -59,20 +68,26 @@ enum class AlphaMode
     blend,
 };
 
+using CompressedTexture = gli::texture;
+
+using OptionalTexture =
+    std::variant<Texture, CompressedTexture, std::monostate>;
+
 struct Material
 {
-    std::optional<Texture> normal;
-    std::optional<Texture> emissive;
-    std::optional<Texture> occlusion;
-    std::optional<Texture> base_color;
-    std::optional<Texture> metallic_roughness;
-    std::optional<Texture> emisive;
+
+    OptionalTexture normal{std::monostate{}};
+    OptionalTexture emissive{std::monostate{}};
+    OptionalTexture occlusion{std::monostate{}};
+    OptionalTexture base_color{std::monostate{}};
+    OptionalTexture metallic_roughness{std::monostate{}};
+    OptionalTexture emisive{std::monostate{}};
 
     glm::vec4 base_color_factor{1.f};
-    float metallic_factor;
-    float roughness_factor;
+    float metallic_factor = 0.f;
+    float roughness_factor = 0.f;
 
-    AlphaMode alpha_mode;
+    AlphaMode alpha_mode = AlphaMode::opaque;
     float alpha_cutoff;
 };
 
@@ -83,6 +98,7 @@ struct Model
     glm::mat4 transform;
 };
 
-std::vector<Model> load_gltf(const std::filesystem::path &path);
+std::variant<std::vector<Model>, ImportError>
+load_gltf(const std::filesystem::path &path);
 
 } // namespace engine

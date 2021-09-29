@@ -1,3 +1,4 @@
+#include <Tracy.hpp>
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
 
@@ -51,6 +52,8 @@ void LightingPass::parse_parameters()
 
 void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 {
+    ZoneScoped;
+
     glViewport(0, 0, ctx_v.size.x, ctx_v.size.y);
     glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.hdr_framebuf);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

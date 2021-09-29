@@ -1,3 +1,4 @@
+#include <Tracy.hpp>
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
 
@@ -55,11 +56,11 @@ void GeometryPass::initialize(ViewportContext &ctx)
     glTextureParameteri(normal_metal, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(normal_metal, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    glTextureStorage2D(base_color_rough, 1, GL_RGBA16F, ctx.size.x, ctx.size.y);
+    glTextureStorage2D(base_color_rough, 1, GL_SRGB8, ctx.size.x, ctx.size.y);
     glTextureParameteri(base_color_rough, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(base_color_rough, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    glTextureStorage2D(depth, 1, GL_DEPTH_COMPONENT24, ctx.size.x, ctx.size.y);
+    glTextureStorage2D(depth, 1, GL_DEPTH_COMPONENT32, ctx.size.x, ctx.size.y);
     glTextureParameteri(depth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(depth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTextureParameteri(depth, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -87,6 +88,8 @@ void GeometryPass::initialize(ViewportContext &ctx)
 
 void GeometryPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 {
+    ZoneScoped;
+
     glViewport(0, 0, ctx_v.size.x, ctx_v.size.y);
     glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.g_buf.framebuffer);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

@@ -200,7 +200,8 @@ void main()
     else
         base_color = vec3(1.f);
 
-	float roughness = base_color_roughness.a;
+    // Linear to sRGB because the roughness was sampled from an sRGB texture.
+	float roughness = pow(base_color_roughness.a, 2.2);
 
 
 	vec4 normal_metallic = texture(u_g_normal_metallic, tex_coords);

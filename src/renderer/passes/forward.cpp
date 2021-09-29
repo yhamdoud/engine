@@ -1,3 +1,5 @@
+#include <Tracy.hpp>
+
 #include "forward.hpp"
 #include "renderer/renderer.hpp"
 
@@ -32,6 +34,8 @@ void ForwardPass::initialize(ViewportContext &ctx) {}
 
 void ForwardPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 {
+    ZoneScoped;
+
     glViewport(0, 0, ctx_v.size.x, ctx_v.size.y);
     glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.hdr_framebuf);
     glBlitNamedFramebuffer(ctx_v.g_buf.framebuffer, ctx_v.hdr_framebuf, 0, 0,
