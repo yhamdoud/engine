@@ -12,14 +12,12 @@
 #include <glad/glad.h>
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
-#include <imgui.h>
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
 
 #include <Tracy.hpp>
 #include <TracyOpenGL.hpp>
 
 #include "constants.hpp"
+#include "editor.hpp"
 #include "entity.hpp"
 #include "logger.hpp"
 #include "model.hpp"
@@ -104,25 +102,7 @@ void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
                message);
 }
 
-struct SceneGraphNode
-{
-    static constexpr size_t root_index = (size_t)-1;
-
-    mat4 local_transform_matrix;
-    size_t parent_index = root_index;
-
-    void set_position(const vec3 &pos)
-    {
-        local_transform_matrix[3] = vec4{pos, local_transform_matrix[3][3]};
-    }
-
-    SceneGraphNode(mat4 m, size_t i)
-        : local_transform_matrix{m}, parent_index{i}
-    {
-    }
-};
-
-// Put in renderer?
+// TODO: move
 
 vector<Entity> entities;
 vector<SceneGraphNode> scene_graph;
@@ -252,8 +232,10 @@ int main()
     if (skybox_texture == invalid_texture_id)
         return EXIT_FAILURE;
 
-    Renderer r(ivec2{1600, 900}, skybox_texture);
-    glfwSetWindowUserPointer(window, &r);
+    Renderer renderer(ivec2{1600, 900}, skybox_texture);
+    glfwSetWindowUserPointer(window, &renderer);
+
+    Editor editor(*window, renderer);
 
     auto deferred_shader = *Shader::from_paths(ShaderPaths{
         .vert = shaders_path / "geometry.vs",
@@ -281,7 +263,7 @@ int main()
         {
             for (const auto &m : *sponza)
             {
-                add_entity(r, Entity::Flags::casts_shadow,
+                add_entity(renderer, Entity::Flags::casts_shadow,
                            Transform{m.transform}, m, std::nullopt,
                            deferred_shader);
             }
@@ -294,178 +276,10 @@ int main()
     // Enable profiling.
     TracyGpuContext;
 
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 460");
-
     FrameMarkEnd("Loading");
-
-    int bounce_count = 1;
-    float distance = 1.f;
-    //    r.generate_probe_grid(data, vec3{2.f, 6.f, 2.f}, vec3{4, 4, 4},
-    //    4);
-
-    // r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
-    //                           vec3{22.f, 8.f, 9.f}, 1.f);
-
-    // r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
-    //                           vec3{22.f, 8.f, 9.f}, 3.f);
 
     while (!glfwWindowShouldClose(window))
     {
-
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        float viuewport_aspect_ratio =
-            static_cast<float>(r.ctx_v.size.x) / r.ctx_v.size.y;
-
-        ImGui::Begin("Renderer");
-        {
-            if (ImGui::CollapsingHeader("GI"))
-            {
-                ImGui::SliderInt("Bounces", &bounce_count, 0, 10);
-                ImGui::SliderFloat("Distance", &distance, 1.f, 5.f);
-
-                if (ImGui::Button("Bake"))
-                {
-                    auto data = generate_render_data();
-                    r.generate_probe_grid_gpu(data, vec3{0.5f, 4.5f, 0.5f},
-                                              vec3{22.f, 8.f, 9.f}, distance,
-                                              bounce_count);
-                }
-            }
-
-            if (ImGui::CollapsingHeader("SSAO"))
-            {
-                if (ImGui::SliderInt("Sample count", &r.ssao.sample_count, 0,
-                                     r.ssao.sample_count) |
-                    ImGui::SliderFloat("Radius", &r.ssao.radius, 0.f, 10.f) |
-                    ImGui::SliderFloat("Bias", &r.ssao.bias, 0.f, 1.f) |
-                    ImGui::SliderFloat("Strength", &r.ssao.strength, 0.f, 5.f))
-                    r.ssao.parse_parameters();
-
-                ImVec2 window_size = ImGui::GetWindowSize();
-                ImVec2 texture_size{window_size.x,
-                                    window_size.x / viuewport_aspect_ratio};
-
-                ImGui::Text("Depth");
-                ImGui::Image((ImTextureID)r.ctx_v.ao_tex, texture_size,
-                             ImVec2(0, 1), ImVec2(1, 0));
-            }
-
-            if (ImGui::CollapsingHeader("Lighting"))
-            {
-                if (ImGui::Checkbox("Direct lighting",
-                                    &r.lighting.direct_light);
-                    ImGui::Checkbox("Indirect lighting",
-                                    &r.lighting.indirect_light) |
-                    ImGui::Checkbox("Base color", &r.lighting.use_base_color) |
-                    ImGui::Checkbox("Color shadow cascades",
-                                    &r.lighting.color_shadow_cascades) |
-                    ImGui::Checkbox("Filter shadows",
-                                    &r.lighting.filter_shadows) |
-                    ImGui::SliderFloat("Leak offset ", &r.lighting.leak_offset,
-                                       0, 1.f))
-                    r.lighting.parse_parameters();
-            }
-
-            if (ImGui::CollapsingHeader("Forward"))
-            {
-                if (ImGui::Checkbox("Draw probes", &r.forward.draw_probes))
-                    r.forward.parse_parameters();
-            }
-
-            if (ImGui::CollapsingHeader("Bloom"))
-            {
-                if (ImGui::SliderFloat("Intensity", &r.bloom.cfg.intensity, 0.f,
-                                       5.f),
-                    ImGui::SliderFloat("Upsample radius",
-                                       &r.bloom.cfg.upsample_radius, 0.f, 3.f))
-                    ;
-            }
-
-            if (ImGui::CollapsingHeader("Tone map"))
-            {
-                if (ImGui::Checkbox("Gamma correction",
-                                    &r.tone_map.do_gamma_correct) |
-                    ImGui::Checkbox("Tone mapping", &r.tone_map.do_tone_map) |
-                    ImGui::InputFloat("Gamma", &r.tone_map.gamma) |
-                    ImGui::InputFloat("Exposure", &r.tone_map.exposure))
-                    r.tone_map.parse_parameters();
-            }
-
-            if (ImGui::CollapsingHeader("Viewport"))
-            {
-                const array<ivec2, 3> resolutions{
-                    ivec2{1280, 720}, ivec2{1600, 900}, ivec2{1920, 1080}};
-                const char *items[] = {"1280x720", "1600x900", "1920x1080"};
-                static_assert(resolutions.size() == IM_ARRAYSIZE(items));
-
-                static int cur_idx = 0;
-                ImGui::ListBox("Resolution", &cur_idx, items,
-                               IM_ARRAYSIZE(items), 4);
-                if (ImGui::Button("Set"))
-                {
-                    const auto &res = resolutions[cur_idx];
-                    glfwSetWindowSize(window, res.x, res.y);
-                    r.resize_viewport(res);
-                }
-            }
-
-            if (ImGui::CollapsingHeader("Shadow mapping"))
-            {
-                ImGui::Checkbox("Stabilize", &r.shadow.stabilize);
-
-                float aspect_ratio =
-                    static_cast<float>(r.shadow.size.x) / r.shadow.size.y;
-
-                ImVec2 window_size = ImGui::GetWindowSize();
-                ImVec2 texture_size{window_size.x,
-                                    window_size.x / aspect_ratio};
-
-                for (const auto &v : r.shadow.debug_views)
-                {
-                    ImGui::Image((ImTextureID)v, texture_size, ImVec2(0, 1),
-                                 ImVec2(1, 0));
-                }
-            }
-
-            if (ImGui::CollapsingHeader("G-buffer"))
-            {
-                ImGui::BeginChild("Stuff");
-                ImVec2 window_size = ImGui::GetWindowSize();
-                ImVec2 texture_size{window_size.x,
-                                    window_size.x / viuewport_aspect_ratio};
-
-                ImGui::Text("Depth");
-                ImGui::Image((ImTextureID)r.ctx_v.g_buf.depth, texture_size,
-                             ImVec2(0, 1), ImVec2(1, 0));
-
-                ImGui::Text("Base color");
-                ImGui::Image((ImTextureID)r.geometry.debug_view_base_color,
-                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
-
-                ImGui::Text("Normal");
-                ImGui::Image((ImTextureID)r.geometry.debug_view_normal,
-                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
-
-                ImGui::Text("Metallic");
-                ImGui::Image((ImTextureID)r.geometry.debug_view_metallic,
-                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
-
-                ImGui::Text("Roughness");
-                ImGui::Image((ImTextureID)r.geometry.debug_view_roughness,
-                             texture_size, ImVec2(0, 1), ImVec2(1, 0));
-
-                ImGui::EndChild();
-            }
-        }
-        ImGui::End();
-
         // Timestep.
         float time = glfwGetTime();
         float delta_time = time - last_time;
@@ -478,22 +292,17 @@ int main()
             auto delta = cursor_pos - new_cursor_pos;
 
             if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-                r.camera.pan(delta);
+                renderer.camera.pan(delta);
             else
-                r.camera.rotate(delta);
+                renderer.camera.rotate(delta);
         }
 
         cursor_pos = new_cursor_pos;
 
         auto data = generate_render_data();
 
-        r.render(data);
-
-        {
-            TracyGpuZone("GUI");
-            ImGui::Render();
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        }
+        renderer.render(data);
+        editor.draw();
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -502,10 +311,6 @@ int main()
 
         FrameMark
     }
-
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
 
     glfwDestroyWindow(window);
     glfwTerminate();

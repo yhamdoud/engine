@@ -1,9 +1,9 @@
-
 #include <memory>
 
 #include "entity.hpp"
 
 using namespace engine;
+using namespace glm;
 
 constexpr Entity::Flags operator|(Entity::Flags a, Entity::Flags b)
 {

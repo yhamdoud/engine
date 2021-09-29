@@ -32,7 +32,7 @@ void ToneMapPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 {
     ZoneScoped;
 
-    glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.ldr_framebuf);
+    glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.ldr_frame_buf);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glUseProgram(tonemap_shader.get_id());

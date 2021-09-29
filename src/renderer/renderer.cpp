@@ -112,14 +112,14 @@ Renderer::Renderer(glm::ivec2 viewport_size, uint skybox_texture)
         glTextureParameteri(ctx_v.hdr_tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTextureParameteri(ctx_v.hdr_tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-        glCreateFramebuffers(1, &ctx_v.hdr_framebuf);
-        glNamedFramebufferTexture(ctx_v.hdr_framebuf, GL_COLOR_ATTACHMENT0,
+        glCreateFramebuffers(1, &ctx_v.hdr_frame_buf);
+        glNamedFramebufferTexture(ctx_v.hdr_frame_buf, GL_COLOR_ATTACHMENT0,
                                   ctx_v.hdr_tex, 0);
-        glNamedFramebufferRenderbuffer(ctx_v.hdr_framebuf, GL_DEPTH_ATTACHMENT,
+        glNamedFramebufferRenderbuffer(ctx_v.hdr_frame_buf, GL_DEPTH_ATTACHMENT,
                                        GL_RENDERBUFFER, depth);
 
-        if (glCheckNamedFramebufferStatus(ctx_v.hdr_framebuf, GL_FRAMEBUFFER) !=
-            GL_FRAMEBUFFER_COMPLETE)
+        if (glCheckNamedFramebufferStatus(
+                ctx_v.hdr_frame_buf, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
             logger.error("Main viewport frame buffer incomplete.");
     }
 
@@ -136,11 +136,11 @@ Renderer::Renderer(glm::ivec2 viewport_size, uint skybox_texture)
         glTextureParameteri(ctx.hdr_tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTextureParameteri(ctx.hdr_tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-        glCreateFramebuffers(1, &ctx.hdr_framebuf);
-        glNamedFramebufferRenderbuffer(ctx.hdr_framebuf, GL_DEPTH_ATTACHMENT,
+        glCreateFramebuffers(1, &ctx.hdr_frame_buf);
+        glNamedFramebufferRenderbuffer(ctx.hdr_frame_buf, GL_DEPTH_ATTACHMENT,
                                        GL_RENDERBUFFER, depth);
 
-        if (glCheckNamedFramebufferStatus(ctx.hdr_framebuf, GL_FRAMEBUFFER) !=
+        if (glCheckNamedFramebufferStatus(ctx.hdr_frame_buf, GL_FRAMEBUFFER) !=
             GL_FRAMEBUFFER_COMPLETE)
             logger.error("Probe frame buffer incomplete.");
     }
@@ -158,7 +158,6 @@ Renderer::Renderer(glm::ivec2 viewport_size, uint skybox_texture)
     tone_map.initialize(ctx_v);
 
     // TODO: move
-
     probe_view.shadow.initialize(probe_view.ctx);
     probe_view.geometry.initialize(probe_view.ctx);
     probe_view.lighting.initialize(probe_view.ctx);
@@ -409,6 +408,15 @@ void Renderer::render(std::vector<RenderData> &queue)
 
     ctx_r.queue = std::move(queue);
 
+    if (bake_probes_flag)
+    {
+        TracyGpuZone("Probe baking pass");
+        // TODO: Amortize this over multiple frames.
+        bake_probes();
+        bake_probes_flag = false;
+        return;
+    }
+
     {
         TracyGpuZone("Shadow pass");
         shadow.render(ctx_v, ctx_r);
@@ -463,7 +471,7 @@ IrradianceProbe Renderer::generate_probe(vec3 position)
 
     for (int face_idx = 0; face_idx < 6; face_idx++)
     {
-        glNamedFramebufferTextureLayer(probe_view.ctx.hdr_framebuf,
+        glNamedFramebufferTextureLayer(probe_view.ctx.hdr_frame_buf,
                                        GL_COLOR_ATTACHMENT0,
                                        probe_view.ctx.hdr_tex, 0, face_idx);
         probe_view.ctx.view = views[face_idx];
@@ -478,41 +486,34 @@ IrradianceProbe Renderer::generate_probe(vec3 position)
     return probe;
 }
 
-void Renderer::generate_probe_grid_gpu(std::vector<RenderData> &queue,
-                                       glm::vec3 center, glm::vec3 world_dims,
-                                       float distance, int bounce_count)
+void Renderer::initialize_probes(glm::vec3 center, glm::vec3 world_dims,
+                                 float distance, int bounce_count)
 {
-    ctx_r.queue = std::move(queue);
-
     // FIXME:
     probe_view.ctx.ao_tex = ctx_v.ao_tex;
 
-    ivec3 dims = world_dims / distance;
-    int probe_count = dims.x * dims.y * dims.z;
-
-    logger.info("Baking {} probes", probe_count);
-
-    // We can pack the 27 coefficient into 7 4 channel textures
+    // We pack the 27 coefficient into 7 4 channel textures
     const int texture_count = ctx_r.sh_texs.size();
 
-    const ivec2 local_size{16, 16};
-    const ivec3 group_count{probe_view.ctx.size / local_size, 6};
-
     const vec3 origin = center - world_dims / 2.f;
+    const ivec2 local_size{16, 16};
 
-    const mat4 grid_transform =
-        scale(translate(mat4(1.f), origin), vec3(distance));
-    ctx_r.inv_grid_transform = inverse(grid_transform);
-
-    ctx_r.grid_dims = dims;
+    grid_data = ProbeGrid{
+        .bounce_count = bounce_count,
+        .dims = world_dims / distance,
+        .group_count = ivec3(probe_view.ctx.size / local_size, 6),
+        .grid_transform = scale(translate(mat4(1.f), origin), vec3(distance)),
+        .weight_sum = 0.f,
+    };
 
     glDeleteTextures(texture_count, ctx_r.sh_texs.data());
     glCreateTextures(GL_TEXTURE_3D, texture_count, ctx_r.sh_texs.data());
 
     for (int tex_idx = 0; tex_idx < texture_count; tex_idx++)
     {
-        glTextureStorage3D(ctx_r.sh_texs[tex_idx], 1, GL_RGBA16F, dims.x,
-                           dims.y, dims.z);
+        glTextureStorage3D(ctx_r.sh_texs[tex_idx], 1, GL_RGBA16F,
+                           grid_data.dims.x, grid_data.dims.y,
+                           grid_data.dims.z);
 
         glTextureParameteri(ctx_r.sh_texs[tex_idx], GL_TEXTURE_WRAP_S,
                             GL_CLAMP_TO_EDGE);
@@ -521,22 +522,21 @@ void Renderer::generate_probe_grid_gpu(std::vector<RenderData> &queue,
         glTextureParameteri(ctx_r.sh_texs[tex_idx], GL_TEXTURE_WRAP_R,
                             GL_CLAMP_TO_EDGE);
 
-        // Important for trilinear interpolation!
+        // Important for trilinear interpolation.
         glTextureParameteri(ctx_r.sh_texs[tex_idx], GL_TEXTURE_MAG_FILTER,
                             GL_LINEAR);
         glTextureParameteri(ctx_r.sh_texs[tex_idx], GL_TEXTURE_MIN_FILTER,
                             GL_LINEAR_MIPMAP_LINEAR);
     }
 
-    uint ssbo;
-    glCreateBuffers(1, &ssbo);
-    glNamedBufferStorage(ssbo,
-                         group_count.x * group_count.y * group_count.z *
-                             texture_count * sizeof(vec4),
+    glCreateBuffers(1, &grid_data.coef_buf);
+    glNamedBufferStorage(grid_data.coef_buf,
+                         grid_data.group_count.x * grid_data.group_count.y *
+                             grid_data.group_count.z * texture_count *
+                             sizeof(vec4),
                          nullptr, GL_NONE);
 
     // Compute the final weight for integration
-    float weight_sum = 0.f;
     for (int y = 0; y < probe_view.ctx.size.x; y++)
     {
         for (int x = 0; x < probe_view.ctx.size.y; x++)
@@ -547,23 +547,36 @@ void Renderer::generate_probe_grid_gpu(std::vector<RenderData> &queue,
                                 1.0f;
 
             const float tmp = 1.f + coords.s * coords.s + coords.t * coords.t;
-            weight_sum += 4.f / (sqrt(tmp) * tmp);
+            grid_data.weight_sum += 4.f / (sqrt(tmp) * tmp);
         }
     }
 
-    weight_sum = 4.f * pi<float>() / weight_sum;
+    grid_data.weight_sum = 4.f * pi<float>() / grid_data.weight_sum;
 
-    for (int i = 0; i < bounce_count; i++)
+    // Update context.
+    ctx_r.inv_grid_transform = inverse(grid_data.grid_transform);
+    ctx_r.grid_dims = grid_data.dims;
+
+    bake_probes_flag = true;
+}
+
+void Renderer::bake_probes()
+{
+    logger.info("Baking {} probes",
+                grid_data.dims.x * grid_data.dims.y * grid_data.dims.z);
+
+    for (int i = 0; i < grid_data.bounce_count; i++)
     {
         probe_view.lighting.indirect_light = i != 0;
 
-        for (int z = 0; z < dims.z; z++)
+        for (int z = 0; z < grid_data.dims.z; z++)
         {
-            for (int y = 0; y < dims.y; y++)
+            for (int y = 0; y < grid_data.dims.y; y++)
             {
-                for (int x = 0; x < dims.x; x++)
+                for (int x = 0; x < grid_data.dims.x; x++)
                 {
-                    vec3 position = vec3(grid_transform * vec4{x, y, z, 1});
+                    vec3 position =
+                        vec3(grid_data.grid_transform * vec4{x, y, z, 1});
 
                     auto probe = generate_probe(position);
                     // FIXME:
@@ -574,20 +587,23 @@ void Renderer::generate_probe_grid_gpu(std::vector<RenderData> &queue,
                                     GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
                     glUseProgram(project.get_id());
-                    project.set("u_weight_sum", weight_sum);
-                    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssbo);
+                    project.set("u_weight_sum", grid_data.weight_sum);
+                    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1,
+                                     grid_data.coef_buf);
                     glBindImageTexture(0, probe.cubemap, 0, true, 0,
                                        GL_READ_ONLY, GL_RGBA16F);
 
-                    glDispatchCompute(group_count.x, group_count.y,
-                                      group_count.z);
+                    glDispatchCompute(grid_data.group_count.x,
+                                      grid_data.group_count.y,
+                                      grid_data.group_count.z);
 
                     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
                     glUseProgram(reduce.get_id());
                     reduce.set("u_idx", ivec3{x, y, z});
-                    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, ssbo);
-                    for (int j = 0; j < texture_count; j++)
+                    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7,
+                                     grid_data.coef_buf);
+                    for (int j = 0; j < ctx_r.sh_texs.size(); j++)
                         glBindImageTexture(j, ctx_r.sh_texs[j], 0, true, 0,
                                            GL_WRITE_ONLY, GL_RGBA16F);
 
@@ -596,7 +612,7 @@ void Renderer::generate_probe_grid_gpu(std::vector<RenderData> &queue,
             }
         }
 
-        logger.info("Bounce {} complete.", i);
+        logger.info("Bounce {} complete.", i + 1);
     }
 
     logger.info("Probe grid generation finished");

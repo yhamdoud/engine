@@ -19,6 +19,16 @@
 namespace engine
 {
 
+struct ProbeGrid
+{
+    uint coef_buf;
+    int bounce_count;
+    glm::ivec3 dims;
+    glm::ivec3 group_count;
+    glm::mat4 grid_transform;
+    float weight_sum;
+};
+
 struct ProbeViewport
 {
     ViewportContext ctx{
@@ -56,36 +66,18 @@ class Renderer
         unsupported_texture_format,
     };
 
-  public:
-    Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
-
-    Renderer(glm::ivec2 viewport_size, uint skybox_texture);
-    ~Renderer();
-
-    size_t register_mesh(const Mesh &mesh);
-
-    static void render_mesh_instance(unsigned int vao,
-                                     const MeshInstance &mesh);
-    void render(std::vector<RenderData> &queue);
-
     Shader project = *Shader::from_comp_path(shaders_path / "sh_project.comp");
     Shader reduce = *Shader::from_comp_path(shaders_path / "sh_reduce.comp");
 
-    IrradianceProbe generate_probe(glm::vec3 position);
-    void generate_probe_grid_gpu(std::vector<RenderData> &queue,
-                                 glm::vec3 center, glm::vec3 world_dims,
-                                 float distance, int bounce_count);
-    // void generate_probe_grid_cpu(std::vector<RenderData> &queue,
-    //                              glm::vec3 center, glm::vec3 world_dims,
-    //                              float distance);
-
-    void resize_viewport(glm::vec2 size);
-
-    std::variant<uint, Error> register_texture(const Texture &texture);
-    std::variant<uint, Error>
-    register_texture(const CompressedTexture &texture);
-
     ProbeViewport probe_view;
+    ProbeGrid grid_data;
+
+    bool bake_probes_flag = false;
+
+    void bake_probes();
+
+  public:
+    Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
 
     ViewportContext ctx_v{
         .near = 0.01f,
@@ -149,6 +141,30 @@ class Renderer
         .exposure = 1.f,
         .gamma = 2.2f,
     }};
+
+    Renderer(glm::ivec2 viewport_size, uint skybox_texture);
+    ~Renderer();
+
+    Renderer(Renderer &&) = delete;
+    Renderer &operator=(const Renderer &) = delete;
+
+    void render(std::vector<RenderData> &queue);
+
+    Renderer &operator=(Renderer &&) = delete;
+
+    size_t register_mesh(const Mesh &mesh);
+    static void render_mesh_instance(unsigned int vao,
+                                     const MeshInstance &mesh);
+
+    IrradianceProbe generate_probe(glm::vec3 position);
+    void initialize_probes(glm::vec3 center, glm::vec3 world_dims,
+                           float distance, int bounce_count);
+
+    void resize_viewport(glm::vec2 size);
+
+    std::variant<uint, Error> register_texture(const Texture &texture);
+    std::variant<uint, Error>
+    register_texture(const CompressedTexture &texture);
 };
 
 } // namespace engine

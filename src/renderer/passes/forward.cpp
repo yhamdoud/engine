@@ -37,8 +37,8 @@ void ForwardPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     ZoneScoped;
 
     glViewport(0, 0, ctx_v.size.x, ctx_v.size.y);
-    glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.hdr_framebuf);
-    glBlitNamedFramebuffer(ctx_v.g_buf.framebuffer, ctx_v.hdr_framebuf, 0, 0,
+    glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.hdr_frame_buf);
+    glBlitNamedFramebuffer(ctx_v.g_buf.framebuffer, ctx_v.hdr_frame_buf, 0, 0,
                            ctx_v.size.x, ctx_v.size.y, 0, 0, ctx_v.size.x,
                            ctx_v.size.y, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 

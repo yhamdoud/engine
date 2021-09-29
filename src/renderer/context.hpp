@@ -69,8 +69,8 @@ struct ViewportContext
 {
     glm::ivec2 size;
     uint hdr_tex = invalid_texture_id;
-    uint hdr_framebuf = default_frame_buffer_id;
-    uint ldr_framebuf = default_frame_buffer_id;
+    uint hdr_frame_buf = default_frame_buffer_id;
+    uint ldr_frame_buf = default_frame_buffer_id;
     glm::mat4 proj;
     glm::mat4 view;
     float near = 0;

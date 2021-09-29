@@ -55,7 +55,7 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     ZoneScoped;
 
     glViewport(0, 0, ctx_v.size.x, ctx_v.size.y);
-    glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.hdr_framebuf);
+    glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.hdr_frame_buf);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glUseProgram(lighting_shader.get_id());
