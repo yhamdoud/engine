@@ -125,7 +125,6 @@ class Renderer
 
     RenderContext ctx_r = RenderContext{
         .sun{
-            .position = glm::vec3(0.f, 15., -5.f),
             .color = glm::vec3{1.f, 0.95f, 0.95f},
             .intensity = 40.f,
             .direction = glm::normalize(glm::vec3{0.2f, -1.f, 0.2f}),

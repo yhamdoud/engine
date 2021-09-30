@@ -12,6 +12,7 @@ class Editor
     Renderer &renderer;
     int bounce_count = 1;
     float distance = 1.f;
+    glm::vec3 light_dir{0.f, -1.f, 1.f};
 
   public:
     Editor(Window &window, Renderer &renderer);

@@ -1,5 +1,6 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
@@ -8,6 +9,7 @@
 #include <TracyOpenGL.hpp>
 
 #include "editor.hpp"
+#include "glm/geometric.hpp"
 
 using namespace engine;
 using namespace std;
@@ -44,6 +46,16 @@ void Editor::draw()
 
     ImGui::Begin("Renderer");
     {
+        if (ImGui::CollapsingHeader("Sun"))
+        {
+            ImGui::ColorEdit3("Color", value_ptr(renderer.ctx_r.sun.color));
+            ImGui::SliderFloat("Intensity", &renderer.ctx_r.sun.intensity, 0.f,
+                               100.f);
+            if (ImGui::SliderFloat3("Direction", value_ptr(light_dir), -1.f,
+                                    1.f))
+                renderer.ctx_r.sun.direction = normalize(light_dir);
+        }
+
         if (ImGui::CollapsingHeader("GI"))
         {
             ImGui::SliderInt("Bounces", &bounce_count, 0, 10);

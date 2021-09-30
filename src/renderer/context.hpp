@@ -9,12 +9,6 @@
 namespace engine
 {
 
-struct IrradianceProbe
-{
-    glm::vec3 position;
-    uint cubemap;
-};
-
 struct GBuffer
 {
     glm::ivec2 size;
@@ -52,7 +46,6 @@ struct MeshInstance
 
 struct DirectionalLight
 {
-    glm::vec3 position;
     glm::vec3 color;
     // Intensity is illuminance at perpendicular incidence in lux.
     float intensity;
