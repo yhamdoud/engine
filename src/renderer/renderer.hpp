@@ -19,6 +19,39 @@
 namespace engine
 {
 
+struct BakingJob
+{
+    glm::ivec3 coords;
+};
+
+class ProbeBuffer
+{
+  public:
+    static constexpr size_t count = 7;
+
+    ProbeBuffer(glm::ivec3 size);
+    ~ProbeBuffer();
+
+    ProbeBuffer(const ProbeBuffer &) = delete;
+    ProbeBuffer &operator=(const ProbeBuffer &) = delete;
+    ProbeBuffer(ProbeBuffer &&) = delete;
+    ProbeBuffer &operator=(ProbeBuffer &&) = delete;
+
+    glm::ivec3 get_size() const;
+    void swap();
+    void clear();
+    void resize(glm::ivec3 size);
+    uint *front();
+    uint *back();
+
+  private:
+    int active_buf = 0;
+    glm::ivec3 size;
+    std::array<std::array<uint, count>, 2> data{};
+
+    void allocate(glm::ivec3 size);
+};
+
 struct ProbeGrid
 {
     uint coef_buf;
@@ -70,13 +103,18 @@ class Renderer
     Shader reduce = *Shader::from_comp_path(shaders_path / "sh_reduce.comp");
 
     ProbeViewport probe_view;
-    ProbeGrid grid_data;
+    ProbeGrid probe_grid;
+    ProbeBuffer probe_buf{glm::ivec3(1, 1, 1)};
+    std::vector<BakingJob> baking_jobs{};
+    int cur_baking_offset = 0;
+    int cur_bounce_idx = 0;
 
-    bool bake_probes_flag = false;
-
-    void bake_probes();
+    void bake();
+    void bake_job(const BakingJob &job, int bounce);
 
   public:
+    int bake_batch_size = 64;
+
     Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
 
     ViewportContext ctx_v{
@@ -86,23 +124,22 @@ class Renderer
     };
 
     RenderContext ctx_r = RenderContext{
-        .sun =
-            {
-                .position = glm::vec3(0.f, 15., -5.f),
-                .color = glm::vec3{1.f, 0.95f, 0.95f},
-                .intensity = 40.f,
-                .direction = glm::normalize(glm::vec3{0.2f, -1.f, 0.2f}),
-            },
-        .lights =
-            std::vector<Light>{
-                Light{glm::vec3{0, 3, 3}, glm::vec3{0., 0., 0.}},
-                Light{glm::vec3{0, 3, 3}, glm::vec3{0., 0., 0.}},
-                Light{glm::vec3{3, 3, 3}, glm::vec3{0., 0., 0.}},
-            },
+        .sun{
+            .position = glm::vec3(0.f, 15., -5.f),
+            .color = glm::vec3{1.f, 0.95f, 0.95f},
+            .intensity = 40.f,
+            .direction = glm::normalize(glm::vec3{0.2f, -1.f, 0.2f}),
+        },
+        .lights{
+            Light{glm::vec3{0, 3, 3}, glm::vec3{0., 0., 0.}},
+            Light{glm::vec3{0, 3, 3}, glm::vec3{0., 0., 0.}},
+            Light{glm::vec3{3, 3, 3}, glm::vec3{0., 0., 0.}},
+        },
+        .sh_texs = std::span<uint, 7>{probe_buf.front(), 7},
     };
 
     ShadowPass shadow{{
-        .size = {4096, 4096},
+        .size{4096, 4096},
         .stabilize = true,
     }};
 
@@ -156,15 +193,18 @@ class Renderer
     static void render_mesh_instance(unsigned int vao,
                                      const MeshInstance &mesh);
 
-    IrradianceProbe generate_probe(glm::vec3 position);
-    void initialize_probes(glm::vec3 center, glm::vec3 world_dims,
-                           float distance, int bounce_count);
+    uint render_probe(glm::vec3 position);
+    void prepare_bake(glm::vec3 center, glm::vec3 world_dims, float distance,
+                      int bounce_count);
 
     void resize_viewport(glm::vec2 size);
 
     std::variant<uint, Error> register_texture(const Texture &texture);
     std::variant<uint, Error>
     register_texture(const CompressedTexture &texture);
+
+    float baking_progress();
+    bool is_baking();
 };
 
 } // namespace engine

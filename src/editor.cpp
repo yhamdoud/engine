@@ -49,12 +49,17 @@ void Editor::draw()
             ImGui::SliderInt("Bounces", &bounce_count, 0, 10);
             ImGui::SliderFloat("Distance", &distance, 1.f, 5.f);
 
-            if (ImGui::Button("Bake"))
+            ImGui::Separator();
+
+            ImGui::SliderInt("Batch size", &renderer.bake_batch_size, 1, 128);
+            if (ImGui::Button("Bake") && !renderer.is_baking())
             {
-                renderer.initialize_probes(vec3{0.5f, 4.5f, 0.5f},
-                                           vec3{22.f, 8.f, 9.f}, distance,
-                                           bounce_count);
+                renderer.prepare_bake(vec3{0.5f, 4.5f, 0.5f},
+                                      vec3{22.f, 8.f, 9.f}, distance,
+                                      bounce_count);
             }
+            ImGui::Text("Progress");
+            ImGui::ProgressBar(renderer.baking_progress());
         }
 
         if (ImGui::CollapsingHeader("SSAO"))

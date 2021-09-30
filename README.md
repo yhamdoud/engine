@@ -32,6 +32,7 @@ https://user-images.githubusercontent.com/18217298/134210414-40b6ae4c-4609-4e9a-
 
 -   OpenGL 4.6
     -   Direct state access (DSA)
+-   Amortized GI probe baking
 -   GPU probe baking
 -   glTF model loading
 -   DDS, PNG, JPEG texture loading
@@ -103,8 +104,7 @@ The material system only supports the metallic-roughness workflow as of writing.
 
 Diffuse GI for static and dynamic objects is approximated using a grid of irradiance probes.
 During baking, the scene is rasterized at each probe and the resulting irradiance map is processed with a compute shader.
-This process is repeated for multiple bounces.
-As of writing baking freezes the main viewport, but in the future it will be amortized over several frames.
+This process is repeated for multiple bounces and can be amortized over several frames.
 
 An efficient encoding is required to support many probes, the fact that we are primarily interested in capturing low frequency detail can be put to good use here.
 We opted to project radiance map on the third-order spherical harmonics basis functions.

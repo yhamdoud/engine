@@ -94,8 +94,8 @@ struct RenderContext
     uint skybox_tex = invalid_texture_id;
     glm::mat4 inv_grid_transform;
     glm::vec3 grid_dims;
-    std::array<uint, 7> sh_texs{invalid_texture_id};
-    std::vector<IrradianceProbe> probes;
+    std::span<uint, 7> sh_texs;
+    std::vector<glm::vec3> probes;
     size_t probe_mesh_idx;
 };
 

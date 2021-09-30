@@ -77,10 +77,10 @@ void ForwardPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
         glBindTextureUnit(5, ctx_r.sh_texs[5]);
         glBindTextureUnit(6, ctx_r.sh_texs[6]);
 
-        for (const auto &probe : ctx_r.probes)
+        for (const auto &position : ctx_r.probes)
         {
             const mat4 model =
-                scale(translate(mat4(1.f), probe.position), vec3(0.2f));
+                scale(translate(mat4(1.f), position), vec3(0.2f));
             const mat4 model_view = ctx_v.view * model;
 
             probe_shader.set("u_model", model);

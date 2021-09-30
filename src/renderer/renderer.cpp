@@ -407,13 +407,10 @@ void Renderer::render(std::vector<RenderData> &queue)
 
     ctx_r.queue = std::move(queue);
 
-    if (bake_probes_flag)
+    if (baking_jobs.size() > 0)
     {
         TracyGpuZone("Probe baking pass");
-        // TODO: Amortize this over multiple frames.
-        bake_probes();
-        bake_probes_flag = false;
-        return;
+        bake();
     }
 
     {
@@ -452,14 +449,14 @@ void Renderer::resize_viewport(glm::vec2 size)
     // TODO: clean up buffers
 }
 
-IrradianceProbe Renderer::generate_probe(vec3 position)
+uint Renderer::render_probe(vec3 position)
 {
-    IrradianceProbe probe{position, invalid_texture_id};
+    ZoneScoped;
 
     probe_view.ctx.proj = perspective(probe_view.ctx.fov, 1.f,
                                       probe_view.ctx.near, probe_view.ctx.far);
 
-    array<mat4, 6> views{
+    const array<mat4, 6> views{
         lookAt(position, position + vec3{1.f, 0.f, 0.f}, vec3{0.f, -1.f, 0.f}),
         lookAt(position, position + vec3{-1.f, 0.f, 0.f}, vec3{0.f, -1.f, 0.f}),
         lookAt(position, position + vec3{0.f, 1.f, 0.f}, vec3{0.f, 0.f, 1.f}),
@@ -481,23 +478,20 @@ IrradianceProbe Renderer::generate_probe(vec3 position)
         probe_view.forward.render(probe_view.ctx, ctx_r);
     }
 
-    probe.cubemap = probe_view.ctx.hdr_tex;
-    return probe;
+    return probe_view.ctx.hdr_tex;
 }
 
-void Renderer::initialize_probes(glm::vec3 center, glm::vec3 world_dims,
-                                 float distance, int bounce_count)
+void Renderer::prepare_bake(glm::vec3 center, glm::vec3 world_dims,
+                            float distance, int bounce_count)
 {
     // FIXME:
     probe_view.ctx.ao_tex = ctx_v.ao_tex;
 
     // We pack the 27 coefficient into 7 4 channel textures
-    const int texture_count = ctx_r.sh_texs.size();
-
     const vec3 origin = center - world_dims / 2.f;
     const ivec2 local_size{16, 16};
 
-    grid_data = ProbeGrid{
+    probe_grid = ProbeGrid{
         .bounce_count = bounce_count,
         .dims = world_dims / distance,
         .group_count = ivec3(probe_view.ctx.size / local_size, 6),
@@ -505,35 +499,19 @@ void Renderer::initialize_probes(glm::vec3 center, glm::vec3 world_dims,
         .weight_sum = 0.f,
     };
 
-    glDeleteTextures(texture_count, ctx_r.sh_texs.data());
-    glCreateTextures(GL_TEXTURE_3D, texture_count, ctx_r.sh_texs.data());
+    if (probe_grid.dims != probe_buf.get_size())
+        probe_buf.resize(probe_grid.dims);
 
-    for (int tex_idx = 0; tex_idx < texture_count; tex_idx++)
-    {
-        glTextureStorage3D(ctx_r.sh_texs[tex_idx], 1, GL_RGBA16F,
-                           grid_data.dims.x, grid_data.dims.y,
-                           grid_data.dims.z);
-
-        glTextureParameteri(ctx_r.sh_texs[tex_idx], GL_TEXTURE_WRAP_S,
-                            GL_CLAMP_TO_EDGE);
-        glTextureParameteri(ctx_r.sh_texs[tex_idx], GL_TEXTURE_WRAP_T,
-                            GL_CLAMP_TO_EDGE);
-        glTextureParameteri(ctx_r.sh_texs[tex_idx], GL_TEXTURE_WRAP_R,
-                            GL_CLAMP_TO_EDGE);
-
-        // Important for trilinear interpolation.
-        glTextureParameteri(ctx_r.sh_texs[tex_idx], GL_TEXTURE_MAG_FILTER,
-                            GL_LINEAR);
-        glTextureParameteri(ctx_r.sh_texs[tex_idx], GL_TEXTURE_MIN_FILTER,
-                            GL_LINEAR_MIPMAP_LINEAR);
-    }
-
-    glCreateBuffers(1, &grid_data.coef_buf);
-    glNamedBufferStorage(grid_data.coef_buf,
-                         grid_data.group_count.x * grid_data.group_count.y *
-                             grid_data.group_count.z * texture_count *
-                             sizeof(vec4),
+    glCreateBuffers(1, &probe_grid.coef_buf);
+    glNamedBufferStorage(probe_grid.coef_buf,
+                         probe_grid.group_count.x * probe_grid.group_count.y *
+                             probe_grid.group_count.z * 7 * sizeof(vec4),
                          nullptr, GL_NONE);
+
+    for (int z = 0; z < probe_grid.dims.z; z++)
+        for (int y = 0; y < probe_grid.dims.y; y++)
+            for (int x = 0; x < probe_grid.dims.x; x++)
+                baking_jobs.emplace_back(BakingJob{ivec3(x, y, z)});
 
     // Compute the final weight for integration
     for (int y = 0; y < probe_view.ctx.size.x; y++)
@@ -546,75 +524,93 @@ void Renderer::initialize_probes(glm::vec3 center, glm::vec3 world_dims,
                                 1.0f;
 
             const float tmp = 1.f + coords.s * coords.s + coords.t * coords.t;
-            grid_data.weight_sum += 4.f / (sqrt(tmp) * tmp);
+            probe_grid.weight_sum += 4.f / (sqrt(tmp) * tmp);
         }
     }
 
-    grid_data.weight_sum = 4.f * pi<float>() / grid_data.weight_sum;
+    probe_grid.weight_sum = 4.f * pi<float>() / probe_grid.weight_sum;
 
     // Update context.
-    ctx_r.inv_grid_transform = inverse(grid_data.grid_transform);
-    ctx_r.grid_dims = grid_data.dims;
+    ctx_r.inv_grid_transform = inverse(probe_grid.grid_transform);
+    ctx_r.grid_dims = probe_grid.dims;
 
-    bake_probes_flag = true;
+    cur_bounce_idx = 0;
+    ctx_r.probes.clear();
+
+    logger.info("Baking {} probes, {} bounce(s).",
+                probe_grid.dims.x * probe_grid.dims.y * probe_grid.dims.z,
+                probe_grid.bounce_count);
 }
 
-void Renderer::bake_probes()
+void Renderer::bake_job(const BakingJob &job, int bounce_idx)
 {
-    logger.info("Baking {} probes",
-                grid_data.dims.x * grid_data.dims.y * grid_data.dims.z);
+    ZoneScoped;
 
-    for (int i = 0; i < grid_data.bounce_count; i++)
+    probe_view.lighting.indirect_light = bounce_idx != 0;
+
+    vec3 position = vec3(probe_grid.grid_transform * vec4{job.coords, 1});
+
+    uint radiance_map = render_probe(position);
+    if (bounce_idx == 0)
+        ctx_r.probes.emplace_back(position);
+
+    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT |
+                    GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+    glUseProgram(project.get_id());
+    project.set("u_weight_sum", probe_grid.weight_sum);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, probe_grid.coef_buf);
+    glBindImageTexture(0, radiance_map, 0, true, 0, GL_READ_ONLY, GL_RGBA16F);
+
+    glDispatchCompute(probe_grid.group_count.x, probe_grid.group_count.y,
+                      probe_grid.group_count.z);
+
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    glUseProgram(reduce.get_id());
+    reduce.set("u_idx", job.coords);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, probe_grid.coef_buf);
+    for (int j = 0; j < ProbeBuffer::count; j++)
+        glBindImageTexture(j, probe_buf.back()[j], 0, true, 0, GL_WRITE_ONLY,
+                           GL_RGBA16F);
+
+    glDispatchCompute(1, 1, 1);
+}
+
+void Renderer::bake()
+{
+    ZoneScoped;
+
+    int stop_idx = cur_baking_offset + bake_batch_size;
+    bool final_batch = false;
+
+    if (stop_idx >= baking_jobs.size())
     {
-        probe_view.lighting.indirect_light = i != 0;
-
-        for (int z = 0; z < grid_data.dims.z; z++)
-        {
-            for (int y = 0; y < grid_data.dims.y; y++)
-            {
-                for (int x = 0; x < grid_data.dims.x; x++)
-                {
-                    vec3 position =
-                        vec3(grid_data.grid_transform * vec4{x, y, z, 1});
-
-                    auto probe = generate_probe(position);
-                    // FIXME:
-                    if (i == 0)
-                        ctx_r.probes.emplace_back(probe);
-
-                    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT |
-                                    GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-                    glUseProgram(project.get_id());
-                    project.set("u_weight_sum", grid_data.weight_sum);
-                    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1,
-                                     grid_data.coef_buf);
-                    glBindImageTexture(0, probe.cubemap, 0, true, 0,
-                                       GL_READ_ONLY, GL_RGBA16F);
-
-                    glDispatchCompute(grid_data.group_count.x,
-                                      grid_data.group_count.y,
-                                      grid_data.group_count.z);
-
-                    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-                    glUseProgram(reduce.get_id());
-                    reduce.set("u_idx", ivec3{x, y, z});
-                    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7,
-                                     grid_data.coef_buf);
-                    for (int j = 0; j < ctx_r.sh_texs.size(); j++)
-                        glBindImageTexture(j, ctx_r.sh_texs[j], 0, true, 0,
-                                           GL_WRITE_ONLY, GL_RGBA16F);
-
-                    glDispatchCompute(1, 1, 1);
-                }
-            }
-        }
-
-        logger.info("Bounce {} complete.", i + 1);
+        stop_idx = baking_jobs.size() - 1;
+        final_batch = true;
     }
 
-    logger.info("Probe grid generation finished");
+    for (int idx = cur_baking_offset; idx < stop_idx; idx++)
+        bake_job(baking_jobs[idx], cur_bounce_idx);
+
+    cur_baking_offset = stop_idx;
+
+    // Schedule new jobs if there are any bounces left.
+    if (final_batch)
+    {
+        logger.info("Bounce {}/{} baked.", cur_bounce_idx + 1,
+                    probe_grid.bounce_count);
+
+        cur_baking_offset = 0;
+
+        probe_buf.swap();
+        ctx_r.sh_texs = span<uint, 7>(probe_buf.front(), ProbeBuffer::count);
+
+        if (cur_bounce_idx == probe_grid.bounce_count - 1)
+            baking_jobs.clear();
+        else
+            cur_bounce_idx++;
+    }
 }
 
 enum CubeMapFace
@@ -767,6 +763,17 @@ array<vec3, 9> sh_project(uint cube_map, int size)
 
     return rgb_coeffs;
 }
+
+float Renderer::baking_progress()
+{
+    return is_baking() *
+           (static_cast<float>(cur_bounce_idx) +
+            static_cast<float>(cur_baking_offset + 1) /
+                static_cast<float>(baking_jobs.size())) /
+           static_cast<float>(probe_grid.bounce_count);
+}
+
+bool Renderer::is_baking() { return baking_jobs.size() != 0; }
 
 // void Renderer::generate_probe_grid_cpu(std::vector<RenderData> &queue,
 //                                        glm::vec3 center, glm::vec3
