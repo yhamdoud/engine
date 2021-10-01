@@ -8,89 +8,17 @@
 
 #include "camera.hpp"
 #include "context.hpp"
-#include "passes/bloom.hpp"
-#include "passes/forward.hpp"
-#include "passes/geometry.hpp"
-#include "passes/lighting.hpp"
-#include "passes/shadow.hpp"
-#include "passes/ssao.hpp"
-#include "passes/tone_map.hpp"
+#include "renderer/passes/bloom.hpp"
+#include "renderer/passes/forward.hpp"
+#include "renderer/passes/geometry.hpp"
+#include "renderer/passes/lighting.hpp"
+#include "renderer/passes/shadow.hpp"
+#include "renderer/passes/ssao.hpp"
+#include "renderer/passes/tone_map.hpp"
+#include "renderer/probe_viewport.hpp"
 
 namespace engine
 {
-
-struct BakingJob
-{
-    glm::ivec3 coords;
-};
-
-class ProbeBuffer
-{
-  public:
-    static constexpr size_t count = 7;
-
-    ProbeBuffer(glm::ivec3 size);
-    ~ProbeBuffer();
-
-    ProbeBuffer(const ProbeBuffer &) = delete;
-    ProbeBuffer &operator=(const ProbeBuffer &) = delete;
-    ProbeBuffer(ProbeBuffer &&) = delete;
-    ProbeBuffer &operator=(ProbeBuffer &&) = delete;
-
-    glm::ivec3 get_size() const;
-    void swap();
-    void clear();
-    void resize(glm::ivec3 size);
-    uint *front();
-    uint *back();
-
-  private:
-    int active_buf = 0;
-    glm::ivec3 size;
-    std::array<std::array<uint, count>, 2> data{};
-
-    void allocate(glm::ivec3 size);
-};
-
-struct ProbeGrid
-{
-    uint coef_buf;
-    int bounce_count;
-    glm::ivec3 dims;
-    glm::ivec3 group_count;
-    glm::mat4 grid_transform;
-    float weight_sum;
-};
-
-struct ProbeViewport
-{
-    ViewportContext ctx{
-        .size = glm::ivec2(64, 64),
-        .near = 0.01f,
-        .far = 50.f,
-        .fov = glm::radians(90.f),
-    };
-
-    ShadowPass shadow{{
-        .size = {256, 256},
-        .stabilize = true,
-    }};
-
-    GeometryPass geometry{};
-
-    LightingPass lighting{{
-        .indirect_light = false,
-        .direct_light = true,
-        .use_base_color = true,
-        .color_shadow_cascades = false,
-        .filter_shadows = false,
-        .leak_offset = 0.4f,
-    }};
-
-    ForwardPass forward{{
-        .draw_probes = false,
-    }};
-};
 
 class Renderer
 {
@@ -98,9 +26,6 @@ class Renderer
     {
         unsupported_texture_format,
     };
-
-    Shader project = *Shader::from_comp_path(shaders_path / "sh_project.comp");
-    Shader reduce = *Shader::from_comp_path(shaders_path / "sh_reduce.comp");
 
     ProbeViewport probe_view;
     ProbeGrid probe_grid;
@@ -110,10 +35,10 @@ class Renderer
     int cur_bounce_idx = 0;
 
     void bake();
-    void bake_job(const BakingJob &job, int bounce);
 
   public:
     int bake_batch_size = 64;
+    int probe_view_count = 10;
 
     Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
 
@@ -192,7 +117,6 @@ class Renderer
     static void render_mesh_instance(unsigned int vao,
                                      const MeshInstance &mesh);
 
-    uint render_probe(glm::vec3 position);
     void prepare_bake(glm::vec3 center, glm::vec3 world_dims, float distance,
                       int bounce_count);
 

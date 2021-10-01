@@ -45,18 +45,18 @@ class Shader
 
     uint get_id() const;
 
-    void set(const std::string &name, const glm::mat4 &value);
-    void set(const std::string &name, const std::span<glm::mat4> values);
-    void set(const std::string &name, const glm::mat3 &value);
-    void set(const std::string &name, const glm::vec2 &value);
-    void set(const std::string &name, const glm::vec3 &value);
-    void set(const std::string &name, const glm::ivec3 &value);
-    void set(const std::string &name, const std::span<glm::vec3> values);
-    void set(const std::string &name, float value);
-    void set(const std::string &name, std::span<float> value);
-    void set(const std::string &name, int value);
-    void set(const std::string &name, uint value);
-    void set(const std::string &name, bool value);
+    void set(const std::string &name, const glm::mat4 &value) const;
+    void set(const std::string &name, const std::span<glm::mat4> values) const;
+    void set(const std::string &name, const glm::mat3 &value) const;
+    void set(const std::string &name, const glm::vec2 &value) const;
+    void set(const std::string &name, const glm::vec3 &value) const;
+    void set(const std::string &name, const glm::ivec3 &value) const;
+    void set(const std::string &name, const std::span<glm::vec3> values) const;
+    void set(const std::string &name, float value) const;
+    void set(const std::string &name, std::span<float> value) const;
+    void set(const std::string &name, int value) const;
+    void set(const std::string &name, uint value) const;
+    void set(const std::string &name, bool value) const;
 };
 
 GLuint upload_cube_map(const std::array<std::filesystem::path, 6> &paths);

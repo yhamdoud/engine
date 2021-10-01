@@ -80,7 +80,7 @@ process_texture_view(const cgltf_texture_view &texture_view)
     const auto &texture = *texture_view.texture;
     const auto &image = *texture.image;
 
-    bool find_dds = true;
+    constexpr bool find_dds = true;
 
     if (image.uri && find_dds)
     {

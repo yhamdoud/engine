@@ -1,4 +1,6 @@
-#include "renderer/renderer.hpp"
+#include <glad/glad.h>
+
+#include "renderer/probe_buffer.hpp"
 
 using namespace engine;
 using namespace glm;

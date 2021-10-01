@@ -92,4 +92,9 @@ struct RenderContext
     size_t probe_mesh_idx;
 };
 
+struct BakingJob
+{
+    glm::ivec3 coords;
+};
+
 } // namespace engine

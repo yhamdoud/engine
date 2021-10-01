@@ -4,18 +4,15 @@
 #include <numeric>
 #include <string>
 
-#include <glad/glad.h>
 #include <glm/ext.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <stb_image_write.h>
-
-#include <Tracy.hpp>
-#include <TracyOpenGL.hpp>
 
 #include "constants.hpp"
 #include "logger.hpp"
 #include "model.hpp"
 #include "primitives.hpp"
+#include "profiler.hpp"
 #include "renderer.hpp"
 
 using namespace glm;
@@ -122,28 +119,6 @@ Renderer::Renderer(glm::ivec2 viewport_size)
             logger.error("Main viewport frame buffer incomplete.");
     }
 
-    {
-        auto &ctx = probe_view.ctx;
-
-        uint depth;
-        glCreateRenderbuffers(1, &depth);
-        glNamedRenderbufferStorage(depth, GL_DEPTH_COMPONENT32, ctx.size.x,
-                                   ctx.size.y);
-
-        glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &ctx.hdr_tex);
-        glTextureStorage2D(ctx.hdr_tex, 1, GL_RGBA16F, ctx.size.x, ctx.size.y);
-        glTextureParameteri(ctx.hdr_tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTextureParameteri(ctx.hdr_tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        glCreateFramebuffers(1, &ctx.hdr_frame_buf);
-        glNamedFramebufferRenderbuffer(ctx.hdr_frame_buf, GL_DEPTH_ATTACHMENT,
-                                       GL_RENDERBUFFER, depth);
-
-        if (glCheckNamedFramebufferStatus(ctx.hdr_frame_buf, GL_FRAMEBUFFER) !=
-            GL_FRAMEBUFFER_COMPLETE)
-            logger.error("Probe frame buffer incomplete.");
-    }
-
     // Setup state for displaying probe.
     auto sphere_model =
         move(get<vector<Model>>(load_gltf(models_path / "sphere.glb"))[0]);
@@ -156,11 +131,8 @@ Renderer::Renderer(glm::ivec2 viewport_size)
     bloom.initialize(ctx_v);
     tone_map.initialize(ctx_v);
 
-    // TODO: move
-    probe_view.shadow.initialize(probe_view.ctx);
-    probe_view.geometry.initialize(probe_view.ctx);
-    probe_view.lighting.initialize(probe_view.ctx);
-    probe_view.forward.initialize(probe_view.ctx);
+    // FIXME:
+    probe_view.ctx.ao_tex = ctx_v.ao_tex;
 }
 
 Renderer::~Renderer()
@@ -449,43 +421,9 @@ void Renderer::resize_viewport(glm::vec2 size)
     // TODO: clean up buffers
 }
 
-uint Renderer::render_probe(vec3 position)
-{
-    ZoneScoped;
-
-    probe_view.ctx.proj = perspective(probe_view.ctx.fov, 1.f,
-                                      probe_view.ctx.near, probe_view.ctx.far);
-
-    const array<mat4, 6> views{
-        lookAt(position, position + vec3{1.f, 0.f, 0.f}, vec3{0.f, -1.f, 0.f}),
-        lookAt(position, position + vec3{-1.f, 0.f, 0.f}, vec3{0.f, -1.f, 0.f}),
-        lookAt(position, position + vec3{0.f, 1.f, 0.f}, vec3{0.f, 0.f, 1.f}),
-        lookAt(position, position + vec3{0.f, -1.f, 0.f}, vec3{0.f, 0.f, -1.f}),
-        lookAt(position, position + vec3{0.f, 0.f, 1.f}, vec3{0.f, -1.f, 0.f}),
-        lookAt(position, position + vec3{0.f, 0.f, -1.f}, vec3{0.f, -1.f, 0.f}),
-    };
-
-    for (int face_idx = 0; face_idx < 6; face_idx++)
-    {
-        glNamedFramebufferTextureLayer(probe_view.ctx.hdr_frame_buf,
-                                       GL_COLOR_ATTACHMENT0,
-                                       probe_view.ctx.hdr_tex, 0, face_idx);
-        probe_view.ctx.view = views[face_idx];
-
-        probe_view.shadow.render(probe_view.ctx, ctx_r);
-        probe_view.geometry.render(probe_view.ctx, ctx_r);
-        probe_view.lighting.render(probe_view.ctx, ctx_r);
-        probe_view.forward.render(probe_view.ctx, ctx_r);
-    }
-
-    return probe_view.ctx.hdr_tex;
-}
-
 void Renderer::prepare_bake(glm::vec3 center, glm::vec3 world_dims,
                             float distance, int bounce_count)
 {
-    // FIXME:
-    probe_view.ctx.ao_tex = ctx_v.ao_tex;
 
     // We pack the 27 coefficient into 7 4 channel textures
     const vec3 origin = center - world_dims / 2.f;
@@ -542,41 +480,6 @@ void Renderer::prepare_bake(glm::vec3 center, glm::vec3 world_dims,
                 probe_grid.bounce_count);
 }
 
-void Renderer::bake_job(const BakingJob &job, int bounce_idx)
-{
-    ZoneScoped;
-
-    probe_view.lighting.indirect_light = bounce_idx != 0;
-
-    vec3 position = vec3(probe_grid.grid_transform * vec4{job.coords, 1});
-
-    uint radiance_map = render_probe(position);
-    if (bounce_idx == 0)
-        ctx_r.probes.emplace_back(position);
-
-    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT |
-                    GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-    glUseProgram(project.get_id());
-    project.set("u_weight_sum", probe_grid.weight_sum);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, probe_grid.coef_buf);
-    glBindImageTexture(0, radiance_map, 0, true, 0, GL_READ_ONLY, GL_RGBA16F);
-
-    glDispatchCompute(probe_grid.group_count.x, probe_grid.group_count.y,
-                      probe_grid.group_count.z);
-
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-    glUseProgram(reduce.get_id());
-    reduce.set("u_idx", job.coords);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, probe_grid.coef_buf);
-    for (int j = 0; j < ProbeBuffer::count; j++)
-        glBindImageTexture(j, probe_buf.back()[j], 0, true, 0, GL_WRITE_ONLY,
-                           GL_RGBA16F);
-
-    glDispatchCompute(1, 1, 1);
-}
-
 void Renderer::bake()
 {
     ZoneScoped;
@@ -591,7 +494,14 @@ void Renderer::bake()
     }
 
     for (int idx = cur_baking_offset; idx < stop_idx; idx++)
-        bake_job(baking_jobs[idx], cur_bounce_idx);
+    {
+        probe_view.lighting.indirect_light = cur_bounce_idx != 0;
+        probe_view.position = vec3(probe_grid.grid_transform *
+                                   vec4{baking_jobs[idx].coords, 1.f});
+        probe_view.render(ctx_r);
+        probe_view.bake(ctx_r, baking_jobs[idx], cur_bounce_idx, probe_grid,
+                        probe_buf);
+    }
 
     cur_baking_offset = stop_idx;
 

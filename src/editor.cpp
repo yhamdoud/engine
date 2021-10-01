@@ -63,7 +63,7 @@ void Editor::draw()
 
             ImGui::Separator();
 
-            ImGui::SliderInt("Batch size", &renderer.bake_batch_size, 1, 128);
+            ImGui::SliderInt("Batch size", &renderer.bake_batch_size, 1, 512);
             if (ImGui::Button("Bake") && !renderer.is_baking())
             {
                 renderer.prepare_bake(vec3{0.5f, 4.5f, 0.5f},

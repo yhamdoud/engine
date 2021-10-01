@@ -169,80 +169,82 @@ optional<Shader> Shader::from_stages(const std::initializer_list<uint> &stages)
     return std::make_optional<Shader>(Shader{program, uniforms});
 }
 
-void Shader::set(const std::string &name, const glm::mat4 &value)
+void Shader::set(const std::string &name, const glm::mat4 &value) const
 {
     auto uniform = uniforms.at(name);
     glProgramUniformMatrix4fv(id, uniform.location, uniform.count, false,
                               glm::value_ptr(value));
 }
 
-void Shader::set(const std::string &name, const std::span<glm::mat4> values)
+void Shader::set(const std::string &name,
+                 const std::span<glm::mat4> values) const
 {
     auto uniform = uniforms.at(name);
     glProgramUniformMatrix4fv(id, uniform.location, uniform.count, false,
                               reinterpret_cast<float *>(values.data()));
 }
 
-void Shader::set(const std::string &name, const glm::mat3 &value)
+void Shader::set(const std::string &name, const glm::mat3 &value) const
 {
     auto uniform = uniforms.at(name);
     glProgramUniformMatrix3fv(id, uniform.location, uniform.count, false,
                               glm::value_ptr(value));
 }
 
-void Shader::set(const std::string &name, const glm::vec2 &value)
+void Shader::set(const std::string &name, const glm::vec2 &value) const
 {
     auto uniform = uniforms.at(name);
     glProgramUniform2fv(id, uniform.location, uniform.count,
                         glm::value_ptr(value));
 }
 
-void Shader::set(const std::string &name, const glm::vec3 &value)
+void Shader::set(const std::string &name, const glm::vec3 &value) const
 {
     auto uniform = uniforms.at(name);
     glProgramUniform3fv(id, uniform.location, uniform.count,
                         glm::value_ptr(value));
 }
 
-void Shader::set(const std::string &name, const std::span<glm::vec3> values)
+void Shader::set(const std::string &name,
+                 const std::span<glm::vec3> values) const
 {
     auto uniform = uniforms.at(name);
     glProgramUniform3fv(id, uniform.location, uniform.count,
                         reinterpret_cast<float *>(values.data()));
 }
 
-void Shader::set(const std::string &name, const glm::ivec3 &value)
+void Shader::set(const std::string &name, const glm::ivec3 &value) const
 {
     auto uniform = uniforms.at(name);
     glProgramUniform3iv(id, uniform.location, uniform.count,
                         glm::value_ptr(value));
 }
 
-void Shader::set(const std::string &name, float value)
+void Shader::set(const std::string &name, float value) const
 {
     auto uniform = uniforms.at(name);
     glProgramUniform1f(id, uniform.location, value);
 }
 
-void Shader::set(const std::string &name, std::span<float> value)
+void Shader::set(const std::string &name, std::span<float> value) const
 {
     auto uniform = uniforms.at(name);
     glProgramUniform1fv(id, uniform.location, uniform.count, value.data());
 }
 
-void Shader::set(const std::string &name, int value)
+void Shader::set(const std::string &name, int value) const
 {
     auto uniform = uniforms.at(name);
     glProgramUniform1i(id, uniform.location, value);
 }
 
-void Shader::set(const std::string &name, uint value)
+void Shader::set(const std::string &name, uint value) const
 {
     auto uniform = uniforms.at(name);
     glProgramUniform1ui(id, uniform.location, value);
 }
 
-void Shader::set(const std::string &name, bool value)
+void Shader::set(const std::string &name, bool value) const
 {
     auto uniform = uniforms.at(name);
     glProgramUniform1i(id, uniform.location, value);
