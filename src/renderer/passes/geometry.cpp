@@ -30,13 +30,13 @@ void GeometryPass::create_debug_views()
 
     glGenTextures(1, &debug_view_base_color);
     glTextureView(debug_view_base_color, GL_TEXTURE_2D, base_color_rough,
-                  GL_RGBA8, 0, 1, 0, 1);
+                  GL_SRGB8_ALPHA8, 0, 1, 0, 1);
     glTextureParameteriv(debug_view_base_color, GL_TEXTURE_SWIZZLE_RGBA,
                          rgb_swizzle.data());
 
     glGenTextures(1, &debug_view_roughness);
     glTextureView(debug_view_roughness, GL_TEXTURE_2D, base_color_rough,
-                  GL_RGBA8, 0, 1, 0, 1);
+                  GL_SRGB8_ALPHA8, 0, 1, 0, 1);
     glTextureParameteriv(debug_view_roughness, GL_TEXTURE_SWIZZLE_RGBA,
                          www_swizzle.data());
 }
@@ -56,7 +56,8 @@ void GeometryPass::initialize(ViewportContext &ctx)
     glTextureParameteri(normal_metal, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(normal_metal, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    glTextureStorage2D(base_color_rough, 1, GL_SRGB8, ctx.size.x, ctx.size.y);
+    glTextureStorage2D(base_color_rough, 1, GL_SRGB8_ALPHA8, ctx.size.x,
+                       ctx.size.y);
     glTextureParameteri(base_color_rough, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(base_color_rough, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 

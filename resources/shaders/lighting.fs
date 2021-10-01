@@ -53,6 +53,8 @@ out vec4 frag_color;
 
 const float PI = 3.14159265359;
 
+
+
 uint calculate_cascade_index(vec3 pos)
 {
     uint cascade_idx = cascade_count - 1;
@@ -80,7 +82,7 @@ float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal, vec3 light
 	if (pos.z > 1.0)
 		return 0.;
 
-	// Transform n_worldDC to texture space.
+	// Transform NDC to texture space.
 	pos = 0.5 * pos + 0.5;
 
 	float bias_max = 0.03;
@@ -123,22 +125,18 @@ float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal, vec3 light
 
 // PBS
 
-// n_worldormal distribution function
+// Normal distribution function
 // Source: https://google.github.io/filament
-float D_GGX(float n_worldoH, float roughness)
-{
-    float a = n_worldoH * roughness;
-    float k = roughness / (1.0 - n_worldoH * n_worldoH + a * a);
-    return k * k * (1.0 / PI);
+float D_GGX(float NoH, float a2) {
+    float f = (NoH * a2 - NoH) * NoH + 1.0;
+    return a2 / (PI * f * f);
 }
 
 // Geometric shadowing
 // Source: https://google.github.io/filament
-float V_SmithGGXCorrelated(float n_worldoV, float n_worldoL, float roughness)
-{
-    float a2 = roughness * roughness;
-    float GGXV = n_worldoL * sqrt(n_worldoV * n_worldoV * (1.0 - a2) + a2);
-    float GGXL = n_worldoV * sqrt(n_worldoL * n_worldoL * (1.0 - a2) + a2);
+float V_SmithGGXCorrelated(float NoV, float NoL, float a2) {
+    float GGXL = NoV * sqrt((-NoL * a2 + NoL) * NoL + a2);
+    float GGXV = NoL * sqrt((-NoV * a2 + NoV) * NoV + a2);
     return 0.5 / (GGXV + GGXL);
 }
 
@@ -155,23 +153,22 @@ float Fd_Lambert() {
     return 1.0 / PI;
 }
 
-vec3 n;
-vec3 diffuse_color;
-vec3 f0;
-float a;
-
-vec3 brdf(vec3 v, vec3 l)
+vec3 brdf(vec3 v, vec3 l, vec3 n, vec3 diffuse_color, vec3 f0, float roughness)
 {
-	vec3 h = normalize(v + l);
 
-    float n_worldoV = abs(dot(n, v)) + 1e-5;
-    float n_worldoL = clamp(dot(n, l), 0.0, 1.0);
-    float n_worldoH = clamp(dot(n, h), 0.0, 1.0);
-    float LoH = clamp(dot(l, h), 0.0, 1.0);
+	const vec3 h = normalize(v + l);
 
-    float D = D_GGX(n_worldoH, a);
-    vec3  F = F_Schlick(LoH, f0);
-    float V = V_SmithGGXCorrelated(n_worldoV, n_worldoL, a);
+    const float n_dot_v = abs(dot(n, v)) + 1e-5;
+    const float n_dot_l = clamp(dot(n, l), 0., 1.);
+    const float n_dot_h = clamp(dot(n, h), 0., 1.);
+    const float l_dot_h = clamp(dot(l, h), 0., 1.);
+
+    const float a = roughness * roughness;
+    const float a2 = max(0.01, a * a);
+
+    const float D = D_GGX(n_dot_h, a2);
+    const vec3 F = F_Schlick(l_dot_h, f0);
+    const float V = V_SmithGGXCorrelated(n_dot_v, n_dot_l, a2);
 
     // Specular BRDF component.
     // V already contains the denominator from Cook-Torrance.
@@ -179,14 +176,15 @@ vec3 brdf(vec3 v, vec3 l)
 
     // Diffuse BRDF component.
     vec3 Fd = diffuse_color * Fd_Lambert();
+    vec3 Fin = F_Schlick(n_dot_l, f0);
+    vec3 Fout = F_Schlick(n_dot_v, f0);
+
+    // TODO: Energy conserving but causes artifacts at edges.
     // https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#coupling-diffuse-and-specular-reflection
     // https://computergraphics.stackexchange.com/questions/2285/how-to-properly-combine-the-diffuse-and-specular-terms
-    vec3 Fin = F_Schlick(n_worldoL, f0);
-    vec3 Fout = F_Schlick(n_worldoV, f0);
+    // return ((1 - Fin) * (1 - Fout) * Fd + Fr) * NoL;
 
-    // TODO: Causes black artifacts, weighing the diffuse component causes black artifacts.
-    //	out_radiance += ((1 - Fin) * (1 - Fout) * Fd + Fr) * light_radiance * n_worldoL;
-    return (Fd + Fr) * n_worldoL;
+    return (Fd + Fr) * n_dot_l;
 }
 
 void main()
@@ -200,28 +198,23 @@ void main()
     else
         base_color = vec3(1.f);
 
-    // Linear to sRGB because the roughness was sampled from an sRGB texture.
-	float roughness = pow(base_color_roughness.a, 2.2);
+	float roughness = base_color_roughness.a;
 
 
 	vec4 normal_metallic = texture(u_g_normal_metallic, tex_coords);
-	n = normal_metallic.rgb;
+	vec3 n = normal_metallic.rgb;
 	float metallic = normal_metallic.a;
 
     // View space position.
 	vec3 pos = view_ray * texture(u_g_depth, tex_coords).x;
 	vec3 v = normalize(-pos);
 
-	// n_worldon-metals have achromatic specular reflectance, metals use base color
+	// Non-metals have achromatic specular reflectance, metals use base color
 	// as the specular color.
-	diffuse_color = (1.0 - metallic) * base_color.rgb;
-
-	// Perceptually linear roughness to roughness (alpha).
-	// Clamp to avoid specular aliasing.
-	a = clamp(roughness * roughness, 0.002, 1.);
+	vec3 diffuse_color = (1.0 - metallic) * base_color.rgb;
 
 	// TODO: More physically accurate way to calculate?
-	f0 = mix(vec3(0.04), base_color, metallic);
+	vec3 f0 = mix(vec3(0.04), base_color, metallic);
 
 	// Luminance or radiance?
 	vec3 out_luminance = vec3(0.);
@@ -230,6 +223,10 @@ void main()
 
     // Direct lighting.
     if (u_use_direct) {
+        // Directional light (sun) contribution.
+        vec3 l = normalize(-u_directional_light.direction);
+        vec3 luminance = brdf(v, l, n, diffuse_color, f0, roughness) * u_directional_light.intensity;
+
         // Point lights contribution.
         for (uint i = 0; i < light_count; i++)
         {
@@ -239,14 +236,10 @@ void main()
             // TODO: Might not be a good fit, can cause divide by zero.
             float attenuation = 1 / (dist * dist);
 
-            vec3 l = normalize(light.position - pos);
+            l = normalize(light.position - pos);
 
-            out_luminance += brdf(v, l) * light.color * attenuation;
+            out_luminance += brdf(v, l, n, diffuse_color, f0, roughness) * light.color * attenuation;
         }
-
-        // Directional light (sun) contribution.
-        vec3 l = -u_directional_light.direction;
-        vec3 luminance = brdf(v, l) * u_directional_light.intensity;
 
         // Fragment position in light space.
 
