@@ -374,6 +374,7 @@ void Renderer::render(std::vector<RenderData> &queue)
                              static_cast<float>(ctx_v.size.x) /
                                  static_cast<float>(ctx_v.size.y),
                              ctx_v.near, ctx_v.far);
+    ctx_v.proj_inv = inverse(ctx_v.proj);
 
     ctx_v.view = camera.get_view();
 

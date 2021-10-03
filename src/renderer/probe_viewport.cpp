@@ -41,6 +41,7 @@ void ProbeViewport::render(RenderContext &ctx_r)
     ZoneScoped;
 
     ctx.proj = perspective(ctx.fov, 1.f, ctx.near, ctx.far);
+    ctx.proj_inv = inverse(ctx.proj);
 
     const array<mat4, 6> views{
         lookAt(position, position + vec3{1.f, 0.f, 0.f}, vec3{0.f, -1.f, 0.f}),

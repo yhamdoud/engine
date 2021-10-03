@@ -2,7 +2,6 @@
 
 in vec3 normal;
 in vec3 position;
-in float depth;
 
 uniform mat4 u_inv_grid_transform;
 uniform vec3 u_grid_dims;
@@ -21,8 +20,6 @@ out vec4 frag_color;
 void main()
 {
     vec3 n = normalize(normal);
-
-    gl_FragDepth = depth;
 
     vec3 grid_coords = (u_inv_grid_transform * vec4(position, 1.f)).xyz;
     vec3 tex_coords = (grid_coords + vec3(0.5f)) / u_grid_dims;

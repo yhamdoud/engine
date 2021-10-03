@@ -8,7 +8,6 @@ layout (location = 1) out vec4 g_normal_metallic;
 layout (location = 2) out vec4 g_base_color_roughness;
 
 uniform vec3 u_light_pos;
-uniform mat4 u_model_view;
 uniform mat3 u_normal_mat;
 
 uniform bool u_use_sampler;
@@ -32,7 +31,6 @@ uniform float u_alpha_cutoff;
 in Varying
 {
 	// View space vectors.
-	vec3 position;
 	vec3 normal;
 	vec2 tex_coords;
 	vec4 tangent;
@@ -58,9 +56,6 @@ float saturate(float x)
 
 void main()
 {
-    float depth = -fs_in.position.z / u_far_clip_distance;
-	gl_FragDepth = depth;
-
     g_base_color_roughness.rgb = u_base_color_factor;
 
 	if (u_use_sampler)

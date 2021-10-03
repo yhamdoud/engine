@@ -18,10 +18,15 @@ uniform float u_strength;
 layout (location = 0) out float frag_occlusion;
 layout (location = 2) out vec4 debug;
 
+float linearize_depth(float depth, mat4 proj)
+{
+    return -proj[3][2] / (2. * depth - 1. + proj[2][2]);
+}
+
 void main()
 {
     // View space position.
-	vec3 pos = view_ray * texture(u_g_depth, tex_coords).r;
+	vec3 pos = view_ray * linearize_depth(texture(u_g_depth, tex_coords).r, u_proj);
 	vec3 normal = texture(u_g_normal_metallic, tex_coords).xyz;
 	vec3 random = texture(u_noise, tex_coords * u_noise_scale).xyz;
 
@@ -48,7 +53,7 @@ void main()
 		vec2 sample_coord = sample_clip.xy / sample_clip.w * 0.5 + 0.5;
 
 		// Convert linear to view.
-		float depth_at_sample = texture(u_g_depth, sample_coord.xy).x * -50.f;
+		float depth_at_sample = linearize_depth(texture(u_g_depth, sample_coord.xy).r, u_proj);
 
 		// Deals with samples that are not located near the original fragment,
 		// e.g., samples near the edge.

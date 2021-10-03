@@ -65,6 +65,7 @@ struct ViewportContext
     uint hdr_frame_buf = default_frame_buffer_id;
     uint ldr_frame_buf = default_frame_buffer_id;
     glm::mat4 proj;
+    glm::mat4 proj_inv;
     glm::mat4 view;
     float near = 0;
     float far = 0;

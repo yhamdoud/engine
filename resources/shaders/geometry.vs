@@ -6,7 +6,6 @@ layout (location = 2) in vec2 a_tex_coords;
 layout (location = 3) in vec4 a_tangent;
 
 uniform mat4 u_model;
-uniform mat4 u_model_view;
 uniform mat4 u_mvp;
 uniform mat3 u_normal_mat;
 
@@ -14,7 +13,6 @@ uniform mat4 u_light_transform;
 
 out Varying
 {
-	vec3 position;
 	vec3 normal;
 	vec2 tex_coords;
 	vec4 tangent;
@@ -23,7 +21,6 @@ out Varying
 
 void main()
 {
-	vs_out.position = (u_model_view * vec4(a_position, 1)).xyz;
 	vs_out.normal = u_normal_mat * a_normal;
 	vs_out.tex_coords = a_tex_coords;
 	vs_out.tangent.xyz = u_normal_mat * a_tangent.xyz;

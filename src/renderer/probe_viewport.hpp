@@ -30,8 +30,8 @@ struct ProbeViewport
 
     ViewportContext ctx{
         .size = glm::ivec2(64, 64),
-        .near = 0.01f,
-        .far = 50.f,
+        .near = 0.1f,
+        .far = 25.f,
         .fov = glm::radians(90.f),
     };
 

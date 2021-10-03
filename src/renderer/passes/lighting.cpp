@@ -2,6 +2,7 @@
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
 
+#include "constants.hpp"
 #include "lighting.hpp"
 #include "logger.hpp"
 #include "model.hpp"
@@ -59,14 +60,24 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glUseProgram(lighting_shader.get_id());
-    lighting_shader.set("u_proj_inv", inverse(ctx_v.proj));
+    lighting_shader.set("u_proj", ctx_v.proj);
+    lighting_shader.set("u_proj_inv", ctx_v.proj_inv);
     lighting_shader.set("u_view_inv", inverse(ctx_v.view));
 
     glBindTextureUnit(0, ctx_v.g_buf.depth);
     glBindTextureUnit(1, ctx_v.g_buf.normal_metallic);
     glBindTextureUnit(2, ctx_v.g_buf.base_color_roughness);
     glBindTextureUnit(3, ctx_v.shadow_map);
-    glBindTextureUnit(4, ctx_v.ao_tex);
+
+    if (ctx_v.ao_tex != invalid_texture_id)
+    {
+        lighting_shader.set("u_use_ao", true);
+        glBindTextureUnit(4, ctx_v.ao_tex);
+    }
+    else
+    {
+        lighting_shader.set("u_use_ao", false);
+    }
 
     if (ctx_r.sh_texs.size() != 0 && indirect_light)
     {

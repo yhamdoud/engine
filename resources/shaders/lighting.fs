@@ -3,6 +3,7 @@
 in vec2 tex_coords;
 in vec3 view_ray;
 
+uniform mat4 u_proj;
 
 uniform sampler2D u_g_depth;
 uniform sampler2D u_g_normal_metallic;
@@ -13,6 +14,7 @@ uniform sampler2D u_ao;
 uniform bool u_use_irradiance;
 uniform bool u_use_direct;
 uniform bool u_use_base_color;
+uniform bool u_use_ao;
 
 struct Light {
     vec3 position;
@@ -53,7 +55,11 @@ out vec4 frag_color;
 
 const float PI = 3.14159265359;
 
-
+// https://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer/
+float linearize_depth(float depth, mat4 proj)
+{
+    return -proj[3][2] / (2. * depth - 1. + proj[2][2]);
+}
 
 uint calculate_cascade_index(vec3 pos)
 {
@@ -155,7 +161,6 @@ float Fd_Lambert() {
 
 vec3 brdf(vec3 v, vec3 l, vec3 n, vec3 diffuse_color, vec3 f0, float roughness)
 {
-
 	const vec3 h = normalize(v + l);
 
     const float n_dot_v = abs(dot(n, v)) + 1e-5;
@@ -164,6 +169,7 @@ vec3 brdf(vec3 v, vec3 l, vec3 n, vec3 diffuse_color, vec3 f0, float roughness)
     const float l_dot_h = clamp(dot(l, h), 0., 1.);
 
     const float a = roughness * roughness;
+    // Clamp roughness to prevent NaN fragments.
     const float a2 = max(0.01, a * a);
 
     const float D = D_GGX(n_dot_h, a2);
@@ -206,7 +212,7 @@ void main()
 	float metallic = normal_metallic.a;
 
     // View space position.
-	vec3 pos = view_ray * texture(u_g_depth, tex_coords).x;
+	vec3 pos = view_ray * linearize_depth(texture(u_g_depth, tex_coords).r, u_proj);
 	vec3 v = normalize(-pos);
 
 	// Non-metals have achromatic specular reflectance, metals use base color
@@ -285,7 +291,7 @@ void main()
         // TODO: This isn't correct, I think.
         vec3 kD = 1.0 - kS;
 
-        float occlusion = texture(u_ao, tex_coords).r;
+        float occlusion = u_use_ao ? texture(u_ao, tex_coords).r : 1.;
 
         out_luminance += occlusion * irradiance * base_color * Fd_Lambert();
 	}

@@ -110,11 +110,8 @@ void GeometryPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
         const auto model_view = ctx_v.view * r.model;
         const auto mvp = ctx_v.proj * model_view;
 
-        r.shader.set("u_model_view", model_view);
         r.shader.set("u_mvp", mvp);
         r.shader.set("u_normal_mat", inverseTranspose(mat3{model_view}));
-        float far_clip_dist = ctx_v.proj[3][2] / (ctx_v.proj[2][2] + 1.f);
-        r.shader.set("u_far_clip_distance", far_clip_dist);
 
         r.shader.set("u_base_color_factor", r.base_color_factor);
         r.shader.set("u_metallic_factor", r.metallic_factor);

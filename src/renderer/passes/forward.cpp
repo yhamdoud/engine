@@ -59,15 +59,8 @@ void ForwardPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 
         glUseProgram(probe_shader.get_id());
 
-        float far_clip_dist = ctx_v.proj[3][2] / (ctx_v.proj[2][2] + 1.f);
-        probe_shader.set("u_far_clip_distance", far_clip_dist);
-
         probe_shader.set("u_inv_grid_transform", ctx_r.inv_grid_transform);
         probe_shader.set("u_grid_dims", ctx_r.grid_dims);
-
-        // FIXME:
-        if (ctx_r.sh_texs.size() == 0)
-            return;
 
         glBindTextureUnit(0, ctx_r.sh_texs[0]);
         glBindTextureUnit(1, ctx_r.sh_texs[1]);
@@ -81,11 +74,9 @@ void ForwardPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
         {
             const mat4 model =
                 scale(translate(mat4(1.f), position), vec3(0.2f));
-            const mat4 model_view = ctx_v.view * model;
 
             probe_shader.set("u_model", model);
-            probe_shader.set("u_model_view", model_view);
-            probe_shader.set("u_mvp", ctx_v.proj * model_view);
+            probe_shader.set("u_mvp", ctx_v.proj * ctx_v.view * model);
 
             Renderer::render_mesh_instance(
                 ctx_r.entity_vao, ctx_r.mesh_instances[ctx_r.probe_mesh_idx]);

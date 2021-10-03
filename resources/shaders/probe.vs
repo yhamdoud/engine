@@ -11,11 +11,9 @@ uniform float u_far_clip_distance;
 
 out vec3 normal;
 out vec3 position;
-out float depth;
 
 void main()
 {
-	depth = -(u_model_view * vec4(a_position, 1.)).z / u_far_clip_distance;
     position = (u_model * vec4(a_position, 1.)).xyz;
 	normal = a_normal;
 	gl_Position = u_mvp * vec4(a_position, 1.);
