@@ -38,3 +38,5 @@
 compile_commands.json
 *build*/
 vgcore.*
+resources/models/
+imgui.ini

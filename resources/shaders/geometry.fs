@@ -37,7 +37,6 @@ in Varying
 	vec4 light_space_pos;
 } fs_in;
 
-// TBN transforms from tangent to world space.
 mat3 calculate_tbn_matrix(vec4 tangent_sign, vec3 normal)
 {
     normal = normalize(normal);

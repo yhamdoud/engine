@@ -49,8 +49,8 @@ void Editor::draw()
         if (ImGui::CollapsingHeader("Sun"))
         {
             ImGui::ColorEdit3("Color", value_ptr(renderer.ctx_r.sun.color));
-            ImGui::SliderFloat("Intensity", &renderer.ctx_r.sun.intensity, 0.f,
-                               100.f);
+            ImGui::SliderFloat("Intensity##Sun", &renderer.ctx_r.sun.intensity,
+                               0.f, 100.f);
             if (ImGui::SliderFloat3("Direction", value_ptr(light_dir), -1.f,
                                     1.f))
                 renderer.ctx_r.sun.direction = normalize(light_dir);
@@ -58,7 +58,7 @@ void Editor::draw()
 
         if (ImGui::CollapsingHeader("GI"))
         {
-            ImGui::SliderInt("Bounces", &bounce_count, 0, 10);
+            ImGui::SliderInt("Bounces", &bounce_count, 1, 10);
             ImGui::SliderFloat("Distance", &distance, 1.f, 5.f);
 
             ImGui::Separator();
@@ -74,6 +74,8 @@ void Editor::draw()
             ImGui::ProgressBar(renderer.baking_progress());
         }
 
+        ImGui::Checkbox("##SSAO", &renderer.ssao_enabled);
+        ImGui::SameLine();
         if (ImGui::CollapsingHeader("SSAO"))
         {
             if (ImGui::SliderInt("Sample count", &renderer.ssao.sample_count, 0,
@@ -116,6 +118,29 @@ void Editor::draw()
                 renderer.forward.parse_parameters();
         }
 
+        ImGui::Checkbox("##SSR", &renderer.ssr_enabled);
+        ImGui::SameLine();
+        if (ImGui::CollapsingHeader("SSR"))
+        {
+            if (ImGui::SliderFloat("Thickness", &renderer.ssr.cfg.thickness,
+                                   0.f, 10.f) |
+                ImGui::SliderInt("Stride", &renderer.ssr.cfg.stride, 1, 20) |
+                ImGui::Checkbox("Jitter", &renderer.ssr.cfg.do_jitter) |
+                ImGui::SliderFloat("Max distance", &renderer.ssr.cfg.max_dist,
+                                   0.f, 100.f) |
+                ImGui::SliderInt("Max steps", &renderer.ssr.cfg.max_steps, 0,
+                                 500))
+                renderer.ssr.parse_parameters();
+
+            ImVec2 window_size = ImGui::GetWindowSize();
+            ImVec2 texture_size{window_size.x,
+                                window_size.x / viewport_aspect_ratio};
+            ImGui::Image((ImTextureID)renderer.ssr.ssr_tex, texture_size,
+                         ImVec2(0, 1), ImVec2(1, 0));
+        }
+
+        ImGui::Checkbox("##Bloom", &renderer.bloom_enabled);
+        ImGui::SameLine();
         if (ImGui::CollapsingHeader("Bloom"))
         {
             if (ImGui::SliderFloat("Intensity", &renderer.bloom.cfg.intensity,

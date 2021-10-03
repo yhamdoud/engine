@@ -14,6 +14,7 @@
 #include "renderer/passes/lighting.hpp"
 #include "renderer/passes/shadow.hpp"
 #include "renderer/passes/ssao.hpp"
+#include "renderer/passes/ssr.hpp"
 #include "renderer/passes/tone_map.hpp"
 #include "renderer/probe_viewport.hpp"
 
@@ -43,7 +44,7 @@ class Renderer
     Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
 
     ViewportContext ctx_v{
-        .near = 0.01f,
+        .near = 0.1f,
         .far = 50.f,
         .fov = glm::radians(90.f),
     };
@@ -69,6 +70,7 @@ class Renderer
 
     GeometryPass geometry{};
 
+    bool ssao_enabled = true;
     SsaoPass ssao{{
         .kernel_size = 64,
         .sample_count = 64,
@@ -90,6 +92,16 @@ class Renderer
         .draw_probes = false,
     }};
 
+    bool ssr_enabled = true;
+    SsrPass ssr{{
+        .thickness = 1.f,
+        .stride = 1,
+        .do_jitter = true,
+        .max_dist = 20.f,
+        .max_steps = 300,
+    }};
+
+    bool bloom_enabled = true;
     BloomPass bloom{{
         .pass_count = 5u,
         .intensity = 0.05f,

@@ -128,11 +128,10 @@ Renderer::Renderer(glm::ivec2 viewport_size)
     geometry.initialize(ctx_v);
     ssao.initialize(ctx_v);
     lighting.initialize(ctx_v);
+    forward.initialize(ctx_v);
+    ssr.initialize(ctx_v);
     bloom.initialize(ctx_v);
     tone_map.initialize(ctx_v);
-
-    // FIXME:
-    probe_view.ctx.ao_tex = ctx_v.ao_tex;
 }
 
 Renderer::~Renderer()
@@ -382,37 +381,42 @@ void Renderer::render(std::vector<RenderData> &queue)
 
     if (baking_jobs.size() > 0)
     {
-        TracyGpuZone("Probe baking pass");
-        bake();
+        TracyGpuZone("Probe baking pass") bake();
     }
 
     {
-        TracyGpuZone("Shadow pass");
-        shadow.render(ctx_v, ctx_r);
+        TracyGpuZone("Shadow pass") shadow.render(ctx_v, ctx_r);
     }
+
     {
-        TracyGpuZone("Geometry pass");
-        geometry.render(ctx_v, ctx_r);
+        TracyGpuZone("Geometry pass") geometry.render(ctx_v, ctx_r);
     }
+
+    if (ssao_enabled)
     {
-        TracyGpuZone("SSAO pass");
-        ssao.render(ctx_v);
+        TracyGpuZone("SSAO pass") ssao.render(ctx_v);
     }
+
     {
-        TracyGpuZone("Lighting pass");
-        lighting.render(ctx_v, ctx_r);
+        TracyGpuZone("Lighting pass") lighting.render(ctx_v, ctx_r);
     }
+
     {
-        TracyGpuZone("Forward pass");
-        forward.render(ctx_v, ctx_r);
+        TracyGpuZone("Forward pass") forward.render(ctx_v, ctx_r);
     }
+
+    if (ssr_enabled)
     {
-        TracyGpuZone("Bloom pass");
-        bloom.render(ctx_v, ctx_r);
+        TracyGpuZone("SSR pass") ssr.render(ctx_v, ctx_r);
     }
+
+    if (bloom_enabled)
     {
-        TracyGpuZone("Tone map pass");
-        tone_map.render(ctx_v, ctx_r);
+        TracyGpuZone("Bloom pass") bloom.render(ctx_v, ctx_r);
+    }
+
+    {
+        TracyGpuZone("Tone map pass") tone_map.render(ctx_v, ctx_r);
     }
 }
 

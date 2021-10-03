@@ -1,18 +1,14 @@
 # Deferred OpenGL rendering engine
 
-## Table of contents
-
-1. [Showcase](#showcase)
-2. [Feature list](#feature-list)
-3. [Building](#building)
-4. [Technical overview](#technical-overview)
-5. [Development log](https://github.com/yhamdoud/engine/wiki/Development-Log)
-
-## Showcase
-
 https://user-images.githubusercontent.com/18217298/134210414-40b6ae4c-4609-4e9a-a16c-c40ca20de11f.mp4
 
-https://user-images.githubusercontent.com/18217298/135535368-e1435ba9-5313-4240-aac8-15c663436d46.mp4
+## Table of contents
+
+1. [Feature list](#feature-list)
+2. [Building](#building)
+3. [Showcase](#showcase)
+4. [Technical overview](#technical-overview)
+5. [Development log](https://github.com/yhamdoud/engine/wiki/Development-Log)
 
 ## Feature list
 
@@ -22,9 +18,10 @@ https://user-images.githubusercontent.com/18217298/135535368-e1435ba9-5313-4240-
 -   PBR material system
 -   Irradiance probes for diffuse GI
 -   Stable CSM
+-   SSR
 -   SSAO
--   HDR lighting
 -   Bloom
+-   HDR lighting
 -   Tone mapping
 -   Directional and point lights
 -   Normal mapping
@@ -43,7 +40,6 @@ https://user-images.githubusercontent.com/18217298/135535368-e1435ba9-5313-4240-
 ### Planned
 
 -   TAA
--   SSR
 -   Glossy GI
 -   Bilateral blur filter
 
@@ -79,6 +75,12 @@ $ ./engine
 The Windows equivalent of the steps shown above can be used.
 Alternatively, the CMake GUI or Visual Studio's CMake integration could be used.
 
+## Showcase
+
+### Baking
+
+https://user-images.githubusercontent.com/18217298/135535368-e1435ba9-5313-4240-aac8-15c663436d46.mp4
+
 ## Technical overview
 
 ### Deferred rendering
@@ -95,7 +97,7 @@ The G-buffer consists of the following render targets:
 
 ### Physically based shading
 
-For the specular BRDF, the Cook-Torrance approximation is used.
+The Cook-Torrance model is used as specular BRDF.
 The diffuse BRDF is approximated by a simplified Lambertian model.
 The implementation of both borrows from the work presented in
 [Physically Based Rendering in Filament](https://google.github.io/filament/Filament.md.html) and [Real Shading in Unreal Engine 4](https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf).
@@ -105,19 +107,28 @@ The material system only supports the metallic-roughness workflow as of writing.
 ### Diffuse GI
 
 Diffuse GI for static and dynamic objects is approximated using a grid of irradiance probes.
-During baking, the scene is rasterized at each probe and the resulting irradiance map is processed with a compute shader.
+During baking, the scene is rasterized to a cube map at each probe and the irradiance is subsequently determined using a compute shader.
 This process is repeated for multiple bounces and can be amortized over several frames.
 
-An efficient encoding is required to support many probes, the fact that we are primarily interested in capturing low frequency detail can be put to good use here.
-We opted to project radiance map on the third-order spherical harmonics basis functions.
-This allows us to represent each map using just 27 floating-point numbers, 9 for each channel to be specific.
-Furthermore, calculating the irradiance ends up being a single multiplication of each coefficient by a constant factor, instead of a convolution.
+An efficient encoding for irradiance is required to support many probes, the fact that we are primarily interested in capturing low frequency detail can be put to good use here.
+We opted to project the radiance map on the third-order spherical harmonics basis functions.
+This allows us to represent each map using just 27 floating-point numbers (9 for each channel).
+Furthermore, calculating the irradiance ends up being a multiplication of each coefficient by a constant factor, instead of a convolution.
 
 In practice, the cube map projection algorithm in [Stupid Spherical Harmonics
 Tricks](http://www.ppsloan.org/publications/StupidSH36.pdf) is used.
 The algorithm is implemented using 2 compute shaders, one for the actual projection of each texel and the other for gathering the results with a parallel sum reduction.
-The resulting coefficients are packed in 7 three-dimensional textures.
-At run-time, probes are blended by hardware accelerated trilinear interpolation of the coefficients stored in each texture.
+The resulting coefficients are packed in 7 three-dimensional textures and sampled at run-time using hardware accelerated trilinear interpolation.
+
+### Screen-space reflections
+
+The view space position of the fragment is reconstructed from the depth buffer and corresponding surface normal is sampled from the g-buffer.
+A ray leaving the camera is reflected about this normal.
+The reflected ray is used to march the depth buffer.
+Given that it's visible on screen visible, we end up with an approximate hit position, which can be used to sample a buffer containing the lighted scene.
+
+The implemented ray marching solution relies on rasterization of the ray in screen-space using an optimized DDA algorithm, as first presented by [Morgan McGuire and Mike Mara](https://casual-effects.blogspot.com/2014/08/screen-space-ray-tracing.html).
+This technique helps with evenly distributing the samples, and thus avoids over- and undersampling issues.
 
 ### Screen-space ambient occlusion
 
