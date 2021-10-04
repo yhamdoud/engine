@@ -21,6 +21,8 @@ class SsrPass
     Shader ssr;
     Shader blend;
 
+    int level_count = 5;
+
   public:
     SsrConfig cfg;
     uint ssr_tex;

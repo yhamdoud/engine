@@ -94,8 +94,8 @@ class Renderer
 
     bool ssr_enabled = true;
     SsrPass ssr{{
-        .thickness = 1.f,
-        .stride = 1,
+        .thickness = 0.1f,
+        .stride = 2,
         .do_jitter = true,
         .max_dist = 20.f,
         .max_steps = 300,

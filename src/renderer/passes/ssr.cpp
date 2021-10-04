@@ -20,6 +20,13 @@ SsrPass::SsrPass(SsrConfig cfg)
     glCreateTextures(GL_TEXTURE_2D, 1, &ssr_tex);
     glCreateFramebuffers(1, &frame_buf);
 
+    // TODO:
+    glTextureParameteri(ssr_tex, GL_TEXTURE_MIN_FILTER,
+                        GL_LINEAR_MIPMAP_LINEAR);
+    glTextureParameteri(ssr_tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(ssr_tex, GL_TEXTURE_MAX_LEVEL, level_count);
+    glTextureParameteri(ssr_tex, GL_TEXTURE_BASE_LEVEL, 0);
+
     parse_parameters();
 }
 
@@ -34,7 +41,8 @@ void SsrPass::parse_parameters()
 
 void SsrPass::initialize(ViewportContext &ctx)
 {
-    glTextureStorage2D(ssr_tex, 1, GL_RGBA16F, ctx.size.x, ctx.size.y);
+    glTextureStorage2D(ssr_tex, level_count, GL_RGBA16F, ctx.size.x,
+                       ctx.size.y);
 
     uint debug;
     glCreateTextures(GL_TEXTURE_2D, 1, &debug);
@@ -72,6 +80,8 @@ void SsrPass::render(ViewportContext &ctx, RenderContext &ctx_r)
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
 
+    glGenerateTextureMipmap(ssr_tex);
+
     {
         glViewport(0, 0, ctx.size.x, ctx.size.y);
         glBindFramebuffer(GL_FRAMEBUFFER, ctx.hdr_frame_buf);
@@ -79,7 +89,8 @@ void SsrPass::render(ViewportContext &ctx, RenderContext &ctx_r)
         glEnable(GL_BLEND);
         glBlendFunc(GL_ONE, GL_ONE);
 
-        glBindTextureUnit(0, ssr_tex);
+        glBindTextureUnit(0, ctx.g_buf.base_color_roughness);
+        glBindTextureUnit(1, ssr_tex);
 
         glUseProgram(blend.get_id());
         glDrawArrays(GL_TRIANGLES, 0, 3);
