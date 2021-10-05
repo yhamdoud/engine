@@ -4,9 +4,7 @@
 in vec2 tex_coords;
 in vec3 view_ray;
 
-layout (location = 0) out vec4 foo;
-// FIXME:
-layout (location = 1) out vec4 debug;
+layout (location = 0) out vec4 frag_color;
 
 layout (binding = 0) uniform sampler2D u_g_depth;
 layout (binding = 1) uniform sampler2D u_g_normal_metallic;
@@ -182,18 +180,26 @@ bool ray_trace(
 
 void main()
 {
-    float roughness = texture(u_g_base_color_roughness, tex_coords).a;
-    // FIXME:
-    if (roughness > 0.3)
+    float depth = texture(u_g_depth, tex_coords).r;
+    if (depth == 1.0)
         discard;
+
+    float roughness = texture(u_g_base_color_roughness, tex_coords).a;
+    if (roughness > 0.9)
+    {
+        frag_color = vec4(0.f);
+        return;
+    }
+
 
     vec2 hit_screen = vec2(0., 0.);
     vec3 hit_view = vec3(0., 0., 0.);
 
-    float depth = texture(u_g_depth, tex_coords).r;
 	vec3 ray_origin = view_ray * linearize_depth(depth, u_proj);
 
 	vec3 normal = texture(u_g_normal_metallic, tex_coords).xyz;
+
+    float n_dot_v = max(dot(normal, normalize(-ray_origin)), 0.);
 
 	vec3 ray_dir = normalize(reflect(normalize(ray_origin), normal));
 
@@ -215,9 +221,7 @@ void main()
     );
 
 
-    foo = hit
-        ? vec4(texelFetch(u_hdr_target, ivec2(hit_screen), 0).rgb, 1.)
+    frag_color = hit
+        ? vec4(texelFetch(u_hdr_target, ivec2(hit_screen), 0).rgb, n_dot_v)
         : vec4(0.f);
-
-    debug = vec4(ray_dir, 1.f);
 }

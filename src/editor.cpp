@@ -151,7 +151,8 @@ void Editor::draw()
                 ImGui::SliderFloat("Max distance", &renderer.ssr.cfg.max_dist,
                                    0.f, 100.f) |
                 ImGui::SliderInt("Max steps", &renderer.ssr.cfg.max_steps, 0,
-                                 500))
+                                 500) |
+                ImGui::Checkbox("Fresnel", &renderer.ssr.cfg.correct))
                 renderer.ssr.parse_parameters();
 
             ImVec2 window_size = ImGui::GetWindowSize();

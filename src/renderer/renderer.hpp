@@ -94,11 +94,12 @@ class Renderer
 
     bool ssr_enabled = true;
     SsrPass ssr{{
-        .thickness = 0.1f,
+        .thickness = 0.25f,
         .stride = 2,
         .do_jitter = true,
         .max_dist = 20.f,
         .max_steps = 300,
+        .correct = true,
     }};
 
     bool bloom_enabled = true;

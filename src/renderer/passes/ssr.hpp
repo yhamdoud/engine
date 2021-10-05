@@ -13,6 +13,7 @@ struct SsrConfig
     bool do_jitter;
     float max_dist;
     int max_steps;
+    bool correct;
 };
 
 class SsrPass

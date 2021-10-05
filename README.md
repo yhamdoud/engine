@@ -82,7 +82,7 @@ Alternatively, the CMake GUI or Visual Studio's CMake integration could be used.
 
 ### Baking
 
-https://user-images.githubusercontent.com/18217298/135535368-e1435ba9-5313-4240-aac8-15c663436d46.mp4
+https://user-images.githubusercontent.com/18217298/136076580-9459b416-ab55-4d88-a427-2f2645f74d3f.mp4
 
 ### SSR
 

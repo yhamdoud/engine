@@ -37,6 +37,8 @@ void SsrPass::parse_parameters()
     ssr.set("u_do_jitter", cfg.do_jitter);
     ssr.set("u_max_dist", cfg.max_dist);
     ssr.set("u_max_steps", cfg.max_steps);
+
+    blend.set("u_correct", cfg.correct);
 }
 
 void SsrPass::initialize(ViewportContext &ctx)
@@ -44,13 +46,8 @@ void SsrPass::initialize(ViewportContext &ctx)
     glTextureStorage2D(ssr_tex, level_count, GL_RGBA16F, ctx.size.x,
                        ctx.size.y);
 
-    uint debug;
-    glCreateTextures(GL_TEXTURE_2D, 1, &debug);
-    glTextureStorage2D(debug, 1, GL_RGBA16F, ctx.size.x, ctx.size.y);
-
-    array<GLenum, 2> draw_bufs{GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+    array<GLenum, 1> draw_bufs{GL_COLOR_ATTACHMENT0};
     glNamedFramebufferTexture(frame_buf, draw_bufs[0], ssr_tex, 0);
-    glNamedFramebufferTexture(frame_buf, draw_bufs[1], debug, 0);
     glNamedFramebufferDrawBuffers(frame_buf, draw_bufs.size(),
                                   draw_bufs.data());
 
@@ -89,8 +86,9 @@ void SsrPass::render(ViewportContext &ctx, RenderContext &ctx_r)
         glEnable(GL_BLEND);
         glBlendFunc(GL_ONE, GL_ONE);
 
-        glBindTextureUnit(0, ctx.g_buf.base_color_roughness);
-        glBindTextureUnit(1, ssr_tex);
+        glBindTextureUnit(0, ctx.g_buf.normal_metallic);
+        glBindTextureUnit(1, ctx.g_buf.base_color_roughness);
+        glBindTextureUnit(2, ssr_tex);
 
         glUseProgram(blend.get_id());
         glDrawArrays(GL_TRIANGLES, 0, 3);
