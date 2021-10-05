@@ -84,6 +84,10 @@ Alternatively, the CMake GUI or Visual Studio's CMake integration could be used.
 
 https://user-images.githubusercontent.com/18217298/135535368-e1435ba9-5313-4240-aac8-15c663436d46.mp4
 
+### SSR
+
+https://user-images.githubusercontent.com/18217298/136068154-a21cba37-ff7b-4947-a607-21e0bccd24e1.mp4
+
 ## Technical overview
 
 ### Deferred rendering
