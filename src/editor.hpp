@@ -14,6 +14,8 @@ class Editor
     float distance = 1.f;
     glm::vec3 light_dir{0.f, -1.f, 1.f};
 
+    void draw_profiler();
+
   public:
     Editor(Window &window, Renderer &renderer);
     ~Editor();

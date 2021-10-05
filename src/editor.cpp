@@ -10,6 +10,7 @@
 
 #include "editor.hpp"
 #include "glm/geometric.hpp"
+#include "profiler.hpp"
 
 using namespace engine;
 using namespace std;
@@ -31,6 +32,25 @@ Editor::Editor(Window &w, Renderer &r) : window(w), renderer(r)
     ImGui_ImplOpenGL3_Init("#version 460");
 }
 
+static const char *passes[] = {
+    "Baking",  "Shadow", "Geometry", "SSAO",     "Lighting",
+    "Forward", "SSR",    "Bloom",    "Tone map",
+};
+
+void Editor::draw_profiler()
+{
+
+    ImGui::Begin("Profiler");
+    {
+        for (int i = 0; i < query_count; i++)
+        {
+            ImGui::Text("%s: %.3f ms", passes[i],
+                        static_cast<float>(profiler_zone_time(i)) / 1e6);
+        }
+    }
+    ImGui::End();
+}
+
 void Editor::draw()
 {
     ZoneScoped;
@@ -43,6 +63,8 @@ void Editor::draw()
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+
+    draw_profiler();
 
     ImGui::Begin("Renderer");
     {
@@ -79,7 +101,7 @@ void Editor::draw()
         if (ImGui::CollapsingHeader("SSAO"))
         {
             if (ImGui::SliderInt("Sample count", &renderer.ssao.sample_count, 0,
-                                 renderer.ssao.sample_count) |
+                                 renderer.ssao.kernel_size) |
                 ImGui::SliderFloat("Radius", &renderer.ssao.radius, 0.f, 10.f) |
                 ImGui::SliderFloat("Bias", &renderer.ssao.bias, 0.f, 1.f) |
                 ImGui::SliderFloat("Strength", &renderer.ssao.strength, 0.f,

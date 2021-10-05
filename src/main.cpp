@@ -3,14 +3,12 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 
-#include <Tracy.hpp>
-#include <TracyOpenGL.hpp>
-
 #include "constants.hpp"
 #include "editor.hpp"
 #include "entity.hpp"
 #include "logger.hpp"
 #include "model.hpp"
+#include "profiler.hpp"
 #include "renderer/renderer.hpp"
 #include "shader.hpp"
 #include "transform.hpp"

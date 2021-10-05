@@ -70,7 +70,7 @@ SsaoPass::SsaoPass(SsaoConfig cfg)
 
 void SsaoPass::parse_parameters()
 {
-    ssao.set("u_kernel_size", static_cast<uint>(kernel_size));
+    ssao.set("u_kernel_size", static_cast<uint>(sample_count));
     ssao.set("u_kernel[0]", span(kernel));
     ssao.set("u_radius", radius);
     ssao.set("u_bias", bias);

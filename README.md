@@ -31,11 +31,14 @@ https://user-images.githubusercontent.com/18217298/134210414-40b6ae4c-4609-4e9a-
 
 -   OpenGL 4.6
     -   Direct state access (DSA)
--   Amortized GI probe baking
--   GPU probe baking
+-   Amortized probe baking
+-   GPU and CPU probe baking
 -   glTF model loading
 -   DDS, PNG, JPEG texture loading
 -   Transform hierarchy
+-   GPU profiler
+-   CPU profiling with Tracy
+-   Editor UI
 
 ### Planned
 

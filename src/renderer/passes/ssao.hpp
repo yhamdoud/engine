@@ -24,9 +24,10 @@ class SsaoPass
     uint noise_tex;
     Shader ssao;
     Shader blur;
-    int kernel_size;
 
   public:
+    int kernel_size;
+
     int sample_count;
     float radius;
     float bias;

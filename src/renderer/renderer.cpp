@@ -381,41 +381,57 @@ void Renderer::render(std::vector<RenderData> &queue)
 
     if (baking_jobs.size() > 0)
     {
-        TracyGpuZone("Probe baking pass") bake();
+        TracyGpuZone("Probe baking pass");
+        GpuZone _(0);
+        bake();
     }
 
     {
-        TracyGpuZone("Shadow pass") shadow.render(ctx_v, ctx_r);
+        TracyGpuZone("Shadow pass");
+        GpuZone _(1);
+        shadow.render(ctx_v, ctx_r);
     }
 
     {
-        TracyGpuZone("Geometry pass") geometry.render(ctx_v, ctx_r);
+        TracyGpuZone("Geometry pass");
+        GpuZone _(2);
+        geometry.render(ctx_v, ctx_r);
     }
 
     if (ssao_enabled)
     {
-        TracyGpuZone("SSAO pass") ssao.render(ctx_v);
+        TracyGpuZone("SSAO pass");
+        GpuZone _(3);
+        ssao.render(ctx_v);
     }
 
     {
-        TracyGpuZone("Lighting pass") lighting.render(ctx_v, ctx_r);
+        TracyGpuZone("Lighting pass");
+        GpuZone _(4);
+        lighting.render(ctx_v, ctx_r);
     }
 
     {
-        TracyGpuZone("Forward pass") forward.render(ctx_v, ctx_r);
+        TracyGpuZone("Forward pass");
+        GpuZone _(5);
+        forward.render(ctx_v, ctx_r);
     }
 
     if (ssr_enabled)
     {
-        TracyGpuZone("SSR pass") ssr.render(ctx_v, ctx_r);
+        TracyGpuZone("SSR pass");
+        GpuZone _(6);
+        ssr.render(ctx_v, ctx_r);
     }
 
     if (bloom_enabled)
     {
+        GpuZone _(7);
         TracyGpuZone("Bloom pass") bloom.render(ctx_v, ctx_r);
     }
 
     {
+        GpuZone _(8);
         TracyGpuZone("Tone map pass") tone_map.render(ctx_v, ctx_r);
     }
 }
@@ -784,4 +800,3 @@ bool Renderer::is_baking() { return baking_jobs.size() != 0; }
 //     }
 
 //     logger.info("Probe grid generation finished");
-// }

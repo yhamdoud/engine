@@ -4,10 +4,8 @@
 
 #include <glad/glad.h>
 
-#include <Tracy.hpp>
-#include <TracyOpenGL.hpp>
-
 #include "logger.hpp"
+#include "profiler.hpp"
 #include "renderer/renderer.hpp"
 #include "window.hpp"
 
@@ -130,6 +128,9 @@ bool Window::load_gl()
 void Window::run(const function<void()> &main_loop)
 {
     ZoneScoped;
+
+    profiler_init();
+
     TracyGpuContext;
 
     while (!glfwWindowShouldClose(impl))
@@ -138,6 +139,8 @@ void Window::run(const function<void()> &main_loop)
 
         glfwSwapBuffers(impl);
         glfwPollEvents();
+
+        profiler_collect();
 
         TracyGpuCollect;
         FrameMark
