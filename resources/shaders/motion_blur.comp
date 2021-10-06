@@ -1,0 +1,33 @@
+#version 460 core
+
+layout(local_size_x = 32, local_size_y = 32) in;
+
+layout(binding = 0) uniform sampler2D u_g_velocity;
+layout(binding = 1) uniform sampler2D u_hdr_read;
+layout(binding = 2) restrict writeonly uniform image2D u_hdr_write;
+
+uniform int u_sample_count;
+uniform float u_intensity;
+
+void main()
+{
+	const ivec2 g_id = ivec2(gl_GlobalInvocationID.xy);
+
+	const ivec2 target_size = imageSize(u_hdr_write);
+
+	vec2 tex_coords = (vec2(g_id) + vec2(0.5)) / vec2(target_size);
+
+    vec2 velocity = texelFetch(u_g_velocity, g_id, 0).rg;
+
+    vec3 color = vec3(0.);
+
+    for (int i = 0; i < u_sample_count; i++)
+    {
+        float t = mix(-u_intensity, u_intensity, i / (u_sample_count - 1.));
+        color += textureLod( u_hdr_read, t * velocity + tex_coords, 0).rgb;
+    }
+
+    color /= u_sample_count;
+    
+	imageStore(u_hdr_write, ivec2(g_id), vec4(color, 1.));
+}

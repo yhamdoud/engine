@@ -44,7 +44,7 @@ mat4 get_world_position(size_t node_idx)
 }
 
 size_t add_entity(Renderer &renderer, Entity::Flags flags, Transform transform,
-                  const Model &model, optional<Entity> parent, Shader &shader)
+                  const Model &model, optional<Entity> parent)
 {
     size_t mesh_idx = renderer.register_mesh(*model.mesh);
 
@@ -81,7 +81,6 @@ size_t add_entity(Renderer &renderer, Entity::Flags flags, Transform transform,
         model.material.base_color_factor,
         model.material.alpha_mode,
         model.material.alpha_cutoff,
-        shader,
     });
 
     return entities.size() - 1;
@@ -110,7 +109,6 @@ vector<RenderData> generate_render_data()
             model,
             e.alpha_mode,
             e.alpha_cutoff,
-            e.shader,
         });
     }
 
@@ -146,11 +144,6 @@ int main()
 
     renderer.ctx_r.skybox_tex = skybox_tex;
 
-    auto deferred_shader = *Shader::from_paths(ShaderPaths{
-        .vert = shaders_path / "geometry.vs",
-        .frag = shaders_path / "geometry.fs",
-    });
-
     // {
     //     auto maybe_bistro = load_gltf(models_path /
     //     "bistro/gltf/bistro.gltf");
@@ -173,8 +166,7 @@ int main()
             for (const auto &m : *sponza)
             {
                 add_entity(renderer, Entity::Flags::casts_shadow,
-                           Transform{m.transform}, m, std::nullopt,
-                           deferred_shader);
+                           Transform{m.transform}, m, std::nullopt);
             }
         }
     }

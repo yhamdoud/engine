@@ -15,6 +15,7 @@ struct GBuffer
     uint framebuffer;
     uint base_color_roughness;
     uint normal_metallic;
+    uint velocity;
     uint depth;
 };
 
@@ -31,7 +32,6 @@ struct RenderData
     glm::mat4 model;
     AlphaMode alpha_mode;
     float alpha_cutoff;
-    Shader &shader;
 };
 
 struct MeshInstance
@@ -62,11 +62,13 @@ struct ViewportContext
 {
     glm::ivec2 size;
     uint hdr_tex = invalid_texture_id;
+    uint hdr_tex2 = invalid_texture_id;
     uint hdr_frame_buf = default_frame_buffer_id;
     uint ldr_frame_buf = default_frame_buffer_id;
     glm::mat4 proj;
     glm::mat4 proj_inv;
     glm::mat4 view;
+    glm::mat4 view_proj_prev;
     float near = 0;
     float far = 0;
     float fov = 0;

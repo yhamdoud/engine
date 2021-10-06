@@ -3,9 +3,9 @@
 // TODO: Use this when when using hardware depth buffer.
 // layout(early_fragment_tests) in;
 
-layout (location = 0) out vec4 g_position;
-layout (location = 1) out vec4 g_normal_metallic;
-layout (location = 2) out vec4 g_base_color_roughness;
+layout (location = 0) out vec4 g_normal_metallic;
+layout (location = 1) out vec4 g_base_color_roughness;
+layout (location = 2) out vec4 g_velocity;
 
 uniform vec3 u_light_pos;
 uniform mat3 u_normal_mat;
@@ -35,6 +35,8 @@ in Varying
 	vec2 tex_coords;
 	vec4 tangent;
 	vec4 light_space_pos;
+	vec4 position;
+	vec4 position_prev;
 } fs_in;
 
 mat3 calculate_tbn_matrix(vec4 tangent_sign, vec3 normal)
@@ -94,4 +96,9 @@ void main()
         g_base_color_roughness.a *= metallic_roughness[1];
     }
 
+    vec3 pos = fs_in.position.xyz / fs_in.position.w;
+    vec3 pos_prev = fs_in.position_prev.xyz / fs_in.position_prev.w;
+
+    vec2 velocity = pos.xy - pos_prev.xy;
+    g_velocity = vec4(velocity, 0., 1.);
 }

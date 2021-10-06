@@ -32,9 +32,26 @@ Editor::Editor(Window &w, Renderer &r) : window(w), renderer(r)
     ImGui_ImplOpenGL3_Init("#version 460");
 }
 
+void Editor::draw()
+{
+    ZoneScoped;
+
+    TracyGpuZone("Editor");
+
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    draw_profiler();
+    draw_renderer_menu();
+
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
 static const char *passes[] = {
-    "Baking",  "Shadow", "Geometry", "SSAO",     "Lighting",
-    "Forward", "SSR",    "Bloom",    "Tone map",
+    "Baking",  "Shadow", "Geometry",    "SSAO",  "Lighting",
+    "Forward", "SSR",    "Motion blur", "Bloom", "Tone map",
 };
 
 void Editor::draw_profiler()
@@ -51,20 +68,10 @@ void Editor::draw_profiler()
     ImGui::End();
 }
 
-void Editor::draw()
+void Editor::draw_renderer_menu()
 {
-    ZoneScoped;
-
-    TracyGpuZone("Editor");
-
     float viewport_aspect_ratio =
         static_cast<float>(renderer.ctx_v.size.x) / renderer.ctx_v.size.y;
-
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    draw_profiler();
 
     ImGui::Begin("Renderer");
     {
@@ -162,12 +169,24 @@ void Editor::draw()
                          ImVec2(0, 1), ImVec2(1, 0));
         }
 
+        ImGui::Checkbox("##Motion blur", &renderer.motion_blur_enabled);
+        ImGui::SameLine();
+        if (ImGui::CollapsingHeader("Motion blur"))
+        {
+            if (ImGui::SliderFloat("Intensity##Motion blur",
+                                   &renderer.motion_blur.cfg.intensity, 0.f,
+                                   3.f) |
+                ImGui::SliderInt("Sample count##Motion blur",
+                                 &renderer.motion_blur.cfg.sample_count, 1, 25))
+                renderer.motion_blur.parse_parameters();
+        }
+
         ImGui::Checkbox("##Bloom", &renderer.bloom_enabled);
         ImGui::SameLine();
         if (ImGui::CollapsingHeader("Bloom"))
         {
             if (ImGui::SliderFloat("Intensity", &renderer.bloom.cfg.intensity,
-                                   0.f, 5.f),
+                                   0.f, 0.25f),
                 ImGui::SliderFloat("Upsample radius",
                                    &renderer.bloom.cfg.upsample_radius, 0.f,
                                    3.f))
@@ -222,7 +241,6 @@ void Editor::draw()
 
         if (ImGui::CollapsingHeader("G-buffer"))
         {
-            ImGui::BeginChild("Stuff");
             ImVec2 window_size = ImGui::GetWindowSize();
             ImVec2 texture_size{window_size.x,
                                 window_size.x / viewport_aspect_ratio};
@@ -247,11 +265,10 @@ void Editor::draw()
             ImGui::Image((ImTextureID)renderer.geometry.debug_view_roughness,
                          texture_size, ImVec2(0, 1), ImVec2(1, 0));
 
-            ImGui::EndChild();
+            ImGui::Text("Velocity");
+            ImGui::Image((ImTextureID)renderer.geometry.debug_view_velocity,
+                         texture_size, ImVec2(0, 1), ImVec2(1, 0));
         }
     }
     ImGui::End();
-
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }

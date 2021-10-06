@@ -108,6 +108,16 @@ Renderer::Renderer(glm::ivec2 viewport_size)
         glTextureParameteri(ctx_v.hdr_tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTextureParameteri(ctx_v.hdr_tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+        glCreateTextures(GL_TEXTURE_2D, 1, &ctx_v.hdr_tex2);
+        glTextureStorage2D(ctx_v.hdr_tex2, 1, GL_RGBA16F, ctx_v.size.x,
+                           ctx_v.size.y);
+        glTextureParameteri(ctx_v.hdr_tex2, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(ctx_v.hdr_tex2, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(ctx_v.hdr_tex2, GL_TEXTURE_WRAP_S,
+                            GL_CLAMP_TO_EDGE);
+        glTextureParameteri(ctx_v.hdr_tex2, GL_TEXTURE_WRAP_T,
+                            GL_CLAMP_TO_EDGE);
+
         glCreateFramebuffers(1, &ctx_v.hdr_frame_buf);
         glNamedFramebufferTexture(ctx_v.hdr_frame_buf, GL_COLOR_ATTACHMENT0,
                                   ctx_v.hdr_tex, 0);
@@ -130,6 +140,7 @@ Renderer::Renderer(glm::ivec2 viewport_size)
     lighting.initialize(ctx_v);
     forward.initialize(ctx_v);
     ssr.initialize(ctx_v);
+    motion_blur.initialize(ctx_v);
     bloom.initialize(ctx_v);
     tone_map.initialize(ctx_v);
 }
@@ -424,16 +435,27 @@ void Renderer::render(std::vector<RenderData> &queue)
         ssr.render(ctx_v, ctx_r);
     }
 
+    if (motion_blur_enabled)
+    {
+        TracyGpuZone("Motion blur pass");
+        GpuZone _(7);
+        motion_blur.render(ctx_v, ctx_r);
+    }
+
     if (bloom_enabled)
     {
-        GpuZone _(7);
-        TracyGpuZone("Bloom pass") bloom.render(ctx_v, ctx_r);
+        GpuZone _(8);
+        TracyGpuZone("Bloom pass");
+        bloom.render(ctx_v, ctx_r);
     }
 
     {
-        GpuZone _(8);
-        TracyGpuZone("Tone map pass") tone_map.render(ctx_v, ctx_r);
+        GpuZone _(9);
+        TracyGpuZone("Tone map pass");
+        tone_map.render(ctx_v, ctx_r);
     }
+
+    ctx_v.view_proj_prev = ctx_v.proj * ctx_v.view;
 }
 
 void Renderer::resize_viewport(glm::vec2 size)

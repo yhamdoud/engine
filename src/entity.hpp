@@ -28,8 +28,6 @@ struct Entity
     glm::vec3 base_color_factor;
     AlphaMode alpha_mode;
     float alpha_cutoff;
-
-    Shader &shader;
 };
 
 struct SceneGraphNode

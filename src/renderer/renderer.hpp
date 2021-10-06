@@ -12,6 +12,7 @@
 #include "renderer/passes/forward.hpp"
 #include "renderer/passes/geometry.hpp"
 #include "renderer/passes/lighting.hpp"
+#include "renderer/passes/motion_blur.hpp"
 #include "renderer/passes/shadow.hpp"
 #include "renderer/passes/ssao.hpp"
 #include "renderer/passes/ssr.hpp"
@@ -38,7 +39,7 @@ class Renderer
     void bake();
 
   public:
-    int bake_batch_size = 64;
+    int bake_batch_size = 32;
     int probe_view_count = 10;
 
     Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
@@ -100,6 +101,12 @@ class Renderer
         .max_dist = 20.f,
         .max_steps = 300,
         .correct = true,
+    }};
+
+    bool motion_blur_enabled = true;
+    MotionBlurPass motion_blur{{
+        .sample_count = 20,
+        .intensity = 0.35f,
     }};
 
     bool bloom_enabled = true;

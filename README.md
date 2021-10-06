@@ -23,6 +23,7 @@ https://user-images.githubusercontent.com/18217298/134210414-40b6ae4c-4609-4e9a-
 -   Bloom
 -   HDR lighting
 -   Tone mapping
+-   Motion blur
 -   Directional and point lights
 -   Normal mapping
 -   Skyboxes
@@ -97,9 +98,12 @@ The G-buffer consists of the following render targets:
 -   RT0 (RGBA16F)
     -   RGB: Normal
     -   A: Metallic
--   RT1 (sRGB8):
+-   RT1 (SRGB8_ALPHA8)
     -   RGB: Base color
     -   A: Roughness
+-   RT2: (RGBA16F)
+    -   RG: Velocity
+    -   BA: Unused
 -   Depth buffer
 
 ### Physically based shading
@@ -114,17 +118,17 @@ The material system only supports the metallic-roughness workflow as of writing.
 ### Diffuse GI
 
 Diffuse GI for static and dynamic objects is approximated using a grid of irradiance probes.
-During baking, the scene is rasterized to a cube map at each probe and the irradiance is subsequently determined using a compute shader.
+For each probe, the scene is rasterized to a cube map and the irradiance is subsequently determined using a compute shader.
 This process is repeated for multiple bounces and can be amortized over several frames.
 
-An efficient encoding for irradiance is required to support many probes, the fact that we are primarily interested in capturing low frequency detail can be put to good use here.
+An efficient encoding for irradiance is desirable when storing many probes, the fact that we are primarily interested in capturing low frequency detail can be put to good use here.
 We opted to project the radiance map on the third-order spherical harmonics basis functions.
 This allows us to represent each map using just 27 floating-point numbers (9 for each channel).
 Furthermore, calculating the irradiance ends up being a multiplication of each coefficient by a constant factor, instead of a convolution.
 
-In practice, the cube map projection algorithm in [Stupid Spherical Harmonics
+In practice, the cube map projection algorithm presented in [Stupid Spherical Harmonics
 Tricks](http://www.ppsloan.org/publications/StupidSH36.pdf) is used.
-The algorithm is implemented using 2 compute shaders, one for the actual projection of each texel and the other for gathering the results with a parallel sum reduction.
+The algorithm is implemented using 2 compute shaders, one for the actual projection of each cube map texel and the other for reducing the results of the first pass in parallel.
 The resulting coefficients are packed in 7 three-dimensional textures and sampled at run-time using hardware accelerated trilinear interpolation.
 
 ### Screen-space reflections
@@ -132,10 +136,10 @@ The resulting coefficients are packed in 7 three-dimensional textures and sample
 The view space position of the fragment is reconstructed from the depth buffer and corresponding surface normal is sampled from the g-buffer.
 A ray leaving the camera is reflected about this normal.
 The reflected ray is used to march the depth buffer.
-Given that it's visible on screen visible, we end up with an approximate hit position, which can be used to sample a buffer containing the lighted scene.
+Given that it's visible on screen, we end up with an approximate hit position, which can be used to sample a buffer containing the lighted scene.
 
-The implemented ray marching solution relies on rasterization of the ray in screen-space using an optimized DDA algorithm, as first presented by [Morgan McGuire and Mike Mara](https://casual-effects.blogspot.com/2014/08/screen-space-ray-tracing.html).
-This technique helps with evenly distributing the samples, and thus avoids over- and undersampling issues.
+The implemented depth buffer marching solution relies on rasterization of the ray in screen-space using a DDA algorithm, as first presented by [Morgan McGuire and Mike Mara](https://casual-effects.blogspot.com/2014/08/screen-space-ray-tracing.html).
+This technique evenly distributes the samples, and thus avoids over- and undersampling issues.
 
 ### Screen-space ambient occlusion
 
