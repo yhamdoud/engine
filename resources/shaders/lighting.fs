@@ -84,23 +84,23 @@ float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal, vec3 light
 
     vec3 pos = light_pos.xyz / light_pos.w;
 
-	// Handle points beyond the far plane of the light's frustrum.
-	if (pos.z > 1.0)
-		return 0.;
+    // Handle points beyond the far plane of the light's frustrum.
+    if (pos.z > 1.0)
+        return 0.;
 
-	// Transform NDC to texture space.
-	pos = 0.5 * pos + 0.5;
+    // Transform NDC to texture space.
+    pos = 0.5 * pos + 0.5;
 
-	float bias_max = 0.03;
-	float bias_min = 0.001;
+    float bias_max = 0.03;
+    float bias_min = 0.001;
 
-	float bias = max(bias_max * (1 - dot(normal, light_dir)), bias_min);
+    float bias = max(bias_max * (1 - dot(normal, light_dir)), bias_min);
     // FIXME: temp
     bias = 0;
 
-	float shadow = 0.;
+    float shadow = 0.;
 
-	// PCF
+    // PCF
     if (u_filter)
     {
         int range = 3;
@@ -126,7 +126,7 @@ float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal, vec3 light
         shadow += 1. - texture(u_shadow_map, vec4(pos.xy, cascade_idx, pos.z + bias));
     }
 
-	return shadow;
+    return shadow;
 }
 
 // PBS
@@ -161,7 +161,7 @@ float Fd_Lambert() {
 
 vec3 brdf(vec3 v, vec3 l, vec3 n, vec3 diffuse_color, vec3 f0, float roughness)
 {
-	const vec3 h = normalize(v + l);
+    const vec3 h = normalize(v + l);
 
     const float n_dot_v = abs(dot(n, v)) + 1e-5;
     const float n_dot_l = clamp(dot(n, l), 0., 1.);
@@ -195,8 +195,8 @@ vec3 brdf(vec3 v, vec3 l, vec3 n, vec3 diffuse_color, vec3 f0, float roughness)
 
 void main()
 {
-	// TODO: Differentiate between point and directional point_lights.
-	vec4 base_color_roughness = texture(u_g_base_color_roughness, tex_coords);
+    // TODO: Differentiate between point and directional point_lights.
+    vec4 base_color_roughness = texture(u_g_base_color_roughness, tex_coords);
 
     vec3 base_color;
     if (u_use_base_color)
@@ -204,26 +204,26 @@ void main()
     else
         base_color = vec3(1.f);
 
-	float roughness = base_color_roughness.a;
+    float roughness = base_color_roughness.a;
 
 
-	vec4 normal_metallic = texture(u_g_normal_metallic, tex_coords);
-	vec3 n = normal_metallic.rgb;
-	float metallic = normal_metallic.a;
+    vec4 normal_metallic = texture(u_g_normal_metallic, tex_coords);
+    vec3 n = normal_metallic.rgb;
+    float metallic = normal_metallic.a;
 
     // View space position.
-	vec3 pos = view_ray * linearize_depth(texture(u_g_depth, tex_coords).r, u_proj);
-	vec3 v = normalize(-pos);
+    vec3 pos = view_ray * linearize_depth(texture(u_g_depth, tex_coords).r, u_proj);
+    vec3 v = normalize(-pos);
 
-	// Non-metals have achromatic specular reflectance, metals use base color
-	// as the specular color.
-	vec3 diffuse_color = (1.0 - metallic) * base_color.rgb;
+    // Non-metals have achromatic specular reflectance, metals use base color
+    // as the specular color.
+    vec3 diffuse_color = (1.0 - metallic) * base_color.rgb;
 
-	// TODO: More physically accurate way to calculate?
-	vec3 f0 = mix(vec3(0.04), base_color, metallic);
+    // TODO: More physically accurate way to calculate?
+    vec3 f0 = mix(vec3(0.04), base_color, metallic);
 
-	// Luminance or radiance?
-	vec3 out_luminance = vec3(0.);
+    // Luminance or radiance?
+    vec3 out_luminance = vec3(0.);
 
     uint cascade_idx = calculate_cascade_index(pos);
 
@@ -294,7 +294,7 @@ void main()
         float occlusion = u_use_ao ? texture(u_ao, tex_coords).r : 1.;
 
         out_luminance += occlusion * irradiance * base_color * Fd_Lambert();
-	}
+    }
 
     // Give different shadow map cascades a recognizable tint.
     if (u_color_cascades)
@@ -313,5 +313,5 @@ void main()
         }
     }
 
-	frag_color = vec4(out_luminance, 1.);
+    frag_color = vec4(out_luminance, 1.);
 }

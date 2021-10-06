@@ -6,5 +6,5 @@ uniform mat4 u_model;
 
 void main()
 {
-	gl_Position = u_model * vec4(pos, 1);
+    gl_Position = u_model * vec4(pos, 1);
 }

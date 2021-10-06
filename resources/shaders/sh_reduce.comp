@@ -21,29 +21,29 @@ shared vec4 sh[size][7];
 
 void main()
 {
-	// Copy from global to shared memory.
-	sh[gl_LocalInvocationIndex] = coefs[gl_LocalInvocationIndex];
+    // Copy from global to shared memory.
+    sh[gl_LocalInvocationIndex] = coefs[gl_LocalInvocationIndex];
 
-	// Parallel reduction
-	for (uint stride = work_group_size / 2; stride > 0; stride /= 2)
-	{
-		barrier();
+    // Parallel reduction
+    for (uint stride = work_group_size / 2; stride > 0; stride /= 2)
+    {
+        barrier();
 
-		if (gl_LocalInvocationIndex < stride)
-		{
-			for (uint i = 0; i < 7; i++)
-				sh[gl_LocalInvocationIndex][i] += sh[gl_LocalInvocationIndex + stride][i];
-		}
-	}
+        if (gl_LocalInvocationIndex < stride)
+        {
+            for (uint i = 0; i < 7; i++)
+                sh[gl_LocalInvocationIndex][i] += sh[gl_LocalInvocationIndex + stride][i];
+        }
+    }
 
-	if (gl_LocalInvocationIndex == 0)
-	{
-		imageStore(t0, u_idx, sh[0][0]);
-		imageStore(t1, u_idx, sh[0][1]);
-		imageStore(t2, u_idx, sh[0][2]);
-		imageStore(t3, u_idx, sh[0][3]);
-		imageStore(t4, u_idx, sh[0][4]);
-		imageStore(t5, u_idx, sh[0][5]);
-		imageStore(t6, u_idx, sh[0][6]);
-	}
+    if (gl_LocalInvocationIndex == 0)
+    {
+        imageStore(t0, u_idx, sh[0][0]);
+        imageStore(t1, u_idx, sh[0][1]);
+        imageStore(t2, u_idx, sh[0][2]);
+        imageStore(t3, u_idx, sh[0][3]);
+        imageStore(t4, u_idx, sh[0][4]);
+        imageStore(t5, u_idx, sh[0][5]);
+        imageStore(t6, u_idx, sh[0][6]);
+    }
 }

@@ -35,8 +35,8 @@ vec4 karis_average(vec4 s0, vec4 s1, vec4 s2, vec4 s3)
 
 vec4 jiminez_13_tap_karis(sampler2D texture, uint level, vec2 tex_coords, vec2 texel_size)
 {
-	const float w0 = 0.125;
-	const float w1 = 0.5;
+    const float w0 = 0.125;
+    const float w1 = 0.5;
 
     return (
         karis_average(
@@ -76,8 +76,8 @@ vec4 jiminez_13_tap_karis(sampler2D texture, uint level, vec2 tex_coords, vec2 t
 // http://advances.realtimerendering.com/s2014/#_NEXT_GENERATION_POST
 vec4 jiminez_13_tap(sampler2D texture, uint level, vec2 tex_coords, vec2 texel_size)
 {
-	const float w0 = 0.125 / 4.;
-	const float w1 = 0.5 / 4.;
+    const float w0 = 0.125 / 4.;
+    const float w1 = 0.5 / 4.;
 
     return (
         textureLod(texture, tex_coords + texel_size * vec2(-2., -2.), level) * w0 + 
@@ -88,7 +88,7 @@ vec4 jiminez_13_tap(sampler2D texture, uint level, vec2 tex_coords, vec2 texel_s
         textureLod(texture, tex_coords + texel_size * vec2( 1., -1.), level) * w1 + 
 
         textureLod(texture, tex_coords + texel_size * vec2(-2.,  0.), level) * w0 * 2. + 
-		textureLod(texture, tex_coords, level)                               * w0 * 4. +
+        textureLod(texture, tex_coords, level)                               * w0 * 4. +
         textureLod(texture, tex_coords + texel_size * vec2( 2.,  0.), level) * w0 * 2. + 
 
         textureLod(texture, tex_coords + texel_size * vec2(-1.,  1.), level) * w1 + 
@@ -102,18 +102,18 @@ vec4 jiminez_13_tap(sampler2D texture, uint level, vec2 tex_coords, vec2 texel_s
 
 void main()
 {
-	const uvec2 g_id = gl_GlobalInvocationID.xy;
-	const uvec2 l_id = gl_LocalInvocationID.xy;
+    const uvec2 g_id = gl_GlobalInvocationID.xy;
+    const uvec2 l_id = gl_LocalInvocationID.xy;
 
-	const ivec2 target_size = imageSize(u_target);
-	const ivec2 source_size = textureSize(u_source, 0);
+    const ivec2 target_size = imageSize(u_target);
+    const ivec2 source_size = textureSize(u_source, 0);
 
-	const vec2 tex_coords = (vec2(g_id) + vec2(0.5)) / vec2(target_size);
-	const vec2 texel_size = vec2(1.0) / vec2(source_size);
+    const vec2 tex_coords = (vec2(g_id) + vec2(0.5)) / vec2(target_size);
+    const vec2 texel_size = vec2(1.0) / vec2(source_size);
 
     const vec4 value = u_level == 0
         ? jiminez_13_tap_karis(u_source, u_level, tex_coords, texel_size)
         : jiminez_13_tap(u_source, u_level, tex_coords, texel_size);
 
-	imageStore(u_target, ivec2(g_id), value);
+    imageStore(u_target, ivec2(g_id), value);
 }

@@ -14,21 +14,21 @@ uniform float u_weight_sum;
 
 void project(vec3 n, in vec3 color, out vec4 sh[7])
 {
-	const float a0 = 1.f;
+    const float a0 = 1.f;
     const float a1 = 2.f / 3.f;
     const float a2 = 0.25f;
 
-	vec3 c0 = 0.282095f * a0 * color;
-	vec3 c1 = 0.488603f * n.y * a1 * color;
-	vec3 c2 = 0.488603f * n.z * a1 * color;
-	vec3 c3 = 0.488603f * n.x * a1 * color;
-	vec3 c4 = 1.092548f * n.x * n.y * a2 * color;
-	vec3 c5 = 1.092548f * n.y * n.z * a2 * color;
-	vec3 c6 = 0.315392f * (3.0f * n.z * n.z - 1.0f) * a2 * color;
+    vec3 c0 = 0.282095f * a0 * color;
+    vec3 c1 = 0.488603f * n.y * a1 * color;
+    vec3 c2 = 0.488603f * n.z * a1 * color;
+    vec3 c3 = 0.488603f * n.x * a1 * color;
+    vec3 c4 = 1.092548f * n.x * n.y * a2 * color;
+    vec3 c5 = 1.092548f * n.y * n.z * a2 * color;
+    vec3 c6 = 0.315392f * (3.0f * n.z * n.z - 1.0f) * a2 * color;
     vec3 c7 = 1.092548f * n.x * n.z * a2 * color;
     vec3 c8 = 0.546274f * (n.x * n.x - n.y * n.y) * a2 * color;
 
-	// Packing.
+    // Packing.
     sh[0] = vec4(c0, c7[0]);
     sh[1] = vec4(c1, c7[1]);
     sh[2] = vec4(c2, c7[2]);
@@ -40,18 +40,18 @@ void project(vec3 n, in vec3 color, out vec4 sh[7])
 
 void main()
 {
-	const vec3 radiance = imageLoad(radiance_map, ivec3(gl_GlobalInvocationID)).rgb;
+    const vec3 radiance = imageLoad(radiance_map, ivec3(gl_GlobalInvocationID)).rgb;
 
-	// Texture coordinates in [-1, 1] range.
-	vec2 coords = (gl_GlobalInvocationID.xy + vec2(0.5f)) / imageSize(radiance_map) * 2.f - vec2(1.f);
+    // Texture coordinates in [-1, 1] range.
+    vec2 coords = (gl_GlobalInvocationID.xy + vec2(0.5f)) / imageSize(radiance_map) * 2.f - vec2(1.f);
 
-	float tmp = 1 + coords.s * coords.s + coords.t * coords.t;
-	// Differential solid angle.
-	float weight = 4.f / (sqrt(tmp) * tmp);
+    float tmp = 1 + coords.s * coords.s + coords.t * coords.t;
+    // Differential solid angle.
+    float weight = 4.f / (sqrt(tmp) * tmp);
 
-	vec3 s;
+    vec3 s;
 
-	// Convert a texture coordinates to a normalized vector poinitng to the corresponding texel in world space.
+    // Convert a texture coordinates to a normalized vector poinitng to the corresponding texel in world space.
     // https://www.khronos.org/opengl/wiki/Cubemap_Texture#Upload_and_orientation
     switch (gl_GlobalInvocationID.z)
     {
@@ -69,29 +69,29 @@ void main()
         s = vec3(coords.s, -coords.t, -1.0f); break;
     }
 
-	s = normalize(s);
+    s = normalize(s);
 
-	project(s, weight * radiance, sh[gl_LocalInvocationIndex]);
+    project(s, weight * radiance, sh[gl_LocalInvocationIndex]);
 
-	// Parallel reduction
-	for (uint stride = work_group_size / 2; stride > 0; stride >>= 1)
-	{
-		barrier();
+    // Parallel reduction
+    for (uint stride = work_group_size / 2; stride > 0; stride >>= 1)
+    {
+        barrier();
 
-		if (gl_LocalInvocationIndex < stride)
-		{
-			for (uint i = 0; i < 7; i++)
-				sh[gl_LocalInvocationIndex][i] += sh[gl_LocalInvocationIndex + stride][i];
-		}
-	}
+        if (gl_LocalInvocationIndex < stride)
+        {
+            for (uint i = 0; i < 7; i++)
+                sh[gl_LocalInvocationIndex][i] += sh[gl_LocalInvocationIndex + stride][i];
+        }
+    }
 
-	if (gl_LocalInvocationIndex == 0)
-	{
-		uint offset = gl_WorkGroupID.x +
-		   			  gl_WorkGroupID.y * gl_NumWorkGroups.x +
-					  gl_WorkGroupID.z * gl_NumWorkGroups.x * gl_NumWorkGroups.y;
+    if (gl_LocalInvocationIndex == 0)
+    {
+        uint offset = gl_WorkGroupID.x +
+                         gl_WorkGroupID.y * gl_NumWorkGroups.x +
+                      gl_WorkGroupID.z * gl_NumWorkGroups.x * gl_NumWorkGroups.y;
 
-		for (uint i = 0; i < 7; i++)
-			coefs[offset][i] = u_weight_sum * sh[0][i];
-	}
+        for (uint i = 0; i < 7; i++)
+            coefs[offset][i] = u_weight_sum * sh[0][i];
+    }
 }

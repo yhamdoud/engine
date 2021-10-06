@@ -11,7 +11,7 @@ const float PI = 3.14159265359;
 
 void main()
 {
-	// The world vector acts as the normal of a tangent surface
+    // The world vector acts as the normal of a tangent surface
     // from the origin, aligned to world_position. Given this normal, calculate all
     // incoming radiance of the environment. The result of this radiance
     // is the radiance of light coming from -normal direction, which is what

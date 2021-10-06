@@ -30,13 +30,13 @@ uniform float u_alpha_cutoff;
 
 in Varying
 {
-	// View space vectors.
-	vec3 normal;
-	vec2 tex_coords;
-	vec4 tangent;
-	vec4 light_space_pos;
-	vec4 position;
-	vec4 position_prev;
+    // View space vectors.
+    vec3 normal;
+    vec2 tex_coords;
+    vec4 tangent;
+    vec4 light_space_pos;
+    vec4 position;
+    vec4 position_prev;
 } fs_in;
 
 mat3 calculate_tbn_matrix(vec4 tangent_sign, vec3 normal)
@@ -59,7 +59,7 @@ void main()
 {
     g_base_color_roughness.rgb = u_base_color_factor;
 
-	if (u_use_sampler)
+    if (u_use_sampler)
     {
         vec4 base_color_alpha = texture(u_base_color, fs_in.tex_coords);
         if (u_alpha_mask && base_color_alpha.a < u_alpha_cutoff)
@@ -86,7 +86,7 @@ void main()
     }
 
     g_normal_metallic.a = u_metallic_factor;
-	g_base_color_roughness.a = u_roughness_factor;
+    g_base_color_roughness.a = u_roughness_factor;
 
     if (u_use_metallic_roughness)
     {

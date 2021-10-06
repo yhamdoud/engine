@@ -1,4 +1,3 @@
-
 #version 460 core
 
 in vec2 tex_coords;
@@ -14,15 +13,14 @@ layout (binding = 3) uniform sampler2D u_hdr_target;
 uniform mat4 u_proj;
 uniform float u_near;
 
- // Camera space thickness to ascribe to each pixel in the depth buffer.
+// Camera space thickness to ascribe to each pixel in the depth buffer.
 uniform float u_thickness;
- // Step in horizontal or vertical pixels between samples. This is a float
- // because integer math is slow on GPUs, but should be set to an integer >= 1
+// Step in horizontal or vertical pixels between samples.
 uniform float u_stride;
 uniform bool u_do_jitter;
- // Maximum number of iterations. Higher gives better images but may be slow
+// Maximum number of iterations. Higher gives better images but may be slow.
 uniform int u_max_steps;
- // Maximum camera-space distance to trace before returning a miss
+// Maximum camera-space distance to trace before returning a miss.
 uniform float u_max_dist;
 
 float linearize_depth(float depth, mat4 proj)
@@ -42,13 +40,11 @@ bool intersects_depth(float z, float z_min, float z_max)
     return (z_max >= z - u_thickness) && (z_min < z);
 }
 
-
-float distanceSquared(vec2 a, vec2 b)
+float distance_squared(vec2 a, vec2 b)
 {
-	a -= b;
-	return dot(a, a);
+    a -= b;
+    return dot(a, a);
 }
-
 
 // Returns true if the ray hit something.
 // 
@@ -58,19 +54,9 @@ float distanceSquared(vec2 a, vec2 b)
 // By Morgan McGuire and Michael Mara at Williams College 2014
 // Released as open source under the BSD 2-Clause License
 // http://opensource.org/licenses/BSD-2-Clause
-bool ray_trace(
-    // Camera-space ray origin, which must be within the view volume
-    vec3 origin, 
-    // Unit length camera-space ray direction
-    vec3 dir,
-    float jitter,
-    vec2 z_buf_size,
-    // (Negative) near plane.
-    float z_near, 
-    out vec2 hit_screen, 
-    out vec3 hit_view)
+bool ray_trace(vec3 origin, vec3 dir, float jitter, vec2 z_buf_size,
+               float z_near, out vec2 hit_screen, out vec3 hit_view)
 {
-
     // Clip to the near plane.
     float ray_length = (origin.z + dir.z * u_max_dist) > z_near
         ? (z_near - origin.z) / dir.z
@@ -81,7 +67,6 @@ bool ray_trace(
     vec4 origin_clip = u_proj * vec4(origin, 1.0);
     vec4 end_clip = u_proj * vec4(end, 1.0);
 
-
     // Because the caller was required to clip to the near plane,
     // this homogeneous division (projecting from 4D to 2D) is guaranteed 
     // to succeed. 
@@ -89,8 +74,8 @@ bool ray_trace(
     float k1 = 1.0 / end_clip.w;
 
     // The interpolated homogeneous version of the camera-space points  
-    vec3 Q0 = origin * k0;
-    vec3 Q1 = end * k1;
+    vec3 q0 = origin * k0;
+    vec3 q1 = end * k1;
 
     // Screen-space endpoints
     vec2 p0 = origin_clip.xy * k0;
@@ -100,7 +85,7 @@ bool ray_trace(
 
     // If the line is degenerate, make it cover at least one pixel
     // to avoid handling zero-pixel extent as a special case later
-    p1 += vec2((distanceSquared(p0, p1) < 0.0001) ? 0.01 : 0.0);
+    p1 += vec2((distance_squared(p0, p1) < 0.0001) ? 0.01 : 0.0);
     vec2 delta = p1 - p0;
 
     // Permute so that the primary iteration is in x to collapse all
@@ -115,28 +100,28 @@ bool ray_trace(
         p1 = p1.yx; 
     }
 
-	// From now on, x is the primary iteration direction and y is the secondary one.
+    // From now on, x is the primary iteration direction and y is the secondary one.
 
     float step_dir = sign(delta.x);
     float invdx = step_dir / delta.x;
 
-    // Track the derivatives of Q and k
-    vec3  dQ = (Q1 - Q0) * invdx;
+    // Track the derivatives of q and k
+    vec3  dq = (q1 - q0) * invdx;
     float dk = (k1 - k0) * invdx;
     vec2  dp = vec2(step_dir, delta.y * invdx);
 
     // Scale derivatives by the desired pixel stride.
     dp *= u_stride;
-    dQ *= u_stride;
+    dq *= u_stride;
     dk *= u_stride;
 
     // Offset the starting values by the jitter fraction.
     p0 += dp * jitter;
-    Q0 += dQ * jitter;
+    q0 += dq * jitter;
     k0 += dk * jitter;
 
-    // Slide p from p0 to p1, (now-homogeneous) Q from Q0 to Q1, k from k0 to k1
-    vec3 Q = Q0; 
+    // Slide p from p0 to p1, (now-homogeneous) q from q0 to q1, k from k0 to k1
+    vec3 q = q0; 
 
     // Adjust end condition for iteration direction
     float end_dir = p1.x * step_dir;
@@ -156,12 +141,12 @@ bool ray_trace(
          && (step_count < u_max_steps)
          && !intersects_depth(z_max_scene, z_min, z_max)
          && (z_max_scene != 0); 
-         p += dp, Q.z += dQ.z, k += dk, step_count++)
+         p += dp, q.z += dq.z, k += dk, step_count++)
     {
         z_min = z_max_prev;
 
         // Compute the value at 1/2 pixel into the future.
-        z_max = (dQ.z * 0.5 + Q.z) / (dk * 0.5 + k);
+        z_max = (dq.z * 0.5 + q.z) / (dk * 0.5 + k);
         z_max_prev = z_max;
         if (z_min > z_max) swap(z_min, z_max);
 
@@ -172,9 +157,9 @@ bool ray_trace(
         z_max_scene = linearize_depth(texelFetch(u_g_depth, ivec2(hit_screen), 0).r, u_proj);
     }
     
-    // Advance Q based on the number of steps.
-    Q.xy += dQ.xy * step_count;
-    hit_view = Q * (1.0 / k);
+    // Advance q based on the number of steps.
+    q.xy += dq.xy * step_count;
+    hit_view = q * (1.0 / k);
     return intersects_depth(z_max_scene, z_min, z_max);
 }
 
@@ -186,22 +171,18 @@ void main()
 
     float roughness = texture(u_g_base_color_roughness, tex_coords).a;
     if (roughness > 0.9)
-    {
-        frag_color = vec4(0.f);
-        return;
-    }
-
+        discard;
 
     vec2 hit_screen = vec2(0., 0.);
     vec3 hit_view = vec3(0., 0., 0.);
 
-	vec3 ray_origin = view_ray * linearize_depth(depth, u_proj);
+    vec3 ray_origin = view_ray * linearize_depth(depth, u_proj);
 
-	vec3 normal = texture(u_g_normal_metallic, tex_coords).xyz;
+    vec3 normal = texture(u_g_normal_metallic, tex_coords).xyz;
 
     float n_dot_v = max(dot(normal, normalize(-ray_origin)), 0.);
 
-	vec3 ray_dir = normalize(reflect(normalize(ray_origin), normal));
+    vec3 ray_dir = normalize(reflect(normalize(ray_origin), normal));
 
     vec2 size = textureSize(u_g_depth, 0);
 
@@ -219,7 +200,6 @@ void main()
         hit_screen,
         hit_view
     );
-
 
     frag_color = hit
         ? vec4(texelFetch(u_hdr_target, ivec2(hit_screen), 0).rgb, n_dot_v)
