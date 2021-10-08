@@ -12,8 +12,6 @@ using namespace glm;
 using namespace engine;
 
 SsaoPass::SsaoPass(SsaoConfig cfg)
-    : kernel_size(cfg.kernel_size), sample_count(cfg.sample_count),
-      radius(cfg.radius), bias(cfg.bias), strength(cfg.strength)
 {
     glCreateTextures(GL_TEXTURE_2D, 1, &noise_tex);
     glCreateTextures(GL_TEXTURE_2D, 1, &ao_tex);
@@ -55,26 +53,18 @@ SsaoPass::SsaoPass(SsaoConfig cfg)
     glTextureParameteri(noise_tex, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTextureParameteri(noise_tex, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-    ssao = *Shader::from_paths(ShaderPaths{
-        .vert = shaders_path / "lighting.vs",
-        .frag = shaders_path / "ssao.fs",
-    });
+    glCreateBuffers(1, &ubo);
+    glNamedBufferData(ubo, sizeof(SsaoData), nullptr, GL_DYNAMIC_DRAW);
 
-    blur = *Shader::from_paths(ShaderPaths{
-        .vert = shaders_path / "lighting.vs",
-        .frag = shaders_path / "ssao_blur.fs",
-    });
-
-    parse_parameters();
-}
-
-void SsaoPass::parse_parameters()
-{
-    ssao.set("u_kernel_size", static_cast<uint>(sample_count));
     ssao.set("u_kernel[0]", span(kernel));
-    ssao.set("u_radius", radius);
-    ssao.set("u_bias", bias);
-    ssao.set("u_strength", strength);
+
+    data = {
+        .kernel_size = cfg.kernel_size,
+        .sample_count = cfg.sample_count,
+        .radius = cfg.radius,
+        .bias = cfg.bias,
+        .strength = cfg.strength,
+    };
 }
 
 void SsaoPass::initialize(ViewportContext &ctx)
@@ -116,13 +106,17 @@ void SsaoPass::render(ViewportContext &ctx)
     // FIXME: Causes artifacts, why?
     // glClear(GL_COLOR_BUFFER_BIT);
 
-    ssao.set("u_proj", ctx.proj);
-    ssao.set("u_proj_inv", inverse(ctx.proj));
-    ssao.set("u_noise_scale", static_cast<vec2>(ctx.size) / 4.f);
+    data.proj = ctx.proj;
+    data.noise_scale = static_cast<vec2>(ctx.size) / 4.f;
+
+    glNamedBufferSubData(ubo, 0, sizeof(SsaoData), &data);
+
+    ssao.set("u_proj_inv", ctx.proj_inv);
 
     glBindTextureUnit(0, ctx.g_buf.depth);
     glBindTextureUnit(1, ctx.g_buf.normal_metallic);
     glBindTextureUnit(2, noise_tex);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 3, ubo);
 
     glUseProgram(ssao.get_id());
     glDrawArrays(GL_TRIANGLES, 0, 3);

@@ -107,13 +107,12 @@ void Editor::draw_renderer_menu()
         ImGui::SameLine();
         if (ImGui::CollapsingHeader("SSAO"))
         {
-            if (ImGui::SliderInt("Sample count", &renderer.ssao.sample_count, 0,
-                                 renderer.ssao.kernel_size) |
-                ImGui::SliderFloat("Radius", &renderer.ssao.radius, 0.f, 10.f) |
-                ImGui::SliderFloat("Bias", &renderer.ssao.bias, 0.f, 1.f) |
-                ImGui::SliderFloat("Strength", &renderer.ssao.strength, 0.f,
-                                   5.f))
-                renderer.ssao.parse_parameters();
+            ImGui::SliderInt("Sample count", &renderer.ssao.data.sample_count,
+                             0, renderer.ssao.data.kernel_size);
+            ImGui::SliderFloat("Radius", &renderer.ssao.data.radius, 0.f, 10.f);
+            ImGui::SliderFloat("Bias", &renderer.ssao.data.bias, 0.f, 1.f);
+            ImGui::SliderFloat("Strength", &renderer.ssao.data.strength, 0.f,
+                               5.f);
 
             ImVec2 window_size = ImGui::GetWindowSize();
             ImVec2 texture_size{window_size.x,
