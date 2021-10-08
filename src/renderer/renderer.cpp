@@ -108,15 +108,29 @@ Renderer::Renderer(glm::ivec2 viewport_size)
         glTextureParameteri(ctx_v.hdr_tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTextureParameteri(ctx_v.hdr_tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-        glCreateTextures(GL_TEXTURE_2D, 1, &ctx_v.hdr_tex2);
-        glTextureStorage2D(ctx_v.hdr_tex2, 1, GL_RGBA16F, ctx_v.size.x,
+        glCreateTextures(GL_TEXTURE_2D, 1, &ctx_v.hdr2_tex);
+        glTextureStorage2D(ctx_v.hdr2_tex, 1, GL_RGBA16F, ctx_v.size.x,
                            ctx_v.size.y);
-        glTextureParameteri(ctx_v.hdr_tex2, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTextureParameteri(ctx_v.hdr_tex2, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTextureParameteri(ctx_v.hdr_tex2, GL_TEXTURE_WRAP_S,
+        glTextureParameteri(ctx_v.hdr2_tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(ctx_v.hdr2_tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(ctx_v.hdr2_tex, GL_TEXTURE_WRAP_S,
                             GL_CLAMP_TO_EDGE);
-        glTextureParameteri(ctx_v.hdr_tex2, GL_TEXTURE_WRAP_T,
+        glTextureParameteri(ctx_v.hdr2_tex, GL_TEXTURE_WRAP_T,
                             GL_CLAMP_TO_EDGE);
+
+        glCreateTextures(GL_TEXTURE_2D, 1, &ctx_v.hdr_prev_tex);
+        glTextureStorage2D(ctx_v.hdr_prev_tex, 5, GL_RGBA16F, ctx_v.size.x,
+                           ctx_v.size.y);
+        glTextureParameteri(ctx_v.hdr_prev_tex, GL_TEXTURE_MAG_FILTER,
+                            GL_LINEAR);
+        glTextureParameteri(ctx_v.hdr_prev_tex, GL_TEXTURE_MIN_FILTER,
+                            GL_LINEAR_MIPMAP_LINEAR);
+        glTextureParameteri(ctx_v.hdr_prev_tex, GL_TEXTURE_WRAP_S,
+                            GL_CLAMP_TO_EDGE);
+        glTextureParameteri(ctx_v.hdr_prev_tex, GL_TEXTURE_WRAP_T,
+                            GL_CLAMP_TO_EDGE);
+        glTextureParameteri(ctx_v.hdr_prev_tex, GL_TEXTURE_BASE_LEVEL, 0);
+        glTextureParameteri(ctx_v.hdr_prev_tex, GL_TEXTURE_MAX_LEVEL, 4);
 
         glCreateFramebuffers(1, &ctx_v.hdr_frame_buf);
         glNamedFramebufferTexture(ctx_v.hdr_frame_buf, GL_COLOR_ATTACHMENT0,
@@ -416,6 +430,13 @@ void Renderer::render(std::vector<RenderData> &queue)
         ssao.render(ctx_v);
     }
 
+    if (ssr_enabled)
+    {
+        TracyGpuZone("SSR pass");
+        GpuZone _(6);
+        ssr.render(ctx_v, ctx_r);
+    }
+
     {
         TracyGpuZone("Lighting pass");
         GpuZone _(4);
@@ -428,12 +449,10 @@ void Renderer::render(std::vector<RenderData> &queue)
         forward.render(ctx_v, ctx_r);
     }
 
-    if (ssr_enabled)
-    {
-        TracyGpuZone("SSR pass");
-        GpuZone _(6);
-        ssr.render(ctx_v, ctx_r);
-    }
+    glCopyImageSubData(ctx_v.hdr_tex, GL_TEXTURE_2D, 0, 0, 0, 0,
+                       ctx_v.hdr_prev_tex, GL_TEXTURE_2D, 0, 0, 0, 0,
+                       ctx_v.size.x, ctx_v.size.y, 1);
+    glGenerateTextureMipmap(ctx_v.hdr_prev_tex);
 
     if (motion_blur_enabled)
     {

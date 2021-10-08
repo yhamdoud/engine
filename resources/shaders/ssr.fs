@@ -8,7 +8,6 @@ layout (location = 0) out vec4 frag_color;
 layout (binding = 0) uniform sampler2D u_g_depth;
 layout (binding = 1) uniform sampler2D u_g_normal_metallic;
 layout (binding = 2) uniform sampler2D u_g_base_color_roughness;
-layout (binding = 3) uniform sampler2D u_hdr_target;
 
 uniform mat4 u_proj;
 uniform float u_near;
@@ -201,7 +200,9 @@ void main()
         hit_view
     );
 
-    frag_color = hit
-        ? vec4(texelFetch(u_hdr_target, ivec2(hit_screen), 0).rgb, n_dot_v)
-        : vec4(0.f);
+    frag_color = vec4(
+        vec2(hit_screen) / size, // Screen to texture space.
+        hit ? 1.f : 0.f,
+        n_dot_v
+    );
 }

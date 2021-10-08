@@ -69,6 +69,9 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     glBindTextureUnit(2, ctx_v.g_buf.base_color_roughness);
     glBindTextureUnit(3, ctx_v.shadow_map);
 
+    glBindTextureUnit(12, ctx_v.hdr_prev_tex);
+    glBindTextureUnit(13, ctx_v.reflections_tex);
+
     if (ctx_v.ao_tex != invalid_texture_id)
     {
         lighting_shader.set("u_use_ao", true);

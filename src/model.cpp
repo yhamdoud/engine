@@ -1,3 +1,4 @@
+#include <cstdint>
 #define CGLTF_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 
@@ -67,8 +68,12 @@ vector<uint32_t> process_index_accessor(const cgltf_accessor &accessor)
 
 static Sampler process_sampler(const cgltf_sampler &sampler)
 {
-    return Sampler{sampler.mag_filter, sampler.min_filter, sampler.wrap_s,
-                   sampler.wrap_t};
+    return Sampler{
+        sampler.mag_filter != GL_NONE ? sampler.mag_filter : GL_LINEAR,
+        sampler.min_filter != GL_NONE ? sampler.min_filter : GL_LINEAR,
+        sampler.wrap_s,
+        sampler.wrap_t,
+    };
 }
 
 static OptionalTexture
@@ -227,6 +232,9 @@ static Model process_triangles(const cgltf_primitive &triangles)
             break;
         }
     }
+
+    if (tangents.size() == 0)
+        logger.warn("missing tangents");
 
     auto indices = process_index_accessor(*triangles.indices);
 

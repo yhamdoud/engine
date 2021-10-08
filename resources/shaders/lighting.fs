@@ -5,11 +5,14 @@ in vec3 view_ray;
 
 uniform mat4 u_proj;
 
-uniform sampler2D u_g_depth;
-uniform sampler2D u_g_normal_metallic;
-uniform sampler2D u_g_base_color_roughness;
-uniform sampler2DArrayShadow u_shadow_map;
-uniform sampler2D u_ao;
+layout (binding = 0) uniform sampler2D u_g_depth;
+layout (binding = 1) uniform sampler2D u_g_normal_metallic;
+layout (binding = 2) uniform sampler2D u_g_base_color_roughness;
+layout (binding = 14) uniform sampler2D u_g_velocity;
+
+layout (binding = 3) uniform sampler2DArrayShadow u_shadow_map;
+
+layout (binding = 4) uniform sampler2D u_ao;
 
 uniform bool u_use_irradiance;
 uniform bool u_use_direct;
@@ -43,13 +46,16 @@ uniform mat4 u_inv_grid_transform;
 uniform vec3 u_grid_dims;
 uniform float u_leak_offset;
 
-uniform sampler3D u_sh_0;
-uniform sampler3D u_sh_1;
-uniform sampler3D u_sh_2;
-uniform sampler3D u_sh_3;
-uniform sampler3D u_sh_4;
-uniform sampler3D u_sh_5;
-uniform sampler3D u_sh_6;
+layout (binding = 5) uniform sampler3D u_sh_0;
+layout (binding = 6) uniform sampler3D u_sh_1;
+layout (binding = 7) uniform sampler3D u_sh_2;
+layout (binding = 8) uniform sampler3D u_sh_3;
+layout (binding = 9) uniform sampler3D u_sh_4;
+layout (binding = 10) uniform sampler3D u_sh_5;
+layout (binding = 11) uniform sampler3D u_sh_6;
+
+layout (binding = 12) uniform sampler2D u_hdr_prev;
+layout (binding = 13) uniform sampler2D u_reflections;
 
 out vec4 frag_color;
 
@@ -76,7 +82,6 @@ uint calculate_cascade_index(vec3 pos)
 
     return cascade_idx;
 }
-
 
 // Source: https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
 float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal, vec3 light_dir)
@@ -158,6 +163,11 @@ vec3 F_Schlick(float u, vec3 f0)
 float Fd_Lambert() {
     return 1.0 / PI;
 }
+
+vec3 F_Schlick_roughness(float u, vec3 f0, float roughness)
+{
+    return f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(clamp(1.0 - u, 0.0, 1.0), 5.0);
+}   
 
 vec3 brdf(vec3 v, vec3 l, vec3 n, vec3 diffuse_color, vec3 f0, float roughness)
 {
@@ -294,6 +304,20 @@ void main()
         float occlusion = u_use_ao ? texture(u_ao, tex_coords).r : 1.;
 
         out_luminance += occlusion * irradiance * base_color * Fd_Lambert();
+    }
+
+    // SSR
+    {
+        vec4 r = textureLod(u_reflections, tex_coords, 0);
+
+        float n_dot_v = r.a;
+
+        vec3 F = F_Schlick_roughness(n_dot_v, f0, roughness);
+        int max_roughness = 4;
+
+        // Reprojection.
+        vec2 velocity = texture(u_g_velocity, tex_coords).rg;
+        out_luminance += r.b * F * texture(u_hdr_prev, r.rg - velocity, roughness * max_roughness).rgb;
     }
 
     // Give different shadow map cascades a recognizable tint.

@@ -13,20 +13,8 @@ using namespace engine;
 SsrPass::SsrPass(SsrConfig cfg)
     : ssr(*Shader::from_paths({.vert = shaders_path / "lighting.vs",
                                .frag = shaders_path / "ssr.fs"})),
-      blend(*Shader::from_paths({.vert = shaders_path / "lighting.vs",
-                                 .frag = shaders_path / "blend.fs"})),
       cfg(cfg)
 {
-    glCreateTextures(GL_TEXTURE_2D, 1, &ssr_tex);
-    glCreateFramebuffers(1, &frame_buf);
-
-    // TODO:
-    glTextureParameteri(ssr_tex, GL_TEXTURE_MIN_FILTER,
-                        GL_LINEAR_MIPMAP_LINEAR);
-    glTextureParameteri(ssr_tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTextureParameteri(ssr_tex, GL_TEXTURE_MAX_LEVEL, level_count);
-    glTextureParameteri(ssr_tex, GL_TEXTURE_BASE_LEVEL, 0);
-
     parse_parameters();
 }
 
@@ -37,17 +25,22 @@ void SsrPass::parse_parameters()
     ssr.set("u_do_jitter", cfg.do_jitter);
     ssr.set("u_max_dist", cfg.max_dist);
     ssr.set("u_max_steps", cfg.max_steps);
-
-    blend.set("u_correct", cfg.correct);
 }
 
 void SsrPass::initialize(ViewportContext &ctx)
 {
-    glTextureStorage2D(ssr_tex, level_count, GL_RGBA16F, ctx.size.x,
+    glCreateTextures(GL_TEXTURE_2D, 1, &ctx.reflections_tex);
+    glCreateFramebuffers(1, &frame_buf);
+
+    // TODO:
+    glTextureParameteri(ctx.reflections_tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(ctx.reflections_tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glTextureStorage2D(ctx.reflections_tex, 1, GL_RGBA8, ctx.size.x,
                        ctx.size.y);
 
     array<GLenum, 1> draw_bufs{GL_COLOR_ATTACHMENT0};
-    glNamedFramebufferTexture(frame_buf, draw_bufs[0], ssr_tex, 0);
+    glNamedFramebufferTexture(frame_buf, draw_bufs[0], ctx.reflections_tex, 0);
     glNamedFramebufferDrawBuffers(frame_buf, draw_bufs.size(),
                                   draw_bufs.data());
 
@@ -60,39 +53,18 @@ void SsrPass::render(ViewportContext &ctx, RenderContext &ctx_r)
 {
     ZoneScoped;
 
-    {
-        glViewport(0, 0, ctx.size.x, ctx.size.y);
-        glBindFramebuffer(GL_FRAMEBUFFER, frame_buf);
-        glClear(GL_COLOR_BUFFER_BIT);
-        ssr.set("u_proj_inv", ctx.proj_inv);
-        ssr.set("u_proj", ctx.proj);
-        ssr.set("u_near", ctx.near);
+    glViewport(0, 0, ctx.size.x, ctx.size.y);
+    glBindFramebuffer(GL_FRAMEBUFFER, frame_buf);
+    glClear(GL_COLOR_BUFFER_BIT);
 
-        glBindTextureUnit(0, ctx.g_buf.depth);
-        glBindTextureUnit(1, ctx.g_buf.normal_metallic);
-        glBindTextureUnit(2, ctx.g_buf.base_color_roughness);
-        glBindTextureUnit(3, ctx.hdr_tex);
+    ssr.set("u_proj_inv", ctx.proj_inv);
+    ssr.set("u_proj", ctx.proj);
+    ssr.set("u_near", ctx.near);
 
-        glUseProgram(ssr.get_id());
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-    }
+    glBindTextureUnit(0, ctx.g_buf.depth);
+    glBindTextureUnit(1, ctx.g_buf.normal_metallic);
+    glBindTextureUnit(2, ctx.g_buf.base_color_roughness);
 
-    glGenerateTextureMipmap(ssr_tex);
-
-    {
-        glViewport(0, 0, ctx.size.x, ctx.size.y);
-        glBindFramebuffer(GL_FRAMEBUFFER, ctx.hdr_frame_buf);
-
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_ONE, GL_ONE);
-
-        glBindTextureUnit(0, ctx.g_buf.normal_metallic);
-        glBindTextureUnit(1, ctx.g_buf.base_color_roughness);
-        glBindTextureUnit(2, ssr_tex);
-
-        glUseProgram(blend.get_id());
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-
-        glDisable(GL_BLEND);
-    }
+    glUseProgram(ssr.get_id());
+    glDrawArrays(GL_TRIANGLES, 0, 3);
 }

@@ -165,8 +165,8 @@ void Editor::draw_renderer_menu()
             ImVec2 window_size = ImGui::GetWindowSize();
             ImVec2 texture_size{window_size.x,
                                 window_size.x / viewport_aspect_ratio};
-            ImGui::Image((ImTextureID)renderer.ssr.ssr_tex, texture_size,
-                         ImVec2(0, 1), ImVec2(1, 0));
+            ImGui::Image((ImTextureID)renderer.ctx_v.reflections_tex,
+                         texture_size, ImVec2(0, 1), ImVec2(1, 0));
         }
 
         ImGui::Checkbox("##Motion blur", &renderer.motion_blur_enabled);

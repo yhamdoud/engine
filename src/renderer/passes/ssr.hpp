@@ -20,13 +20,9 @@ class SsrPass
 {
     uint frame_buf;
     Shader ssr;
-    Shader blend;
-
-    int level_count = 5;
 
   public:
     SsrConfig cfg;
-    uint ssr_tex;
 
     SsrPass(SsrConfig cfg);
 

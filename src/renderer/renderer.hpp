@@ -80,6 +80,16 @@ class Renderer
         .strength = 2.f,
     }};
 
+    bool ssr_enabled = true;
+    SsrPass ssr{{
+        .thickness = 0.25f,
+        .stride = 2,
+        .do_jitter = true,
+        .max_dist = 20.f,
+        .max_steps = 300,
+        .correct = true,
+    }};
+
     LightingPass lighting{{
         .indirect_light = true,
         .direct_light = true,
@@ -91,16 +101,6 @@ class Renderer
 
     ForwardPass forward{{
         .draw_probes = false,
-    }};
-
-    bool ssr_enabled = true;
-    SsrPass ssr{{
-        .thickness = 0.25f,
-        .stride = 2,
-        .do_jitter = true,
-        .max_dist = 20.f,
-        .max_steps = 300,
-        .correct = true,
     }};
 
     bool motion_blur_enabled = true;

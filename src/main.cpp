@@ -171,6 +171,20 @@ int main()
         }
     }
 
+    // {
+    //     auto maybe_helmet = load_gltf(models_path / "damaged_helmet_2.glb");
+    //     if (auto helmet = std::get_if<std::vector<Model>>(&maybe_helmet))
+    //     {
+    //         for (const auto &m : *helmet)
+    //         {
+    //             Transform t{vec3(1., 0., -2.)};
+    //             t.set_euler_angles(radians(90.f), 0.f, 0.f);
+    //             add_entity(renderer, Entity::Flags::casts_shadow, t, m,
+    //                        std::nullopt);
+    //         }
+    //     }
+    // }
+
     double last_time = glfwGetTime();
     vec2 cursor_pos = window.get_cursor_position();
 

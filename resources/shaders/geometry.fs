@@ -76,13 +76,13 @@ void main()
         vec3 normal_tangent = vec3(texture(u_normal, fs_in.tex_coords).xy * 2. -1., 0);
         // Reconstruct z-component of normal.
         // TODO: Maybe disable this when loading uncompressed textures.
-        normal_tangent.z = sqrt(saturate(1. - dot(normal_tangent.x, normal_tangent.z)));
+        normal_tangent.z = sqrt(saturate(1. - dot(normal_tangent.xy, normal_tangent.xy)));
 
-        g_normal_metallic.xyz = tbn * normal_tangent;
+        g_normal_metallic.xyz = normalize(tbn * normal_tangent);
     }
     else
     {
-        g_normal_metallic = vec4(normalize(fs_in.normal), 1.);
+        g_normal_metallic.xyz = normalize(fs_in.normal);
     }
 
     g_normal_metallic.a = u_metallic_factor;
@@ -96,8 +96,8 @@ void main()
         g_base_color_roughness.a *= metallic_roughness[1];
     }
 
-    vec3 pos = fs_in.position.xyz / fs_in.position.w;
-    vec3 pos_prev = fs_in.position_prev.xyz / fs_in.position_prev.w;
+    vec3 pos = (fs_in.position.xyz / fs_in.position.w) * 0.5 + 0.5;
+    vec3 pos_prev = (fs_in.position_prev.xyz / fs_in.position_prev.w) * 0.5 + 0.5;
 
     vec2 velocity = pos.xy - pos_prev.xy;
     g_velocity = vec4(velocity, 0., 1.);

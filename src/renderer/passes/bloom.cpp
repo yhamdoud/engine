@@ -46,7 +46,7 @@ void BloomPass::render(ViewportContext &ctx_v, RenderContext &r_ctx)
 
     glUseProgram(downsample_shader.get_id());
 
-    glBindTextureUnit(0u, ctx_v.hdr_tex2);
+    glBindTextureUnit(0u, ctx_v.hdr2_tex);
 
     for (uint i = 0u; i < cfg.pass_count; i++)
     {
@@ -99,7 +99,7 @@ void BloomPass::render(ViewportContext &ctx_v, RenderContext &r_ctx)
     upsample.set("u_target_level", 0u);
     upsample.set("u_intensity", cfg.intensity);
 
-    glBindTextureUnit(1u, ctx_v.hdr_tex2);
+    glBindTextureUnit(1u, ctx_v.hdr2_tex);
     glBindImageTexture(2u, ctx_v.hdr_tex, 0, false, 0, GL_READ_WRITE,
                        GL_RGBA16F);
 

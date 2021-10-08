@@ -62,7 +62,8 @@ struct ViewportContext
 {
     glm::ivec2 size;
     uint hdr_tex = invalid_texture_id;
-    uint hdr_tex2 = invalid_texture_id;
+    uint hdr2_tex = invalid_texture_id;
+    uint hdr_prev_tex = invalid_texture_id;
     uint hdr_frame_buf = default_frame_buffer_id;
     uint ldr_frame_buf = default_frame_buffer_id;
     glm::mat4 proj;
@@ -75,6 +76,7 @@ struct ViewportContext
     GBuffer g_buf;
     uint ao_tex = invalid_texture_id;
     uint shadow_map = invalid_texture_id;
+    uint reflections_tex = invalid_texture_id;
     std::span<float> cascade_distances;
     std::span<glm::mat4> light_transforms;
 };
