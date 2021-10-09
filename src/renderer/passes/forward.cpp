@@ -79,7 +79,9 @@ void ForwardPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
             probe_shader.set("u_mvp", ctx_v.proj * ctx_v.view * model);
 
             Renderer::render_mesh_instance(
-                ctx_r.entity_vao, ctx_r.mesh_instances[ctx_r.probe_mesh_idx]);
+                ctx_r.entity_vao, ctx_r.vertex_buf.get_id(),
+                ctx_r.index_buf.get_id(),
+                ctx_r.mesh_instances[ctx_r.probe_mesh_idx]);
         }
     }
 }

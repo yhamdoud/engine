@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <variant>
 #include <vector>
 
@@ -8,6 +9,7 @@
 
 #include "camera.hpp"
 #include "context.hpp"
+#include "renderer/buffer.hpp"
 #include "renderer/passes/bloom.hpp"
 #include "renderer/passes/forward.hpp"
 #include "renderer/passes/geometry.hpp"
@@ -62,6 +64,8 @@ class Renderer
             Light{glm::vec3{3, 3, 3}, glm::vec3{0., 0., 0.}},
         },
         .sh_texs = std::span<uint, 7>{probe_buf.front(), 7},
+        .vertex_buf{32'000 * sizeof(Vertex), 0},
+        .index_buf{32'000 * sizeof(uint32_t), 0},
     };
 
     ShadowPass shadow{{
@@ -134,7 +138,7 @@ class Renderer
     void render(std::vector<RenderData> &queue);
 
     size_t register_mesh(const Mesh &mesh);
-    static void render_mesh_instance(unsigned int vao,
+    static void render_mesh_instance(uint vao, uint vertex_buf, uint index_buf,
                                      const MeshInstance &mesh);
 
     void prepare_bake(glm::vec3 center, glm::vec3 world_dims, float distance,

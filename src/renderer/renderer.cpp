@@ -330,35 +330,33 @@ variant<uint, Renderer::Error> Renderer::register_texture(const Texture &tex)
 
 size_t Renderer::register_mesh(const Mesh &mesh)
 {
-    uint vertex_buf;
-    glCreateBuffers(1, &vertex_buf);
-    glNamedBufferStorage(vertex_buf, sizeof(Vertex) * mesh.vertices.size(),
-                         mesh.vertices.data(), GL_DYNAMIC_STORAGE_BIT);
+    ctx_r.mesh_instances.emplace_back(
+        ctx_r.vertex_buf.allocate(mesh.vertices.data(),
+                                  mesh.vertices.size() * sizeof(Vertex)),
+        ctx_r.index_buf.allocate(mesh.indices.data(),
+                                 mesh.indices.size() * sizeof(uint32_t)),
+        static_cast<int>(mesh.indices.size()));
 
-    uint index_buf;
-    glCreateBuffers(1, &index_buf);
-    glNamedBufferStorage(index_buf, sizeof(uint32_t) * mesh.indices.size(),
-                         mesh.indices.data(), GL_DYNAMIC_STORAGE_BIT);
-
-    int primitive_count = mesh.indices.size();
-
-    MeshInstance instance{vertex_buf, index_buf, primitive_count};
-
-    ctx_r.mesh_instances.emplace_back(instance);
     return ctx_r.mesh_instances.size() - 1;
 }
 
-void Renderer::render_mesh_instance(unsigned int vao, const MeshInstance &m)
+void Renderer::render_mesh_instance(uint vao, uint vertex_buf, uint index_buf,
+                                    const MeshInstance &m)
 {
     ZoneScoped;
 
-    glVertexArrayElementBuffer(vao, m.index_buffer);
-    glVertexArrayVertexBuffer(vao, 0, m.vertex_buffer, 0, sizeof(Vertex));
-    glVertexArrayVertexBuffer(vao, 1, m.vertex_buffer, 0, sizeof(Vertex));
-    glVertexArrayVertexBuffer(vao, 2, m.vertex_buffer, 0, sizeof(Vertex));
-    glVertexArrayVertexBuffer(vao, 3, m.vertex_buffer, 0, sizeof(Vertex));
+    glVertexArrayElementBuffer(vao, index_buf);
+    glVertexArrayVertexBuffer(vao, 0, vertex_buf, m.vertex_buf_offset,
+                              sizeof(Vertex));
+    glVertexArrayVertexBuffer(vao, 1, vertex_buf, m.vertex_buf_offset,
+                              sizeof(Vertex));
+    glVertexArrayVertexBuffer(vao, 2, vertex_buf, m.vertex_buf_offset,
+                              sizeof(Vertex));
+    glVertexArrayVertexBuffer(vao, 3, vertex_buf, m.vertex_buf_offset,
+                              sizeof(Vertex));
 
-    glDrawElements(GL_TRIANGLES, m.primitive_count, GL_UNSIGNED_INT, nullptr);
+    glDrawElements(GL_TRIANGLES, m.primitive_count, GL_UNSIGNED_INT,
+                   (void *)(m.index_buf_offset));
 }
 
 void Renderer::render(std::vector<RenderData> &queue)

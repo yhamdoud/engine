@@ -160,7 +160,8 @@ void GeometryPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
             shader.set("u_use_metallic_roughness", false);
         }
 
-        Renderer::render_mesh_instance(ctx_r.entity_vao,
-                                       ctx_r.mesh_instances[r.mesh_index]);
+        Renderer::render_mesh_instance(
+            ctx_r.entity_vao, ctx_r.vertex_buf.get_id(),
+            ctx_r.index_buf.get_id(), ctx_r.mesh_instances[r.mesh_index]);
     }
 }

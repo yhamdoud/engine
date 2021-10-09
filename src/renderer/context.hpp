@@ -5,6 +5,7 @@
 #include "constants.hpp"
 #include "entity.hpp"
 #include "model.hpp"
+#include "renderer/buffer.hpp"
 
 namespace engine
 {
@@ -36,8 +37,8 @@ struct RenderData
 
 struct MeshInstance
 {
-    uint vertex_buffer;
-    uint index_buffer;
+    uint32_t vertex_buf_offset;
+    uint32_t index_buf_offset;
     int primitive_count;
 };
 
@@ -92,6 +93,8 @@ struct RenderContext
     std::span<uint, 7> sh_texs;
     std::vector<glm::vec3> probes;
     size_t probe_mesh_idx;
+    Buffer vertex_buf;
+    Buffer index_buf;
 };
 
 struct BakingJob
