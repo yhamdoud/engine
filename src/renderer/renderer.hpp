@@ -137,9 +137,14 @@ class Renderer
 
     void render(std::vector<RenderData> &queue);
 
+    void update_vao();
     size_t register_mesh(const Mesh &mesh);
-    static void render_mesh_instance(uint vao, uint vertex_buf, uint index_buf,
-                                     const MeshInstance &mesh);
+    inline static void render_mesh_instance(const MeshInstance &m)
+    {
+        glDrawElementsBaseVertex(
+            GL_TRIANGLES, m.primitive_count, GL_UNSIGNED_INT,
+            (void *)(m.index_offset_bytes), m.vertex_offset);
+    }
 
     void prepare_bake(glm::vec3 center, glm::vec3 world_dims, float distance,
                       int bounce_count);

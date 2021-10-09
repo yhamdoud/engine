@@ -189,6 +189,8 @@ int main()
 
     FrameMarkEnd("Loading");
 
+    renderer.update_vao();
+
     window.run(
         [&]()
         {

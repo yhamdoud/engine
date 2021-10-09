@@ -188,9 +188,7 @@ void ShadowPass::render(ViewportContext &ctx, RenderContext &ctx_r)
         if (r.flags & Entity::casts_shadow)
         {
             shader.set("u_model", r.model);
-            Renderer::render_mesh_instance(
-                ctx_r.entity_vao, ctx_r.vertex_buf.get_id(),
-                ctx_r.index_buf.get_id(), ctx_r.mesh_instances[r.mesh_index]);
+            Renderer::render_mesh_instance(ctx_r.mesh_instances[r.mesh_index]);
         }
     }
 

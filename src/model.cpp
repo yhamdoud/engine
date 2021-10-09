@@ -97,6 +97,8 @@ process_texture_view(const cgltf_texture_view &texture_view)
             return tex;
     }
 
+    logger.info("DDS not found: {}", image.uri);
+
     auto sampler = texture.sampler == nullptr
                        ? Sampler{}
                        : process_sampler(*texture.sampler);

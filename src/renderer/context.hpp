@@ -37,8 +37,8 @@ struct RenderData
 
 struct MeshInstance
 {
-    uint32_t vertex_buf_offset;
-    uint32_t index_buf_offset;
+    uint32_t vertex_offset;
+    uint32_t index_offset_bytes;
     int primitive_count;
 };
 
