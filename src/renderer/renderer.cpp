@@ -363,6 +363,8 @@ void Renderer::render_mesh_instance(unsigned int vao, const MeshInstance &m)
 
 void Renderer::render(std::vector<RenderData> &queue)
 {
+    GpuZone _(10);
+
     ZoneScoped;
 
     ctx_v.proj = perspective(ctx_v.fov,

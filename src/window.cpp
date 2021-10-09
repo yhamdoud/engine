@@ -122,6 +122,10 @@ bool Window::load_gl()
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(gl_message_callback, nullptr);
 
+    // Disable shader compiler spam.
+    glDebugMessageControl(GL_DEBUG_SOURCE_SHADER_COMPILER, GL_DEBUG_TYPE_OTHER,
+                          GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, false);
+
     return true;
 }
 

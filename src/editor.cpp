@@ -50,9 +50,8 @@ void Editor::draw()
 }
 
 static const char *passes[] = {
-    "Baking",  "Shadow", "Geometry",    "SSAO",  "Lighting",
-    "Forward", "SSR",    "Motion blur", "Bloom", "Tone map",
-};
+    "Baking", "Shadow",      "Geometry", "SSAO",     "Lighting",  "Forward",
+    "SSR",    "Motion blur", "Bloom",    "Tone map", "Frame time"};
 
 void Editor::draw_profiler()
 {

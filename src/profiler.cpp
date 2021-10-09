@@ -1,4 +1,5 @@
 #include <bitset>
+#include <cstdint>
 #include <numeric>
 
 #include "logger.hpp"
@@ -9,50 +10,69 @@ using namespace std;
 
 const int sample_count = 15;
 
-std::array<std::array<uint, query_count>, 2> queries{};
+struct Query
+{
+    uint begin;
+    uint end;
+};
+
+std::array<std::array<Query, query_count>, 2> queries{};
 std::bitset<query_count> active_queries;
 std::array<std::array<uint64_t, sample_count>, query_count> times;
 
 int active = 0;
+uint counter = 0;
 
-uint *front() { return queries[active].data(); }
+Query *front() { return queries[active].data(); }
 
-uint *back() { return queries[active ^ 1].data(); }
+Query *back() { return queries[active ^ 1].data(); }
 
 void swap() { active ^= 1; }
 
 void engine::profiler_init()
 {
-    glGenQueries(2 * query_count, reinterpret_cast<uint *>(queries.data()));
+    glGenQueries(4 * query_count, reinterpret_cast<uint *>(queries.data()));
 }
 
-GpuZone::GpuZone(size_t idx)
+GpuZone::GpuZone(size_t idx) : idx(idx)
 {
-    glBeginQuery(GL_TIME_ELAPSED, back()[idx]);
+    glQueryCounter(back()[idx].begin, GL_TIMESTAMP);
     active_queries[idx] = true;
 }
 
-GpuZone::~GpuZone() { glEndQuery(GL_TIME_ELAPSED); }
-
-uint counter = 0;
+GpuZone::~GpuZone() { glQueryCounter(back()[idx].end, GL_TIMESTAMP); };
 
 void engine::profiler_collect()
 {
-    counter = (counter + 1) % sample_count;
-    uint64_t timer;
+    uint64_t begin, end;
 
     for (int i; i < query_count; i++)
     {
         if (active_queries[i])
         {
-            glGetQueryObjectui64v(front()[i], GL_QUERY_RESULT, &timer);
-            times[i][counter] = timer;
+            int available = 0;
+            glGetQueryObjectiv(front()[i].end, GL_QUERY_RESULT_AVAILABLE,
+                               &available);
+            if (available)
+            {
+                glGetQueryObjectui64v(front()[i].begin, GL_QUERY_RESULT,
+                                      &begin);
+                glGetQueryObjectui64v(front()[i].end, GL_QUERY_RESULT, &end);
+
+                times[i][counter] = end - begin;
+            }
+            else
+            {
+                logger.warn("Timer query result unavailable.");
+            }
         }
         else
         {
             times[i][counter] = 0.f;
         }
     }
+
+    counter = (counter + 1) % sample_count;
 
     active_queries.reset();
 
