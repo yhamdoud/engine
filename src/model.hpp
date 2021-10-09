@@ -52,13 +52,18 @@ struct Texture
                                               Sampler sampler);
 };
 
+struct Vertex
+{
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec2 tex_coords;
+    glm::vec4 tangent;
+};
+
 struct Mesh
 {
-    std::vector<glm::vec3> positions;
-    std::vector<glm::vec3> normals;
-    std::vector<glm::vec2> tex_coords;
-    std::vector<glm::vec4> tangents;
-    std::vector<std::uint32_t> indices;
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
 };
 
 enum class AlphaMode

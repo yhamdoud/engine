@@ -24,16 +24,6 @@ using std::filesystem::path;
 
 constexpr uint default_framebuffer = 0;
 
-uint binding_positions = 0;
-uint binding_normals = 1;
-uint binding_tex_coords = 2;
-uint binding_tangents = 3;
-
-int attrib_positions = 0;
-int attrib_normals = 1;
-int attrib_tex_coords = 2;
-int attrib_tangents = 3;
-
 Renderer::Renderer(glm::ivec2 viewport_size)
 {
     ctx_v.size = viewport_size;
@@ -47,29 +37,40 @@ Renderer::Renderer(glm::ivec2 viewport_size)
 
     // Entity stuff.
     {
+        uint binding_positions = 0;
+        uint binding_normals = 1;
+        uint binding_tex_coords = 2;
+        uint binding_tangents = 3;
+
+        int attrib_positions = 0;
+        int attrib_normals = 1;
+        int attrib_tex_coords = 2;
+        int attrib_tangents = 3;
+
         glCreateVertexArrays(1, &ctx_r.entity_vao);
 
         glEnableVertexArrayAttrib(ctx_r.entity_vao, attrib_positions);
         glVertexArrayAttribFormat(ctx_r.entity_vao, attrib_positions, 3,
-                                  GL_FLOAT, false, 0);
+                                  GL_FLOAT, false, offsetof(Vertex, position));
         glVertexArrayAttribBinding(ctx_r.entity_vao, attrib_positions,
                                    binding_positions);
 
         glEnableVertexArrayAttrib(ctx_r.entity_vao, attrib_normals);
         glVertexArrayAttribFormat(ctx_r.entity_vao, attrib_normals, 3, GL_FLOAT,
-                                  false, 0);
+                                  false, offsetof(Vertex, normal));
         glVertexArrayAttribBinding(ctx_r.entity_vao, attrib_normals,
                                    binding_normals);
 
         glEnableVertexArrayAttrib(ctx_r.entity_vao, attrib_tex_coords);
         glVertexArrayAttribFormat(ctx_r.entity_vao, attrib_tex_coords, 2,
-                                  GL_FLOAT, false, 0);
+                                  GL_FLOAT, false,
+                                  offsetof(Vertex, tex_coords));
         glVertexArrayAttribBinding(ctx_r.entity_vao, attrib_tex_coords,
                                    binding_tex_coords);
 
         glEnableVertexArrayAttrib(ctx_r.entity_vao, attrib_tangents);
         glVertexArrayAttribFormat(ctx_r.entity_vao, attrib_tangents, 4,
-                                  GL_FLOAT, false, 0);
+                                  GL_FLOAT, false, offsetof(Vertex, tangent));
         glVertexArrayAttribBinding(ctx_r.entity_vao, attrib_tangents,
                                    binding_tangents);
     }
@@ -90,8 +91,7 @@ Renderer::Renderer(glm::ivec2 viewport_size)
 
         glNamedBufferStorage(buffer, sizeof(primitives::cube_verts),
                              primitives::cube_verts.data(), GL_NONE);
-        glVertexArrayVertexBuffer(ctx_r.skybox_vao, binding_positions, buffer,
-                                  0, sizeof(vec3));
+        glVertexArrayVertexBuffer(ctx_r.skybox_vao, 0, buffer, 0, sizeof(vec3));
     }
 
     {
@@ -330,44 +330,19 @@ variant<uint, Renderer::Error> Renderer::register_texture(const Texture &tex)
 
 size_t Renderer::register_mesh(const Mesh &mesh)
 {
-    unsigned int id;
-    glCreateBuffers(1, &id);
+    uint vertex_buf;
+    glCreateBuffers(1, &vertex_buf);
+    glNamedBufferStorage(vertex_buf, sizeof(Vertex) * mesh.vertices.size(),
+                         mesh.vertices.data(), GL_DYNAMIC_STORAGE_BIT);
+
+    uint index_buf;
+    glCreateBuffers(1, &index_buf);
+    glNamedBufferStorage(index_buf, sizeof(uint32_t) * mesh.indices.size(),
+                         mesh.indices.data(), GL_DYNAMIC_STORAGE_BIT);
 
     int primitive_count = mesh.indices.size();
 
-    int size_indices = mesh.indices.size() * sizeof(uint32_t);
-    int size_positions = mesh.positions.size() * sizeof(vec3);
-    int size_normals = mesh.normals.size() * sizeof(vec3);
-    int size_tex_coords = mesh.tex_coords.size() * sizeof(vec2);
-    int size_tangents = mesh.tangents.size() * sizeof(vec4);
-
-    // TODO: Investigate if interleaved storage is more efficient than
-    // sequential storage for vertex data.
-    glNamedBufferStorage(id,
-                         size_indices + size_positions + size_normals +
-                             size_tex_coords + size_tangents,
-                         nullptr, GL_DYNAMIC_STORAGE_BIT);
-
-    MeshInstance instance{.buffer_id = id, .primitive_count = primitive_count};
-
-    int offset = 0;
-    glNamedBufferSubData(id, offset, size_indices, mesh.indices.data());
-    offset += size_indices;
-
-    glNamedBufferSubData(id, offset, size_positions, mesh.positions.data());
-    instance.positions_offset = offset;
-    offset += size_positions;
-
-    glNamedBufferSubData(id, offset, size_normals, mesh.normals.data());
-    instance.normals_offset = offset;
-    offset += size_normals;
-
-    glNamedBufferSubData(id, offset, size_tex_coords, mesh.tex_coords.data());
-    instance.tex_coords_offset = offset;
-    offset += size_tex_coords;
-
-    glNamedBufferSubData(id, offset, size_tangents, mesh.tangents.data());
-    instance.tangents_offset = offset;
+    MeshInstance instance{vertex_buf, index_buf, primitive_count};
 
     ctx_r.mesh_instances.emplace_back(instance);
     return ctx_r.mesh_instances.size() - 1;
@@ -377,15 +352,11 @@ void Renderer::render_mesh_instance(unsigned int vao, const MeshInstance &m)
 {
     ZoneScoped;
 
-    glVertexArrayElementBuffer(vao, m.buffer_id);
-    glVertexArrayVertexBuffer(vao, binding_positions, m.buffer_id,
-                              m.positions_offset, sizeof(vec3));
-    glVertexArrayVertexBuffer(vao, binding_normals, m.buffer_id,
-                              m.normals_offset, sizeof(vec3));
-    glVertexArrayVertexBuffer(vao, binding_tex_coords, m.buffer_id,
-                              m.tex_coords_offset, sizeof(vec2));
-    glVertexArrayVertexBuffer(vao, binding_tangents, m.buffer_id,
-                              m.tangents_offset, sizeof(vec4));
+    glVertexArrayElementBuffer(vao, m.index_buffer);
+    glVertexArrayVertexBuffer(vao, 0, m.vertex_buffer, 0, sizeof(Vertex));
+    glVertexArrayVertexBuffer(vao, 1, m.vertex_buffer, 0, sizeof(Vertex));
+    glVertexArrayVertexBuffer(vao, 2, m.vertex_buffer, 0, sizeof(Vertex));
+    glVertexArrayVertexBuffer(vao, 3, m.vertex_buffer, 0, sizeof(Vertex));
 
     glDrawElements(GL_TRIANGLES, m.primitive_count, GL_UNSIGNED_INT, nullptr);
 }

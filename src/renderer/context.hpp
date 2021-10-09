@@ -36,12 +36,9 @@ struct RenderData
 
 struct MeshInstance
 {
-    uint buffer_id;
+    uint vertex_buffer;
+    uint index_buffer;
     int primitive_count;
-    int positions_offset;
-    int normals_offset;
-    int tex_coords_offset;
-    int tangents_offset;
 };
 
 struct DirectionalLight

@@ -233,14 +233,26 @@ static Model process_triangles(const cgltf_primitive &triangles)
         }
     }
 
+    vector<Vertex> vertices(positions.size());
+
     if (tangents.size() == 0)
-        logger.warn("missing tangents");
+    {
+        logger.error("missing tangents");
+        for (size_t i = 0; i < vertices.size(); i++)
+            vertices[i] =
+                Vertex{positions[i], normals[i], tex_coords[i], glm::vec4(0)};
+    }
+    else
+    {
+        for (size_t i = 0; i < vertices.size(); i++)
+            vertices[i] =
+                Vertex{positions[i], normals[i], tex_coords[i], tangents[i]};
+    }
 
     auto indices = process_index_accessor(*triangles.indices);
 
     return Model{
-        make_unique<Mesh>(
-            Mesh{positions, normals, tex_coords, tangents, indices}),
+        make_unique<Mesh>(Mesh{move(vertices), move(indices)}),
         (triangles.material) ? process_material(*triangles.material)
                              : Material{},
     };

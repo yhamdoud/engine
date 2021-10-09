@@ -152,9 +152,8 @@ int main()
     //     {
     //         for (const auto &m : *bistro)
     //         {
-    //             add_entity(r, Entity::Flags::casts_shadow,
-    //                        Transform{m.transform}, m, std::nullopt,
-    //                        deferred_shader);
+    //             add_entity(renderer, Entity::Flags::casts_shadow,
+    //                        Transform{m.transform}, m, std::nullopt);
     //         }
     //     }
     // }
