@@ -9,6 +9,7 @@
 
 #include "camera.hpp"
 #include "context.hpp"
+#include "entity.hpp"
 #include "renderer/buffer.hpp"
 #include "renderer/passes/bloom.hpp"
 #include "renderer/passes/forward.hpp"
@@ -135,7 +136,7 @@ class Renderer
     Renderer(Renderer &&) = delete;
     Renderer &operator=(Renderer &&) = delete;
 
-    void render(std::vector<RenderData> &queue);
+    void render(std::vector<Entity> queue);
 
     void update_vao();
     size_t register_mesh(const Mesh &mesh);

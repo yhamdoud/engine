@@ -20,21 +20,6 @@ struct GBuffer
     uint depth;
 };
 
-struct RenderData
-{
-    Entity::Flags flags;
-    size_t mesh_index;
-    uint base_color_tex_id;
-    uint normal_tex_id;
-    uint metallic_roughness_id;
-    float metallic_factor;
-    float roughness_factor;
-    glm::vec3 base_color_factor;
-    glm::mat4 model;
-    AlphaMode alpha_mode;
-    float alpha_cutoff;
-};
-
 struct MeshInstance
 {
     uint32_t vertex_offset;
@@ -83,7 +68,7 @@ struct RenderContext
 {
     DirectionalLight sun;
     std::vector<MeshInstance> mesh_instances;
-    std::vector<RenderData> queue;
+    std::vector<Entity> queue;
     std::vector<Light> lights;
     uint entity_vao = invalid_texture_id;
     uint skybox_vao = invalid_texture_id;

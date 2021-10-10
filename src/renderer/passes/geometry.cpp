@@ -121,39 +121,39 @@ void GeometryPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
         shader.set("u_mvp_prev", mvp_prev);
         shader.set("u_normal_mat", inverseTranspose(mat3{model_view}));
 
-        shader.set("u_base_color_factor", r.base_color_factor);
-        shader.set("u_metallic_factor", r.metallic_factor);
-        shader.set("u_roughness_factor", r.roughness_factor);
-        shader.set("u_alpha_mask", r.alpha_mode == AlphaMode::mask);
-        shader.set("u_alpha_cutoff", r.alpha_cutoff);
+        shader.set("u_base_color_factor", vec3(r.material.base_color_factor));
+        shader.set("u_metallic_factor", r.material.metallic_factor);
+        shader.set("u_roughness_factor", r.material.roughness_factor);
+        shader.set("u_alpha_mask", r.material.alpha_mode == AlphaMode::mask);
+        shader.set("u_alpha_cutoff", r.material.alpha_cutoff);
 
-        if (r.base_color_tex_id != invalid_texture_id)
+        if (r.material.base_color != invalid_texture_id)
         {
             shader.set("u_use_sampler", true);
             shader.set("u_base_color", 0);
-            glBindTextureUnit(0, r.base_color_tex_id);
+            glBindTextureUnit(0, r.material.base_color);
         }
         else
         {
             shader.set("u_use_sampler", false);
         }
 
-        if (r.normal_tex_id != invalid_texture_id)
+        if (r.material.normal != invalid_texture_id)
         {
             shader.set("u_use_normal", true);
             shader.set("u_normal", 1);
-            glBindTextureUnit(1, r.normal_tex_id);
+            glBindTextureUnit(1, r.material.normal);
         }
         else
         {
             shader.set("u_use_normal", false);
         }
 
-        if (r.metallic_roughness_id != invalid_texture_id)
+        if (r.material.metallic_roughness != invalid_texture_id)
         {
             shader.set("u_use_metallic_roughness", true);
             shader.set("u_metallic_roughness", 2);
-            glBindTextureUnit(2, r.metallic_roughness_id);
+            glBindTextureUnit(2, r.material.metallic_roughness);
         }
         else
         {

@@ -6,8 +6,8 @@
 #include "constants.hpp"
 #include "editor.hpp"
 #include "entity.hpp"
+#include "importer.hpp"
 #include "logger.hpp"
-#include "model.hpp"
 #include "profiler.hpp"
 #include "renderer/renderer.hpp"
 #include "shader.hpp"
@@ -43,78 +43,6 @@ mat4 get_world_position(size_t node_idx)
     return world_transform;
 }
 
-size_t add_entity(Renderer &renderer, Entity::Flags flags, Transform transform,
-                  const Model &model, optional<Entity> parent)
-{
-    size_t mesh_idx = renderer.register_mesh(*model.mesh);
-
-    size_t sg_idx;
-
-    auto reg = [&renderer](const OptionalTexture *maybe_tex)
-    {
-        if (const auto &tex = get_if<Texture>(maybe_tex))
-            return std::get<uint>(renderer.register_texture(*tex));
-        else if (const auto &tex = get_if<CompressedTexture>(maybe_tex))
-            return std::get<uint>(renderer.register_texture(*tex));
-        else
-            return invalid_texture_id;
-    };
-
-    uint base_color_tex_id = reg(&model.material.base_color);
-    uint normal_tex_id = reg(&model.material.normal);
-    uint metallic_roughness_tex_id = reg(&model.material.metallic_roughness);
-
-    if (parent)
-        sg_idx = scene_graph_insert(transform, parent->scene_graph_index);
-    else
-        sg_idx = scene_graph_insert(transform, SceneGraphNode::root_index);
-
-    entities.emplace_back(Entity{
-        flags,
-        sg_idx,
-        mesh_idx,
-        base_color_tex_id,
-        normal_tex_id,
-        metallic_roughness_tex_id,
-        model.material.metallic_factor,
-        model.material.roughness_factor,
-        model.material.base_color_factor,
-        model.material.alpha_mode,
-        model.material.alpha_cutoff,
-    });
-
-    return entities.size() - 1;
-}
-
-vector<RenderData> generate_render_data()
-{
-    ZoneScoped;
-
-    vector<RenderData> data;
-    data.reserve(entities.size());
-
-    for (const auto &e : entities)
-    {
-        mat4 model = get_world_position(e.scene_graph_index);
-
-        data.emplace_back(RenderData{
-            e.flags,
-            e.mesh_index,
-            e.base_color_tex_id,
-            e.normal_tex_id,
-            e.metallic_roughness_tex_id,
-            e.metallic_factor,
-            e.roughness_factor,
-            e.base_color_factor,
-            model,
-            e.alpha_mode,
-            e.alpha_cutoff,
-        });
-    }
-
-    return data;
-}
-
 int main()
 {
     FrameMarkStart("Loading");
@@ -144,45 +72,19 @@ int main()
 
     renderer.ctx_r.skybox_tex = skybox_tex;
 
-    // {
-    //     auto maybe_bistro = load_gltf(models_path /
-    //     "bistro/gltf/bistro.gltf");
-
-    //     if (auto bistro = std::get_if<std::vector<Model>>(&maybe_bistro))
-    //     {
-    //         for (const auto &m : *bistro)
-    //         {
-    //             add_entity(renderer, Entity::Flags::casts_shadow,
-    //                        Transform{m.transform}, m, std::nullopt);
-    //         }
-    //     }
-    // }
+    path model = models_path / "sponza/Sponza.gltf";
+    // path model = models_path / "bistro/gltf/bistro.gltf";
+    // path model = models_path / "avocado.glb";
+    // path model = models_path / "boom_box.glb";
 
     {
-        auto maybe_sponza = load_gltf(models_path / "sponza/Sponza.gltf");
-        if (auto sponza = std::get_if<std::vector<Model>>(&maybe_sponza))
-        {
-            for (const auto &m : *sponza)
-            {
-                add_entity(renderer, Entity::Flags::casts_shadow,
-                           Transform{m.transform}, m, std::nullopt);
-            }
-        }
+        GltfImporter importer(model, renderer);
+        if (auto error = importer.import())
+            logger.error("Import error");
+        else
+            copy(importer.models.begin(), importer.models.end(),
+                 back_inserter(entities));
     }
-
-    // {
-    //     auto maybe_helmet = load_gltf(models_path / "damaged_helmet_2.glb");
-    //     if (auto helmet = std::get_if<std::vector<Model>>(&maybe_helmet))
-    //     {
-    //         for (const auto &m : *helmet)
-    //         {
-    //             Transform t{vec3(1., 0., -2.)};
-    //             t.set_euler_angles(radians(90.f), 0.f, 0.f);
-    //             add_entity(renderer, Entity::Flags::casts_shadow, t, m,
-    //                        std::nullopt);
-    //         }
-    //     }
-    // }
 
     double last_time = glfwGetTime();
     vec2 cursor_pos = window.get_cursor_position();
@@ -214,8 +116,7 @@ int main()
 
             cursor_pos = new_cursor_pos;
 
-            auto data = generate_render_data();
-            renderer.render(data);
+            renderer.render(entities);
 
             editor.draw();
         });

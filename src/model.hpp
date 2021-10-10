@@ -6,6 +6,7 @@
 #include <variant>
 #include <vector>
 
+#include <cgltf.h>
 #include <glad/glad.h>
 #include <gli/gli.hpp>
 #include <glm/glm.hpp>
@@ -29,7 +30,7 @@ struct Sampler
     int wrap_s = GL_REPEAT;
     int wrap_t = GL_REPEAT;
     //    int wrap_r;
-    bool use_mipmap = false;
+    bool use_mipmap = true;
     bool is_srgb = false;
 };
 
@@ -75,18 +76,14 @@ enum class AlphaMode
 
 using CompressedTexture = gli::texture;
 
-using OptionalTexture =
-    std::variant<Texture, CompressedTexture, std::monostate>;
-
 struct Material
 {
-
-    OptionalTexture normal{std::monostate{}};
-    OptionalTexture emissive{std::monostate{}};
-    OptionalTexture occlusion{std::monostate{}};
-    OptionalTexture base_color{std::monostate{}};
-    OptionalTexture metallic_roughness{std::monostate{}};
-    OptionalTexture emisive{std::monostate{}};
+    uint normal = invalid_texture_id;
+    uint emissive = invalid_texture_id;
+    uint occlusion = invalid_texture_id;
+    uint base_color = invalid_texture_id;
+    uint metallic_roughness = invalid_texture_id;
+    uint emisive = invalid_texture_id;
 
     glm::vec4 base_color_factor{1.f};
     float metallic_factor = 0.f;
@@ -95,15 +92,5 @@ struct Material
     AlphaMode alpha_mode = AlphaMode::opaque;
     float alpha_cutoff;
 };
-
-struct Model
-{
-    std::unique_ptr<Mesh> mesh;
-    Material material;
-    glm::mat4 transform;
-};
-
-std::variant<std::vector<Model>, ImportError>
-load_gltf(const std::filesystem::path &path);
 
 } // namespace engine

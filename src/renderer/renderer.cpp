@@ -9,6 +9,7 @@
 #include <stb_image_write.h>
 
 #include "constants.hpp"
+#include "importer.hpp"
 #include "logger.hpp"
 #include "model.hpp"
 #include "primitives.hpp"
@@ -144,9 +145,9 @@ Renderer::Renderer(glm::ivec2 viewport_size)
     }
 
     // Setup state for displaying probe.
-    auto sphere_model =
-        move(get<vector<Model>>(load_gltf(models_path / "sphere.glb"))[0]);
-    ctx_r.probe_mesh_idx = register_mesh(*sphere_model.mesh);
+    GltfImporter importer{models_path / "sphere.glb", *this};
+    importer.import();
+    ctx_r.probe_mesh_idx = importer.models[0].mesh_index;
 
     shadow.initialize(ctx_v);
     geometry.initialize(ctx_v);
@@ -301,7 +302,7 @@ variant<uint, Renderer::Error> Renderer::register_texture(const Texture &tex)
         format = GL_RGB;
         break;
     case 4:
-        internal_format = (tex.sampler.is_srgb) ? GL_SRGB8_ALPHA8 : GL_RGB8;
+        internal_format = (tex.sampler.is_srgb) ? GL_SRGB8_ALPHA8 : GL_RGBA8;
         format = GL_RGBA;
         break;
     default:
@@ -356,7 +357,7 @@ size_t Renderer::register_mesh(const Mesh &mesh)
     return ctx_r.mesh_instances.size() - 1;
 }
 
-void Renderer::render(std::vector<RenderData> &queue)
+void Renderer::render(std::vector<Entity> queue)
 {
     GpuZone _(10);
 
