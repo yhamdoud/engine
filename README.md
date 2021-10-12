@@ -1,6 +1,6 @@
 # Deferred OpenGL rendering engine
 
-https://user-images.githubusercontent.com/18217298/134210414-40b6ae4c-4609-4e9a-a16c-c40ca20de11f.mp4
+https://user-images.githubusercontent.com/18217298/137032993-6adf4c04-9362-4703-beb4-0e1047f122d1.mp4
 
 ## Table of contents
 
@@ -88,9 +88,13 @@ Alternatively, the CMake GUI or Visual Studio's CMake integration could be used.
 
 https://user-images.githubusercontent.com/18217298/136076580-9459b416-ab55-4d88-a427-2f2645f74d3f.mp4
 
-### SSR
+### Reflections
 
 https://user-images.githubusercontent.com/18217298/136068154-a21cba37-ff7b-4947-a607-21e0bccd24e1.mp4
+
+### Tone mapping
+
+https://user-images.githubusercontent.com/18217298/137027876-c6458eea-c5b4-4d22-aa5b-5ba6a5e40fd6.mp4
 
 ## Technical overview
 
