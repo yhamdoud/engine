@@ -78,6 +78,7 @@ struct RenderContext
     std::span<uint, 7> sh_texs;
     std::vector<glm::vec3> probes;
     size_t probe_mesh_idx;
+    float dt;
     Buffer vertex_buf;
     Buffer index_buf;
 };

@@ -22,6 +22,7 @@ https://user-images.githubusercontent.com/18217298/134210414-40b6ae4c-4609-4e9a-
 -   SSAO
 -   Bloom
 -   HDR lighting
+-   Automatic exposure
 -   Tone mapping
 -   Motion blur
 -   Directional and point lights
@@ -31,7 +32,7 @@ https://user-images.githubusercontent.com/18217298/134210414-40b6ae4c-4609-4e9a-
 ### Engine
 
 -   OpenGL 4.6
-    -   Direct state access (DSA)
+-   Direct state access (DSA)
 -   Amortized probe baking
 -   GPU and CPU probe baking
 -   glTF model loading
@@ -44,8 +45,10 @@ https://user-images.githubusercontent.com/18217298/134210414-40b6ae4c-4609-4e9a-
 ### Planned
 
 -   TAA
--   Glossy GI
+-   Reflection probes
+-   Light volumes
 -   Bilateral blur filter
+-   Volumetric lighting
 
 ## Building
 
@@ -101,7 +104,7 @@ The G-buffer consists of the following render targets:
 -   RT1 (SRGB8_ALPHA8)
     -   RGB: Base color
     -   A: Roughness
--   RT2: (RGBA16F)
+-   RT2 (RGBA16F)
     -   RG: Velocity
     -   BA: Unused
 -   Depth buffer
@@ -115,9 +118,9 @@ The implementation of both borrows from the work presented in
 
 The material system only supports the metallic-roughness workflow as of writing.
 
-### Diffuse GI
+### Diffuse indirect lighting
 
-Diffuse GI for static and dynamic objects is approximated using a grid of irradiance probes.
+Diffuse indirect lighting for static and dynamic objects is approximated using a grid of irradiance probes.
 For each probe, the scene is rasterized to a cube map and the irradiance is subsequently determined using a compute shader.
 This process is repeated for multiple bounces and can be amortized over several frames.
 
@@ -170,3 +173,17 @@ The following filters are available:
 -   3x3 tent upsampling filter.
 
 Additionally, a specialized version of the 13-tap filter is implemented for the first downsample pass to reduce fireflies.
+
+### Tone mapping
+
+The first part of the tone mapping process is calculating the average luminance for automatic exposure adjustment.
+A straightforward way of calculating this average is to successively downsample the HDR target into a 1×1 luminance buffer.
+However, the stability of this approach can suffer from the presence of very bright and dark pixels in the HDR target, which over-contribute to the average luminance.
+
+A more robust approach for calculating the average luminance relies on the creation of a luminance histogram.
+Binning samples in a histogram gives us more control over the impact of samples at both extremes.
+Our histogram construction algorithm is based on the work presented by Alex Tarfif in [Adaptive Exposure from Luminance Histograms](http://www.alextardif.com/HistogramLuminance.html).
+The implementation consists of two compute shader passes: one for creating the histogram, and one for calculating the mean.
+In practice, we bin log luminance values and calculate the average log luminance.
+This limits the effect of extremely bright spots, like the sun, on adjustment.
+Additionally, the averaged value is smoothed over time.

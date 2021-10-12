@@ -116,7 +116,7 @@ int main()
 
             cursor_pos = new_cursor_pos;
 
-            renderer.render(entities);
+            renderer.render(delta_time, entities);
 
             editor.draw();
         });

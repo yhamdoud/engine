@@ -1,0 +1,83 @@
+// Generate luminance histogram.
+//
+// Adapted from: http://www.alextardif.com/HistogramLuminance.html
+
+#version 460 core
+
+#define LOCAL_SIZE_X 16
+#define LOCAL_SIZE_Y 16
+
+const uint bin_count = LOCAL_SIZE_X * LOCAL_SIZE_Y;
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout (std140, binding = 0) uniform Uniforms
+{
+    uvec2 size;
+    float min_log_luminance;
+    float log_luminance_range;
+    float log_luminance_range_inverse;
+    float dt;
+    float tau;
+    float target_luminance;
+} u;
+
+layout(std430, binding = 1) buffer Ssbo
+{
+	restrict uint hist[bin_count];
+};
+
+layout(binding = 2) uniform sampler2D u_hdr_read;
+
+shared uint hist_shared[bin_count];
+
+const float discard_threshold = 0.001;
+
+// Calculates relative luminance, as we are working in linear space
+float luminance(vec3 c)
+{
+    return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+uint hdr_to_bin(vec3 hdr_color)
+{
+    float luminance = luminance(hdr_color);
+    
+	// Avoid taking the log of very small values.
+    if(luminance < discard_threshold)
+        return 0;
+    
+	// Map log of luminance to our range, resulting in a [0, 1] value. 
+    float log_luminance = clamp(
+		(log2(luminance) - u.min_log_luminance) * u.log_luminance_range_inverse,
+		0.,
+		1.
+	);
+
+	// Map range to bins, leaving the first bin for the values discarded earlier.
+    return uint(log_luminance * float(bin_count - 2) + 1.);
+}
+
+void main()
+{
+    const uvec2 gid = gl_GlobalInvocationID.xy;
+    const uvec2 lid = gl_LocalInvocationID.xy;
+	const uint lidx = gl_LocalInvocationIndex;
+
+	hist_shared[lidx] = 0;
+
+	barrier();
+	groupMemoryBarrier();
+
+	if (all(lessThan(gid, u.size)))
+	{
+		vec3 luminance = texelFetch(u_hdr_read, ivec2(gid), 0).rgb;
+		uint bin_idx = hdr_to_bin(luminance);
+		atomicAdd(hist_shared[bin_idx], 1);
+	}
+
+	barrier();
+	groupMemoryBarrier();
+
+	atomicAdd(hist[lidx], hist_shared[lidx]);
+}

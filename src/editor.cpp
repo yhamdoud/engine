@@ -194,12 +194,25 @@ void Editor::draw_renderer_menu()
         if (ImGui::CollapsingHeader("Tone map"))
         {
             if (ImGui::Checkbox("Gamma correction",
-                                &renderer.tone_map.do_gamma_correct) |
+                                &renderer.tone_map.params.do_gamma_correct) |
                 ImGui::Checkbox("Tone mapping",
-                                &renderer.tone_map.do_tone_map) |
-                ImGui::InputFloat("Gamma", &renderer.tone_map.gamma) |
-                ImGui::InputFloat("Exposure", &renderer.tone_map.exposure))
-                renderer.tone_map.parse_parameters();
+                                &renderer.tone_map.params.do_tone_map) |
+                ImGui::InputFloat("Gamma", &renderer.tone_map.params.gamma) |
+                ImGui::InputFloat("Exposure",
+                                  &renderer.tone_map.params.exposure) |
+                ImGui::SliderFloat(
+                    "Exposure adjust speed",
+                    &renderer.tone_map.params.exposure_adjust_speed, 0.f, 5.f) |
+                ImGui::SliderFloat("Min. log luminance",
+                                   &renderer.tone_map.params.min_log_luminance,
+                                   -10.f, 10.f) |
+                ImGui::SliderFloat("Max. log luminance",
+                                   &renderer.tone_map.params.max_log_luminance,
+                                   -10.f, 10.f) |
+                ImGui::SliderFloat("Target luminance",
+                                   &renderer.tone_map.params.target_luminance,
+                                   0.01f, 2.f))
+                renderer.tone_map.parse_params();
         }
 
         if (ImGui::CollapsingHeader("Viewport"))

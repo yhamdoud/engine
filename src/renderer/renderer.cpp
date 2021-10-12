@@ -357,7 +357,7 @@ size_t Renderer::register_mesh(const Mesh &mesh)
     return ctx_r.mesh_instances.size() - 1;
 }
 
-void Renderer::render(std::vector<Entity> queue)
+void Renderer::render(float dt, std::vector<Entity> queue)
 {
     GpuZone _(10);
 
@@ -372,6 +372,7 @@ void Renderer::render(std::vector<Entity> queue)
     ctx_v.view = camera.get_view();
 
     ctx_r.queue = std::move(queue);
+    ctx_r.dt = dt;
 
     if (baking_jobs.size() > 0)
     {

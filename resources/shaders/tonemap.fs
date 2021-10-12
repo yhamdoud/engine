@@ -7,6 +7,12 @@ uniform bool u_do_tonemap;
 uniform bool u_do_gamma_correct;
 uniform float u_exposure;
 uniform float u_gamma;
+uniform float u_target_luminance;
+
+layout(std430, binding = 3) buffer Ssbo2
+{
+	float luminance_out;
+};
 
 out vec4 frag_color;
 
@@ -22,7 +28,7 @@ vec3 gamma_correct(vec3 linear, float gamma)
 
 void main()
 {
-    vec3 hdr = texture(u_hdr_screen, tex_coords).rgb;
+    vec3 hdr = (u_target_luminance / luminance_out) * texture(u_hdr_screen, tex_coords).rgb;
 
     if (u_do_tonemap)
         // Now LDR...

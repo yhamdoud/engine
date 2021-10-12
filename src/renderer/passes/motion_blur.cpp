@@ -21,8 +21,6 @@ void MotionBlurPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 {
     ZoneScoped;
 
-    glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.hdr_frame_buf);
-
     glBindTextureUnit(0u, ctx_v.g_buf.velocity);
     glBindTextureUnit(1u, ctx_v.hdr_tex);
     glBindImageTexture(2u, ctx_v.hdr2_tex, 0, false, 0, GL_WRITE_ONLY,

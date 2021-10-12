@@ -122,11 +122,15 @@ class Renderer
     }};
 
     ToneMapPass tone_map{{
-        .do_tonemap = true,
+        .do_tone_map = true,
         .do_gamma_correct = true,
         .exposure = 1.f,
         .gamma = 2.2f,
-    }};
+        .min_log_luminance = -10.f,
+        .max_log_luminance = 2.f,
+        .exposure_adjust_speed = 1.1f,
+        .target_luminance = 0.4f,
+    }}; // namespace engine
 
     Renderer(glm::ivec2 viewport_size);
     ~Renderer();
@@ -136,7 +140,7 @@ class Renderer
     Renderer(Renderer &&) = delete;
     Renderer &operator=(Renderer &&) = delete;
 
-    void render(std::vector<Entity> queue);
+    void render(float dt, std::vector<Entity> queue);
 
     void update_vao();
     size_t register_mesh(const Mesh &mesh);
