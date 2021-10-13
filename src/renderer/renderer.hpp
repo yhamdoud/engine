@@ -122,9 +122,7 @@ class Renderer
     }};
 
     ToneMapPass tone_map{{
-        .do_tone_map = true,
-        .do_gamma_correct = true,
-        .exposure = 1.f,
+        .tm_operator = ToneMapPass::Operator::aces,
         .gamma = 2.2f,
         .min_log_luminance = -10.f,
         .max_log_luminance = 2.f,

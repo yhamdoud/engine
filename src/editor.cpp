@@ -11,6 +11,7 @@
 #include "editor.hpp"
 #include "glm/geometric.hpp"
 #include "profiler.hpp"
+#include "renderer/passes/tone_map.hpp"
 
 using namespace engine;
 using namespace std;
@@ -195,23 +196,22 @@ void Editor::draw_renderer_menu()
 
         if (ImGui::CollapsingHeader("Tone map"))
         {
-            if (ImGui::Checkbox("Gamma correction",
-                                &renderer.tone_map.params.do_gamma_correct) |
-                ImGui::Checkbox("Tone mapping",
-                                &renderer.tone_map.params.do_tone_map) |
-                ImGui::InputFloat("Gamma", &renderer.tone_map.params.gamma) |
-                ImGui::SliderFloat(
-                    "Exposure adjust speed",
-                    &renderer.tone_map.params.exposure_adjust_speed, 0.f, 5.f) |
+            auto &params = renderer.tone_map.params;
+
+            const char *items[] = {"None", "Reinhard", "ACES", "Uncharted 2"};
+
+            if (ImGui::SliderFloat("Gamma", &params.gamma, 0.01f, 5.f) |
+                ImGui::SliderFloat("Exposure adjust speed",
+                                   &params.exposure_adjust_speed, 0.f, 5.f) |
                 ImGui::SliderFloat("Min. log luminance",
-                                   &renderer.tone_map.params.min_log_luminance,
-                                   -10.f, 10.f) |
+                                   &params.min_log_luminance, -10.f, 10.f) |
                 ImGui::SliderFloat("Max. log luminance",
-                                   &renderer.tone_map.params.max_log_luminance,
-                                   -10.f, 10.f) |
-                ImGui::SliderFloat("Target luminance",
-                                   &renderer.tone_map.params.target_luminance,
-                                   0.01f, 2.f))
+                                   &params.max_log_luminance, -10.f, 10.f) |
+                ImGui::SliderFloat("Target luminance", &params.target_luminance,
+                                   0.01f, 2.f) |
+                ImGui::ListBox("Operator",
+                               reinterpret_cast<int *>(&params.tm_operator),
+                               items, IM_ARRAYSIZE(items), 4))
                 renderer.tone_map.parse_params();
         }
 

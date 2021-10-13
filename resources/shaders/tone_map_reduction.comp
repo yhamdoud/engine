@@ -4,7 +4,9 @@
 
 #version 460 core
 
-#define BIN_COUNT 256
+#ifndef ENGINE_DEFINES
+    #define BIN_COUNT 256
+#endif
 
 layout(local_size_x = BIN_COUNT) in;
 
@@ -17,6 +19,8 @@ layout (std140, binding = 0) uniform Uniforms
     float dt;
     float tau;
     float target_luminance;
+	float gamma;
+	uint operator;
 } u;
 
 layout(std430, binding = 1) buffer Ssbo

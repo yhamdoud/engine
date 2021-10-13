@@ -6,53 +6,63 @@
 namespace engine
 {
 
-struct ToneMapParams
-{
-    bool do_tone_map;
-    bool do_gamma_correct;
-    float exposure;
-    float gamma;
-
-    float min_log_luminance;
-    float max_log_luminance;
-    float exposure_adjust_speed;
-    float target_luminance;
-};
-
-struct ExposureUniforms
-{
-    glm::uvec2 size;
-    float min_log_luminance;
-    float log_luminance_range;
-    float log_luminance_range_inverse;
-    float dt;
-    float exposure_adjust_speed;
-    float target_luminance;
-};
-
 class ToneMapPass
 {
+    struct Uniforms
+    {
+        glm::uvec2 size;
+        float min_log_luminance;
+        float log_luminance_range;
+        float log_luminance_range_inverse;
+        float dt;
+        float exposure_adjust_speed;
+        float target_luminance;
+        float gamma;
+        uint tm_operator;
+        float pad0;
+        float pad1;
+    };
+
+    static constexpr uint histogram_size = 256;
+    static constexpr glm::ivec2 group_size{16, 16};
+
     Shader tonemap_shader = *Shader::from_paths(ShaderPaths{
         .vert = shaders_path / "lighting.vs",
         .frag = shaders_path / "tonemap.fs",
     });
-    Shader histogram_shader =
-        *Shader::from_comp_path(shaders_path / "tone_map_histogram.comp");
-    Shader reduction_shader =
-        *Shader::from_comp_path(shaders_path / "tone_map_reduction.comp");
+    Shader histogram_shader = *Shader::from_comp_path(
+        shaders_path / "tone_map_histogram.comp", "#define LOCAL_SIZE 16\n");
+    Shader reduction_shader = *Shader::from_comp_path(
+        shaders_path / "tone_map_reduction.comp", "#define BIN_COUNT 256\n");
 
     uint histogram_buf;
     uint luminance_buf;
     uint uniform_buf;
-    glm::ivec2 group_size{16, 16};
-    uint histogram_size = 256;
 
-    ExposureUniforms uniform_data;
+    Uniforms uniform_data;
 
   public:
-    ToneMapParams params;
+    enum Operator : int
+    {
+        none,
+        reinhard,
+        aces,
+        uncharted2,
+    };
 
-    ToneMapPass(ToneMapParams params);
+    struct Params
+    {
+        Operator tm_operator;
+        float gamma;
+        float min_log_luminance;
+        float max_log_luminance;
+        float exposure_adjust_speed;
+        float target_luminance;
+    };
+
+    Params params;
+
+    ToneMapPass(Params params);
 
     void parse_params();
     void initialize(ViewportContext &ctx);

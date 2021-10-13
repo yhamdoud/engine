@@ -9,20 +9,10 @@ using namespace engine;
 using namespace std;
 using namespace glm;
 
-ToneMapPass::ToneMapPass(ToneMapParams params) : params(params)
-{
-    parse_params();
-}
+ToneMapPass::ToneMapPass(Params params) : params(params) { parse_params(); }
 
 void ToneMapPass::parse_params()
 {
-    tonemap_shader.set("u_hdr_screen", 2);
-    tonemap_shader.set("u_do_tonemap", params.do_tone_map);
-    tonemap_shader.set("u_do_gamma_correct", params.do_gamma_correct);
-    tonemap_shader.set("u_exposure", params.exposure);
-    tonemap_shader.set("u_gamma", params.gamma);
-    tonemap_shader.set("u_target_luminance", params.target_luminance);
-
     float log_luminance_range =
         abs(params.min_log_luminance - params.max_log_luminance);
 
@@ -32,6 +22,8 @@ void ToneMapPass::parse_params()
         .log_luminance_range_inverse = 1 / log_luminance_range,
         .exposure_adjust_speed = params.exposure_adjust_speed,
         .target_luminance = params.target_luminance,
+        .gamma = params.gamma,
+        .tm_operator = static_cast<uint>(params.tm_operator),
     };
 }
 
@@ -47,8 +39,7 @@ void ToneMapPass::initialize(ViewportContext &ctx)
     glNamedBufferStorage(luminance_buf, sizeof(float), &zero, GL_NONE);
 
     glCreateBuffers(1, &uniform_buf);
-    glNamedBufferData(uniform_buf, sizeof(ExposureUniforms), nullptr,
-                      GL_DYNAMIC_DRAW);
+    glNamedBufferData(uniform_buf, sizeof(Uniforms), nullptr, GL_DYNAMIC_DRAW);
 }
 
 void ToneMapPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
@@ -57,16 +48,15 @@ void ToneMapPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 
     uniform_data.size = ctx_v.size;
     uniform_data.dt = ctx_r.dt;
-    glNamedBufferSubData(uniform_buf, 0, sizeof(ExposureUniforms),
-                         &uniform_data);
+    glNamedBufferSubData(uniform_buf, 0, sizeof(Uniforms), &uniform_data);
 
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buf);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, histogram_buf);
     glBindTextureUnit(2, ctx_v.hdr_tex);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, luminance_buf);
 
-    glUseProgram(histogram_shader.get_id());
     uvec2 group_count = (ctx_v.size + group_size - 1) / group_size;
+    glUseProgram(histogram_shader.get_id());
     glDispatchCompute(group_count.x, group_count.y, 1u);
 
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -76,7 +66,6 @@ void ToneMapPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 
     glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.ldr_frame_buf);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
     glUseProgram(tonemap_shader.get_id());
     glDrawArrays(GL_TRIANGLES, 0, 3);
 }
