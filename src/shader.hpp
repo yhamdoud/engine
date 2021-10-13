@@ -24,22 +24,32 @@ struct ShaderPaths
     std::filesystem::path frag;
 };
 
+struct ShaderDefines
+{
+    std::string vert;
+    std::string geom;
+    std::string frag;
+};
+
 using UniformMap = std::unordered_map<std::string, Uniform>;
 
 class Shader
 {
     uint id;
     static UniformMap parse_uniforms(uint program);
-    static uint compile_shader_stage(const std::string &source, GLenum stage);
+    static uint compile_shader_stage(std::string source,
+                                     const std::string &defines, GLenum stage);
 
   public:
     UniformMap uniforms;
 
     Shader();
     Shader(uint program, UniformMap uniforms);
-    static std::optional<Shader> from_paths(const ShaderPaths &p);
+    static std::optional<Shader> from_paths(const ShaderPaths &p,
+                                            const ShaderDefines &d = {});
     static std::optional<Shader>
-    from_comp_path(const std::filesystem::path &path);
+    from_comp_path(const std::filesystem::path &path,
+                   const std::string &defines = "");
     static std::optional<Shader>
     from_stages(const std::initializer_list<uint> &stages);
 

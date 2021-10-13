@@ -117,8 +117,8 @@ class Renderer
     bool bloom_enabled = true;
     BloomPass bloom{{
         .pass_count = 5u,
-        .intensity = 0.05f,
-        .upsample_radius = 1.5f,
+        .intensity = 0.04f,
+        .upsample_radius = 1.3f,
     }};
 
     ToneMapPass tone_map{{
@@ -129,7 +129,7 @@ class Renderer
         .min_log_luminance = -10.f,
         .max_log_luminance = 2.f,
         .exposure_adjust_speed = 1.1f,
-        .target_luminance = 0.4f,
+        .target_luminance = 0.25f,
     }}; // namespace engine
 
     Renderer(glm::ivec2 viewport_size);

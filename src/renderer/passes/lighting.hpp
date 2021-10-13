@@ -28,6 +28,9 @@ class LightingPass
     bool filter_shadows;
     float leak_offset;
 
+    // FIXME: workaround
+    bool ssao = true, ssr = true;
+
     LightingPass(LightingConfig cfg);
 
     void parse_parameters();

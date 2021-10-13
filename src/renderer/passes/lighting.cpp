@@ -64,6 +64,9 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     lighting_shader.set("u_proj_inv", ctx_v.proj_inv);
     lighting_shader.set("u_view_inv", inverse(ctx_v.view));
 
+    lighting_shader.set("u_ssao", ssao);
+    lighting_shader.set("u_ssr", ssr);
+
     glBindTextureUnit(0, ctx_v.g_buf.depth);
     glBindTextureUnit(1, ctx_v.g_buf.normal_metallic);
     glBindTextureUnit(2, ctx_v.g_buf.base_color_roughness);
@@ -71,15 +74,15 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 
     glBindTextureUnit(12, ctx_v.hdr_prev_tex);
     glBindTextureUnit(13, ctx_v.reflections_tex);
+    glBindTextureUnit(14, ctx_v.g_buf.velocity);
 
     if (ctx_v.ao_tex != invalid_texture_id)
     {
-        lighting_shader.set("u_use_ao", true);
         glBindTextureUnit(4, ctx_v.ao_tex);
     }
     else
     {
-        lighting_shader.set("u_use_ao", false);
+        lighting_shader.set("u_ssao", false);
     }
 
     if (ctx_r.sh_texs.size() != 0 && indirect_light)

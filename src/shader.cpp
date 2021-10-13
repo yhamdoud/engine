@@ -21,18 +21,26 @@
 #include "shader.hpp"
 #include "utils.hpp"
 
-using std::optional;
-using std::string;
-using std::unordered_map;
 using std::filesystem::path;
 
 using namespace engine;
+using namespace std;
 
-uint Shader::compile_shader_stage(const string &source, GLenum stage)
+uint Shader::compile_shader_stage(string source, const string &defines,
+                                  GLenum stage)
 {
-    unsigned int shader = glCreateShader(stage);
+    uint shader = glCreateShader(stage);
+
+    auto version_start = source.find("#version");
+    auto version_stop = source.find('\n', version_start) + 1;
+
+    string default_defines = "#define ENGINE_DEFINES\n";
+    default_defines.append(defines);
+
+    source.insert(version_stop, default_defines);
 
     auto c_str = source.c_str();
+
     glShaderSource(shader, 1, &c_str, nullptr);
     glCompileShader(shader);
 
@@ -51,14 +59,16 @@ uint Shader::compile_shader_stage(const string &source, GLenum stage)
     return shader;
 }
 
-optional<Shader> Shader::from_paths(const ShaderPaths &p)
+optional<Shader> Shader::from_paths(const ShaderPaths &p,
+                                    const ShaderDefines &d)
 {
     uint vert = invalid_shader_id, geom = invalid_shader_id,
          frag = invalid_shader_id;
 
     if (std::filesystem::exists(p.vert))
     {
-        vert = compile_shader_stage(utils::from_file(p.vert), GL_VERTEX_SHADER);
+        vert = compile_shader_stage(utils::from_file(p.vert), d.vert,
+                                    GL_VERTEX_SHADER);
         if (vert == invalid_shader_id)
             return std::nullopt;
     }
@@ -72,7 +82,7 @@ optional<Shader> Shader::from_paths(const ShaderPaths &p)
     {
         if (std::filesystem::exists(p.geom))
         {
-            geom = compile_shader_stage(utils::from_file(p.geom),
+            geom = compile_shader_stage(utils::from_file(p.geom), d.geom,
                                         GL_GEOMETRY_SHADER);
             if (geom == invalid_shader_id)
                 return std::nullopt;
@@ -89,7 +99,7 @@ optional<Shader> Shader::from_paths(const ShaderPaths &p)
     {
         if (std::filesystem::exists(p.frag))
         {
-            frag = compile_shader_stage(utils::from_file(p.frag),
+            frag = compile_shader_stage(utils::from_file(p.frag), d.frag,
                                         GL_FRAGMENT_SHADER);
             if (frag == invalid_shader_id)
                 return std::nullopt;
@@ -114,13 +124,15 @@ optional<Shader> Shader::from_paths(const ShaderPaths &p)
     return Shader::from_stages({vert});
 }
 
-std::optional<Shader> Shader::from_comp_path(const path &path)
+std::optional<Shader> Shader::from_comp_path(const path &path,
+                                             const string &defines)
 {
     uint comp;
 
     if (std::filesystem::exists(path))
     {
-        comp = compile_shader_stage(utils::from_file(path), GL_COMPUTE_SHADER);
+        comp = compile_shader_stage(utils::from_file(path), defines,
+                                    GL_COMPUTE_SHADER);
         if (comp == invalid_shader_id)
             return std::nullopt;
     }

@@ -87,7 +87,7 @@ void Editor::draw_renderer_menu()
         if (ImGui::CollapsingHeader("GI"))
         {
             ImGui::SliderInt("Bounces", &bounce_count, 1, 10);
-            ImGui::SliderFloat("Distance", &distance, 1.f, 5.f);
+            ImGui::SliderFloat("Distance", &distance, 0.5f, 5.f);
 
             ImGui::Separator();
 
@@ -102,7 +102,8 @@ void Editor::draw_renderer_menu()
             ImGui::ProgressBar(renderer.baking_progress());
         }
 
-        ImGui::Checkbox("##SSAO", &renderer.ssao_enabled);
+        if (ImGui::Checkbox("##SSAO", &renderer.ssao_enabled))
+            renderer.lighting.ssao = renderer.ssao_enabled;
         ImGui::SameLine();
         if (ImGui::CollapsingHeader("SSAO"))
         {
@@ -125,7 +126,7 @@ void Editor::draw_renderer_menu()
         if (ImGui::CollapsingHeader("Lighting"))
         {
             if (ImGui::Checkbox("Direct lighting",
-                                &renderer.lighting.direct_light);
+                                &renderer.lighting.direct_light) |
                 ImGui::Checkbox("Indirect lighting",
                                 &renderer.lighting.indirect_light) |
                 ImGui::Checkbox("Base color",
@@ -145,7 +146,8 @@ void Editor::draw_renderer_menu()
                 renderer.forward.parse_parameters();
         }
 
-        ImGui::Checkbox("##SSR", &renderer.ssr_enabled);
+        if (ImGui::Checkbox("##SSR", &renderer.ssr_enabled))
+            renderer.lighting.ssr = renderer.ssr_enabled;
         ImGui::SameLine();
         if (ImGui::CollapsingHeader("SSR"))
         {
@@ -198,8 +200,6 @@ void Editor::draw_renderer_menu()
                 ImGui::Checkbox("Tone mapping",
                                 &renderer.tone_map.params.do_tone_map) |
                 ImGui::InputFloat("Gamma", &renderer.tone_map.params.gamma) |
-                ImGui::InputFloat("Exposure",
-                                  &renderer.tone_map.params.exposure) |
                 ImGui::SliderFloat(
                     "Exposure adjust speed",
                     &renderer.tone_map.params.exposure_adjust_speed, 0.f, 5.f) |

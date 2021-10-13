@@ -17,7 +17,6 @@ layout (binding = 4) uniform sampler2D u_ao;
 uniform bool u_use_irradiance;
 uniform bool u_use_direct;
 uniform bool u_use_base_color;
-uniform bool u_use_ao;
 
 struct Light {
     vec3 position;
@@ -45,6 +44,9 @@ uniform bool u_filter;
 uniform mat4 u_inv_grid_transform;
 uniform vec3 u_grid_dims;
 uniform float u_leak_offset;
+
+uniform bool u_ssr;
+uniform bool u_ssao;
 
 layout (binding = 5) uniform sampler3D u_sh_0;
 layout (binding = 6) uniform sampler3D u_sh_1;
@@ -297,27 +299,30 @@ void main()
                           c7.rgb * 1.092548f * n_world.x * n_world.z +
                           c8.rgb * 0.546274f * (n_world.x * n_world.x - n_world.y * n_world.y);
 
-        vec3 kS = F_Schlick(max(dot(n, v), 0.), f0);
-        // TODO: This isn't correct, I think.
-        vec3 kD = 1.0 - kS;
-
-        float occlusion = u_use_ao ? texture(u_ao, tex_coords).r : 1.;
+        float occlusion = u_ssao ? texture(u_ao, tex_coords).r : 1.;
 
         out_luminance += occlusion * irradiance * base_color * Fd_Lambert();
     }
 
     // SSR
+    if (u_ssr)
     {
         vec4 r = textureLod(u_reflections, tex_coords, 0);
 
         float n_dot_v = r.a;
 
         vec3 F = F_Schlick_roughness(n_dot_v, f0, roughness);
-        int max_roughness = 4;
+        int max_lod = 4;
 
         // Reprojection.
         vec2 velocity = texture(u_g_velocity, tex_coords).rg;
-        out_luminance += r.b * F * texture(u_hdr_prev, r.rg - velocity, roughness * max_roughness).rgb;
+        out_luminance +=
+            r.b * F * textureLod(
+                u_hdr_prev,
+                // r.rg - u_dt * velocity,
+                r.rg,
+                roughness * max_lod
+            ).rgb;
     }
 
     // Give different shadow map cascades a recognizable tint.
