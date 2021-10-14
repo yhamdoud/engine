@@ -160,7 +160,24 @@ vec2 Window::get_cursor_position()
 
 void Window::resize(ivec2 resolution)
 {
+    size = resolution;
     glfwSetWindowSize(impl, resolution.x, resolution.y);
+}
+
+void Window::set_full_screen(bool enable)
+{
+    is_full_screen = enable;
+
+    if (enable)
+    {
+        glfwSetWindowMonitor(impl, glfwGetPrimaryMonitor(), 0, 0, size.x,
+                             size.y, GLFW_DONT_CARE);
+    }
+    else
+    {
+        glfwSetWindowMonitor(impl, nullptr, 0, 0, size.x, size.y,
+                             GLFW_DONT_CARE);
+    }
 }
 
 void engine::scroll_callback(GLFWwindow *window, double x_offset,

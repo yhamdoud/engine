@@ -18,6 +18,8 @@ class Window
     glm::ivec2 size;
 
   public:
+    bool is_full_screen;
+
     // TODO: Wrap this behind an interface completely, eventually.
     GLFWwindow *impl;
 
@@ -32,6 +34,7 @@ class Window
     void run(const std::function<void()> &main_loop);
     glm::vec2 get_cursor_position();
     void resize(glm::ivec2 resolution);
+    void set_full_screen(bool enable);
 
     static bool load_gl();
 };

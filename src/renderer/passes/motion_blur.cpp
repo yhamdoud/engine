@@ -28,5 +28,5 @@ void MotionBlurPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 
     glUseProgram(shader.get_id());
 
-    glDispatchCompute(ctx_v.size.x / 32, ctx_v.size.y / 32, 1);
+    glDispatchCompute((ctx_v.size.x + 31) / 32, (ctx_v.size.y + 31) / 32, 1);
 }
