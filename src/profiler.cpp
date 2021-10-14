@@ -4,6 +4,7 @@
 
 #include "logger.hpp"
 #include "profiler.hpp"
+#include "constants.hpp"
 
 using namespace engine;
 using namespace std;
@@ -46,7 +47,7 @@ void engine::profiler_collect()
 {
     uint64_t begin, end;
 
-    for (int i; i < query_count; i++)
+    for (int i = 0; i < query_count; i++)
     {
         if (active_queries[i])
         {

@@ -9,7 +9,7 @@ class Buffer
 {
     uint id;
     uint32_t capacity;
-    uint32_t size;
+    uint32_t size = 0;
 
   public:
     Buffer(uint32_t capacity, uint32_t alignment);

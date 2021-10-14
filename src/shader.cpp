@@ -294,7 +294,7 @@ UniformMap Shader::parse_uniforms(uint program)
     return uniforms;
 }
 
-GLuint upload_cube_map(const std::array<path, 6> &paths)
+GLuint engine::upload_cube_map(const std::array<path, 6> &paths)
 {
     unsigned int id;
 
@@ -309,7 +309,7 @@ GLuint upload_cube_map(const std::array<path, 6> &paths)
         int width, height, channel_count;
 
         glm::uint8_t *data =
-            stbi_load(path.c_str(), &width, &height, &channel_count, 0);
+            stbi_load(path.string().c_str(), &width, &height, &channel_count, 0);
 
         if (face_idx == 0)
             glTextureStorage2D(id, 1, GL_RGBA8, width, height);

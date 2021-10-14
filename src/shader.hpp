@@ -8,8 +8,12 @@
 #include <unordered_map>
 
 #include <glad/glad.h>
-
 #include <glm/glm.hpp>
+
+#include "constants.hpp"
+
+namespace engine
+{
 
 struct Uniform
 {
@@ -70,3 +74,5 @@ class Shader
 };
 
 GLuint upload_cube_map(const std::array<std::filesystem::path, 6> &paths);
+
+} // namespace engine

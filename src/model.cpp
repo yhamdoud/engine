@@ -38,7 +38,7 @@ optional<Texture> Texture::from_file(path path, Sampler sampler)
 {
     int width, height, channel_count;
 
-    uint8_t *data = stbi_load(path.c_str(), &width, &height, &channel_count, 0);
+    uint8_t *data = stbi_load(path.string().c_str(), &width, &height, &channel_count, 0);
     if (data == nullptr)
     {
         logger.error("Error loading texture at path: {}", path.string());

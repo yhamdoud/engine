@@ -27,10 +27,11 @@ optional<ImportError> GltfImporter::import()
     logger.info("Loading model at path: {}", path.string());
 
     cgltf_options options = {};
-    cgltf_result result = cgltf_parse_file(&options, path.c_str(), &gltf);
+    cgltf_result result =
+        cgltf_parse_file(&options, path.string().c_str(), &gltf);
 
     if (result == cgltf_result_success)
-        result = cgltf_load_buffers(&options, gltf, path.c_str());
+        result = cgltf_load_buffers(&options, gltf, path.string().c_str());
 
     if (result == cgltf_result_success)
         result = cgltf_validate(gltf);
@@ -258,14 +259,15 @@ uint GltfImporter::process_texture_view(const cgltf_texture_view &texture_view)
 
     if (image.uri && find_dds)
     {
-        auto tex = gli::load(folder / "dds" /
-                             std::filesystem::path(image.uri)
-                                 .filename()
-                                 .replace_extension("dds")
-                                 .c_str());
+        auto tex = gli::load(
+            (folder / "dds" /
+             std::filesystem::path(image.uri).filename().replace_extension(
+                 "dds"))
+                .string()
+                .c_str());
 
         if (!tex.empty())
-            return get<uint>(renderer.register_texture(tex));
+            return get<unsigned int>(renderer.register_texture(tex));
     }
 
     auto sampler = texture.sampler == nullptr

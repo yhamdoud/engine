@@ -71,7 +71,7 @@ int main()
         return EXIT_FAILURE;
 
     renderer.ctx_r.skybox_tex = skybox_tex;
-
+    
     path model = models_path / "sponza/Sponza.gltf";
     // path model = models_path / "bistro/gltf/bistro.gltf";
     // path model = models_path / "avocado.glb";
