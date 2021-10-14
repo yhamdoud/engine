@@ -158,6 +158,11 @@ vec2 Window::get_cursor_position()
     return vec2{x, y};
 }
 
+void Window::resize(ivec2 resolution)
+{
+    glfwSetWindowSize(impl, resolution.x, resolution.y);
+}
+
 void engine::scroll_callback(GLFWwindow *window, double x_offset,
                              double y_offset)
 {
@@ -182,6 +187,7 @@ void engine::key_callback(GLFWwindow *window, int key, int scancode, int action,
         renderer->camera.reset();
     }
 }
+
 void engine::glfw_error_callback(int error, const char *description)
 {
     logger.error("GLFW ({}): {}", error, description);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "constants.hpp"
 #include "renderer/context.hpp"
 #include "renderer/pass.hpp"
 
@@ -32,9 +33,10 @@ class SsaoPass
     std::array<glm::vec3, 64> kernel;
 
     uint frame_buf;
-    uint ao_tex;
-    uint ao_blurred_tex;
-    uint noise_tex;
+    uint noise_tex = invalid_texture_id;
+
+    uint ao_tex = invalid_texture_id;
+    uint ao_blur_tex = invalid_texture_id;
 
     Shader ssao = *Shader::from_paths(ShaderPaths{
         .vert = shaders_path / "lighting.vs",

@@ -29,6 +29,7 @@ void SsrPass::parse_parameters()
 
 void SsrPass::initialize(ViewportContext &ctx)
 {
+    glDeleteTextures(1, &ctx.reflections_tex);
     glCreateTextures(GL_TEXTURE_2D, 1, &ctx.reflections_tex);
     glCreateFramebuffers(1, &frame_buf);
 

@@ -25,6 +25,49 @@ using std::filesystem::path;
 
 constexpr uint default_framebuffer = 0;
 
+static bool init_framebuffer(ivec2 size, uint hdr_frame_buf, uint &depth_tex,
+                             uint &hdr_tex, uint &hdr2_tex, uint &hdr_prev_tex)
+{
+    glDeleteTextures(1, &hdr_tex);
+    glDeleteTextures(1, &hdr2_tex);
+    glDeleteTextures(1, &hdr_prev_tex);
+    glDeleteRenderbuffers(1, &depth_tex);
+
+    glCreateRenderbuffers(1, &depth_tex);
+    glNamedRenderbufferStorage(depth_tex, GL_DEPTH_COMPONENT32, size.x, size.y);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &hdr_tex);
+    glTextureStorage2D(hdr_tex, 1, GL_RGBA16F, size.x, size.y);
+    glTextureParameteri(hdr_tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(hdr_tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(hdr_tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(hdr_tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &hdr2_tex);
+    glTextureStorage2D(hdr2_tex, 1, GL_RGBA16F, size.x, size.y);
+    glTextureParameteri(hdr2_tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(hdr2_tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(hdr2_tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(hdr2_tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &hdr_prev_tex);
+    glTextureStorage2D(hdr_prev_tex, 5, GL_RGBA16F, size.x, size.y);
+    glTextureParameteri(hdr_prev_tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(hdr_prev_tex, GL_TEXTURE_MIN_FILTER,
+                        GL_LINEAR_MIPMAP_LINEAR);
+    glTextureParameteri(hdr_prev_tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(hdr_prev_tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(hdr_prev_tex, GL_TEXTURE_BASE_LEVEL, 0);
+    glTextureParameteri(hdr_prev_tex, GL_TEXTURE_MAX_LEVEL, 4);
+
+    glNamedFramebufferTexture(hdr_frame_buf, GL_COLOR_ATTACHMENT0, hdr_tex, 0);
+    glNamedFramebufferRenderbuffer(hdr_frame_buf, GL_DEPTH_ATTACHMENT,
+                                   GL_RENDERBUFFER, depth_tex);
+
+    return glCheckNamedFramebufferStatus(hdr_frame_buf, GL_FRAMEBUFFER) ==
+           GL_FRAMEBUFFER_COMPLETE;
+}
+
 Renderer::Renderer(glm::ivec2 viewport_size)
 {
     ctx_v.size = viewport_size;
@@ -95,54 +138,11 @@ Renderer::Renderer(glm::ivec2 viewport_size)
         glVertexArrayVertexBuffer(ctx_r.skybox_vao, 0, buffer, 0, sizeof(vec3));
     }
 
-    {
-        uint depth;
-        glCreateRenderbuffers(1, &depth);
-        glNamedRenderbufferStorage(depth, GL_DEPTH_COMPONENT32, ctx_v.size.x,
-                                   ctx_v.size.y);
+    glCreateFramebuffers(1, &ctx_v.hdr_frame_buf);
 
-        glCreateTextures(GL_TEXTURE_2D, 1, &ctx_v.hdr_tex);
-        glTextureStorage2D(ctx_v.hdr_tex, 1, GL_RGBA16F, ctx_v.size.x,
-                           ctx_v.size.y);
-        glTextureParameteri(ctx_v.hdr_tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTextureParameteri(ctx_v.hdr_tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTextureParameteri(ctx_v.hdr_tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTextureParameteri(ctx_v.hdr_tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        glCreateTextures(GL_TEXTURE_2D, 1, &ctx_v.hdr2_tex);
-        glTextureStorage2D(ctx_v.hdr2_tex, 1, GL_RGBA16F, ctx_v.size.x,
-                           ctx_v.size.y);
-        glTextureParameteri(ctx_v.hdr2_tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTextureParameteri(ctx_v.hdr2_tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTextureParameteri(ctx_v.hdr2_tex, GL_TEXTURE_WRAP_S,
-                            GL_CLAMP_TO_EDGE);
-        glTextureParameteri(ctx_v.hdr2_tex, GL_TEXTURE_WRAP_T,
-                            GL_CLAMP_TO_EDGE);
-
-        glCreateTextures(GL_TEXTURE_2D, 1, &ctx_v.hdr_prev_tex);
-        glTextureStorage2D(ctx_v.hdr_prev_tex, 5, GL_RGBA16F, ctx_v.size.x,
-                           ctx_v.size.y);
-        glTextureParameteri(ctx_v.hdr_prev_tex, GL_TEXTURE_MAG_FILTER,
-                            GL_LINEAR);
-        glTextureParameteri(ctx_v.hdr_prev_tex, GL_TEXTURE_MIN_FILTER,
-                            GL_LINEAR_MIPMAP_LINEAR);
-        glTextureParameteri(ctx_v.hdr_prev_tex, GL_TEXTURE_WRAP_S,
-                            GL_CLAMP_TO_EDGE);
-        glTextureParameteri(ctx_v.hdr_prev_tex, GL_TEXTURE_WRAP_T,
-                            GL_CLAMP_TO_EDGE);
-        glTextureParameteri(ctx_v.hdr_prev_tex, GL_TEXTURE_BASE_LEVEL, 0);
-        glTextureParameteri(ctx_v.hdr_prev_tex, GL_TEXTURE_MAX_LEVEL, 4);
-
-        glCreateFramebuffers(1, &ctx_v.hdr_frame_buf);
-        glNamedFramebufferTexture(ctx_v.hdr_frame_buf, GL_COLOR_ATTACHMENT0,
-                                  ctx_v.hdr_tex, 0);
-        glNamedFramebufferRenderbuffer(ctx_v.hdr_frame_buf, GL_DEPTH_ATTACHMENT,
-                                       GL_RENDERBUFFER, depth);
-
-        if (glCheckNamedFramebufferStatus(
-                ctx_v.hdr_frame_buf, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-            logger.error("Main viewport frame buffer incomplete.");
-    }
+    if (!init_framebuffer(ctx_v.size, ctx_v.hdr_frame_buf, depth_tex,
+                          ctx_v.hdr_tex, ctx_v.hdr2_tex, ctx_v.hdr_prev_tex))
+        logger.error("Main viewport frame buffer incomplete.");
 
     // Setup state for displaying probe.
     GltfImporter importer{models_path / "sphere.glb", *this};
@@ -413,16 +413,16 @@ void Renderer::render(float dt, std::vector<Entity> queue)
         lighting.render(ctx_v, ctx_r);
     }
 
+    glCopyImageSubData(ctx_v.hdr_tex, GL_TEXTURE_2D, 0, 0, 0, 0,
+                       ctx_v.hdr_prev_tex, GL_TEXTURE_2D, 0, 0, 0, 0,
+                       ctx_v.size.x, ctx_v.size.y, 1);
+    glGenerateTextureMipmap(ctx_v.hdr_prev_tex);
+
     {
         TracyGpuZone("Forward pass");
         GpuZone _(5);
         forward.render(ctx_v, ctx_r);
     }
-
-    glCopyImageSubData(ctx_v.hdr_tex, GL_TEXTURE_2D, 0, 0, 0, 0,
-                       ctx_v.hdr_prev_tex, GL_TEXTURE_2D, 0, 0, 0, 0,
-                       ctx_v.size.x, ctx_v.size.y, 1);
-    glGenerateTextureMipmap(ctx_v.hdr_prev_tex);
 
     if (motion_blur_enabled)
     {
@@ -450,13 +450,19 @@ void Renderer::render(float dt, std::vector<Entity> queue)
 void Renderer::resize_viewport(glm::vec2 size)
 {
     ctx_v.size = size;
-    // TODO: clean up buffers
+
+    init_framebuffer(size, ctx_v.hdr_frame_buf, depth_tex, ctx_v.hdr_tex,
+                     ctx_v.hdr2_tex, ctx_v.hdr_prev_tex);
+
+    geometry.initialize(ctx_v);
+    ssao.initialize(ctx_v);
+    ssr.initialize(ctx_v);
+    bloom.initialize(ctx_v);
 }
 
 void Renderer::prepare_bake(glm::vec3 center, glm::vec3 world_dims,
                             float distance, int bounce_count)
 {
-
     // We pack the 27 coefficient into 7 4 channel textures
     const vec3 origin = center - world_dims / 2.f;
     const ivec2 local_size{16, 16};

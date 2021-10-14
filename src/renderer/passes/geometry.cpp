@@ -48,17 +48,12 @@ void GeometryPass::create_debug_views()
                          rg_swizzle.data());
 }
 
-GeometryPass::GeometryPass()
-{
-    glCreateFramebuffers(1, &f_buf);
-    glCreateTextures(GL_TEXTURE_2D, 1, &normal_metal);
-    glCreateTextures(GL_TEXTURE_2D, 1, &base_color_rough);
-    glCreateTextures(GL_TEXTURE_2D, 1, &depth);
-    glCreateTextures(GL_TEXTURE_2D, 1, &velocity);
-}
+GeometryPass::GeometryPass() { glCreateFramebuffers(1, &f_buf); }
 
 void GeometryPass::initialize(ViewportContext &ctx)
 {
+    glDeleteTextures(4, &normal_metal);
+    glCreateTextures(GL_TEXTURE_2D, 4, &normal_metal);
 
     glTextureStorage2D(normal_metal, 1, GL_RGBA16F, ctx.size.x, ctx.size.y);
     glTextureParameteri(normal_metal, GL_TEXTURE_MIN_FILTER, GL_NEAREST);

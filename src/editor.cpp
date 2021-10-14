@@ -229,6 +229,7 @@ void Editor::draw_renderer_menu()
             {
                 const auto &res = resolutions[cur_idx];
                 // TODO: resize window
+                window.resize(res);
                 renderer.resize_viewport(res);
             }
         }

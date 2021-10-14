@@ -31,6 +31,7 @@ class Window
 
     void run(const std::function<void()> &main_loop);
     glm::vec2 get_cursor_position();
+    void resize(glm::ivec2 resolution);
 
     static bool load_gl();
 };

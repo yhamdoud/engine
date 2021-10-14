@@ -1,5 +1,6 @@
 #pragma once
 
+#include "constants.hpp"
 #include "renderer/context.hpp"
 #include "renderer/pass.hpp"
 
@@ -12,7 +13,11 @@ struct GeometryConfig
 
 class GeometryPass
 {
-    uint f_buf, normal_metal, base_color_rough, velocity, depth;
+    uint f_buf;
+    uint normal_metal = invalid_texture_id;
+    uint base_color_rough = invalid_texture_id;
+    uint velocity = invalid_texture_id;
+    uint depth = invalid_texture_id;
 
     Shader shader = *Shader::from_paths(ShaderPaths{
         .vert = shaders_path / "geometry.vs",

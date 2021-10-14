@@ -18,7 +18,9 @@ BloomPass::BloomPass(BloomConfig cfg) : cfg(cfg)
 
 void BloomPass::initialize(ViewportContext &ctx)
 {
-    glCreateTextures(GL_TEXTURE_2D, 1, &downsample_tex);
+    glDeleteTextures(2, &downsample_tex);
+    glCreateTextures(GL_TEXTURE_2D, 2, &downsample_tex);
+
     glTextureStorage2D(downsample_tex, cfg.pass_count, GL_RGBA16F,
                        ctx.size.x / 2, ctx.size.y / 2);
     glTextureParameteri(downsample_tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -26,7 +28,6 @@ void BloomPass::initialize(ViewportContext &ctx)
     glTextureParameteri(downsample_tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTextureParameteri(downsample_tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    glCreateTextures(GL_TEXTURE_2D, 1, &upsample_tex);
     glTextureStorage2D(upsample_tex, cfg.pass_count - 1, GL_RGBA16F,
                        ctx.size.x / 2, ctx.size.y / 2);
     glTextureParameteri(upsample_tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);

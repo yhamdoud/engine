@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 
 #include "camera.hpp"
+#include "constants.hpp"
 #include "context.hpp"
 #include "entity.hpp"
 #include "renderer/buffer.hpp"
@@ -31,6 +32,8 @@ class Renderer
     {
         unsupported_texture_format,
     };
+
+    uint depth_tex = invalid_texture_id;
 
     ProbeViewport probe_view;
     ProbeGrid probe_grid;

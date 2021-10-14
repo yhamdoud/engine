@@ -13,13 +13,6 @@ using namespace engine;
 
 SsaoPass::SsaoPass(SsaoConfig cfg)
 {
-    glCreateTextures(GL_TEXTURE_2D, 1, &noise_tex);
-    glCreateTextures(GL_TEXTURE_2D, 1, &ao_tex);
-    glCreateTextures(GL_TEXTURE_2D, 1, &ao_blurred_tex);
-
-    glTextureParameteri(ao_tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(ao_tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
     uniform_real_distribution<float> dist1(0.f, 1.f);
     uniform_real_distribution<float> dist2(-1.f, 1.f);
     default_random_engine gen;
@@ -47,6 +40,7 @@ SsaoPass::SsaoPass(SsaoConfig cfg)
     for (int i = 0; i < noise_count; i++)
         noise[i] = normalize(vec3(dist2(gen), dist2(gen), 0.f));
 
+    glCreateTextures(GL_TEXTURE_2D, 1, &noise_tex);
     glTextureStorage2D(noise_tex, 1, GL_RGBA16F, 4, 4);
     glTextureSubImage2D(noise_tex, 0, 0, 0, 4, 4, GL_RGB, GL_FLOAT,
                         noise.data());
@@ -65,18 +59,23 @@ SsaoPass::SsaoPass(SsaoConfig cfg)
         .bias = cfg.bias,
         .strength = cfg.strength,
     };
+
+    glCreateFramebuffers(1, &frame_buf);
 }
 
 void SsaoPass::initialize(ViewportContext &ctx)
 {
-    glTextureStorage2D(ao_tex, 1, GL_R8, ctx.size.x, ctx.size.y);
-    glTextureStorage2D(ao_blurred_tex, 1, GL_R8, ctx.size.x, ctx.size.y);
+    glDeleteTextures(2, &ao_tex);
+    glCreateTextures(GL_TEXTURE_2D, 2, &ao_tex);
 
-    glCreateFramebuffers(1, &frame_buf);
+    glTextureParameteri(ao_tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(ao_tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTextureStorage2D(ao_tex, 1, GL_R8, ctx.size.x, ctx.size.y);
+    glTextureStorage2D(ao_blur_tex, 1, GL_R8, ctx.size.x, ctx.size.y);
 
     glNamedFramebufferTexture(frame_buf, GL_COLOR_ATTACHMENT0, ao_tex, 0);
-    glNamedFramebufferTexture(frame_buf, GL_COLOR_ATTACHMENT1, ao_blurred_tex,
-                              0);
+    glNamedFramebufferTexture(frame_buf, GL_COLOR_ATTACHMENT1, ao_blur_tex, 0);
 
     array<GLenum, 2> draw_bufs{
         GL_COLOR_ATTACHMENT0,
@@ -94,7 +93,7 @@ void SsaoPass::initialize(ViewportContext &ctx)
     glClearNamedFramebufferfv(frame_buf, GL_COLOR, 0, &one);
     glClearNamedFramebufferfv(frame_buf, GL_COLOR, 1, &one);
 
-    ctx.ao_tex = ao_blurred_tex;
+    ctx.ao_tex = ao_blur_tex;
 }
 
 void SsaoPass::render(ViewportContext &ctx)
