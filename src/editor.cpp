@@ -123,17 +123,14 @@ void Editor::draw_renderer_menu()
 
     if (ImGui::CollapsingHeader("Lighting"))
     {
-        if (ImGui::Checkbox("Direct lighting",
-                            &renderer.lighting.direct_light) |
-            ImGui::Checkbox("Indirect lighting",
-                            &renderer.lighting.indirect_light) |
-            ImGui::Checkbox("Base color", &renderer.lighting.use_base_color) |
+        auto &params = renderer.lighting.params;
+        if (ImGui::Checkbox("Direct lighting", &params.direct_light) |
+            ImGui::Checkbox("Indirect lighting", &params.indirect_light) |
+            ImGui::Checkbox("Base color", &params.use_base_color) |
             ImGui::Checkbox("Color shadow cascades",
-                            &renderer.lighting.color_shadow_cascades) |
-            ImGui::Checkbox("Filter shadows",
-                            &renderer.lighting.filter_shadows) |
-            ImGui::SliderFloat("Leak offset ", &renderer.lighting.leak_offset,
-                               0, 1.f))
+                            &params.color_shadow_cascades) |
+            ImGui::Checkbox("Filter shadows", &params.filter_shadows) |
+            ImGui::SliderFloat("Leak offset ", &params.leak_offset, 0, 1.f))
             renderer.lighting.parse_parameters();
     }
 
@@ -234,18 +231,22 @@ void Editor::draw_renderer_menu()
 
     if (ImGui::CollapsingHeader("Shadow mapping"))
     {
-        ImGui::Checkbox("Stabilize", &renderer.shadow.stabilize);
+        auto &params = renderer.shadow.params;
 
-        float aspect_ratio =
-            static_cast<float>(renderer.shadow.size.x) / renderer.shadow.size.y;
+        ImGui::Checkbox("Stabilize", &params.stabilize);
+        ImGui::SliderFloat("Z-multiplier", &params.z_multiplier, 1.f, 3.f);
+        ImGui::Checkbox("Cull front faces", &params.cull_front_faces);
+
+        float aspect_ratio = static_cast<float>(params.size.x) /
+                             static_cast<float>(params.size.y);
 
         ImVec2 window_size = ImGui::GetWindowSize();
         ImVec2 texture_size{window_size.x, window_size.x / aspect_ratio};
 
-        for (const auto &v : renderer.shadow.debug_views)
+        for (int i = 0; i < params.cascade_count; i++)
         {
-            ImGui::Image((ImTextureID)v, texture_size, ImVec2(0, 1),
-                         ImVec2(1, 0));
+            ImGui::Image((ImTextureID)renderer.shadow.debug_views[i],
+                         texture_size, ImVec2(0, 1), ImVec2(1, 0));
         }
     }
 

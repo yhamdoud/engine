@@ -1,6 +1,7 @@
 #include <numeric>
 
 #include <Tracy.hpp>
+#include <fmt/format.h>
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
 
@@ -14,18 +15,23 @@ using namespace engine;
 
 static constexpr vec3 homogenize(const vec4 &v) { return vec3(v) / v.w; }
 
-ShadowPass::ShadowPass(ShadowConfig cfg)
-    : size(cfg.size), stabilize(cfg.stabilize)
+ShadowPass::ShadowPass(Params params) : params(params)
 {
-
     // Depth texture rendered from light perspective.
     glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &shadow_map);
     glCreateFramebuffers(1, &frame_buf);
 
-    shader = *Shader::from_paths(ShaderPaths{
-        .vert = shaders_path / "shadow_map.vs",
-        .geom = shaders_path / "shadow_map.geom",
-    });
+    assert(params.cascade_count < max_cascade_coutn);
+
+    shader = *Shader::from_paths(
+        ShaderPaths{
+            .vert = shaders_path / "shadow_map.vs",
+            .geom = shaders_path / "shadow_map.geom",
+        },
+        {
+            .geom =
+                fmt::format("#define CASCADE_COUNT {}", params.cascade_count),
+        });
 }
 
 void ShadowPass::initialize(ViewportContext &ctx)
@@ -37,10 +43,10 @@ void ShadowPass::initialize(ViewportContext &ctx)
     const auto &n = ctx.near;
     const auto &f = ctx.far;
 
-    for (int i = 0; i < cascade_count; i++)
+    for (int i = 0; i < params.cascade_count; i++)
     {
-        float s_i =
-            static_cast<float>(i + 1) / static_cast<float>(cascade_count);
+        float s_i = static_cast<float>(i + 1) /
+                    static_cast<float>(params.cascade_count);
         float log = n * pow(f / n, s_i);
         float uni = n + (f - n) * s_i;
         cascade_distances[i] = lerp(uni, log, lambda);
@@ -58,12 +64,12 @@ void ShadowPass::initialize(ViewportContext &ctx)
     glTextureParameterfv(shadow_map, GL_TEXTURE_BORDER_COLOR,
                          value_ptr(border_color));
 
-    glTextureStorage3D(shadow_map, 1, GL_DEPTH_COMPONENT32, size.x, size.y,
-                       cascade_count);
+    glTextureStorage3D(shadow_map, 1, GL_DEPTH_COMPONENT32, params.size.x,
+                       params.size.y, params.cascade_count);
 
-    glGenTextures(cascade_count, debug_views.data());
+    glGenTextures(params.cascade_count, debug_views.data());
 
-    for (int i = 0; i < cascade_count; i++)
+    for (int i = 0; i < params.cascade_count; i++)
     {
         glTextureView(debug_views[i], GL_TEXTURE_2D, shadow_map,
                       GL_DEPTH_COMPONENT32, 0, 1, i, 1);
@@ -83,16 +89,16 @@ void ShadowPass::render(ViewportContext &ctx, RenderContext &ctx_r)
 {
     ZoneScoped;
 
-    glViewport(0, 0, size.x, size.y);
+    glViewport(0, 0, params.size.x, params.size.y);
     glBindFramebuffer(GL_FRAMEBUFFER, frame_buf);
     glClear(GL_DEPTH_BUFFER_BIT);
 
     float aspect_ratio =
         static_cast<float>(ctx.size.x) / static_cast<float>(ctx.size.y);
 
-    for (int c_idx = 0; c_idx < cascade_count; c_idx++)
+    for (int c_idx = 0; c_idx < params.cascade_count; c_idx++)
     {
-        float near = (c_idx == 0) ? 0.1f : cascade_distances[c_idx - 1];
+        float near = (c_idx == 0) ? 0.01f : cascade_distances[c_idx - 1];
         float far = cascade_distances[c_idx];
 
         // Camera's projection matrix for the current cascade.
@@ -121,7 +127,7 @@ void ShadowPass::render(ViewportContext &ctx, RenderContext &ctx_r)
 
         float radius = 0;
 
-        if (stabilize)
+        if (params.stabilize)
         {
             // Calculate the radius of the bounding sphere surrounding the
             // frustum.
@@ -147,24 +153,25 @@ void ShadowPass::render(ViewportContext &ctx, RenderContext &ctx_r)
                 min = glm::min(min, corner_light_space);
                 max = glm::max(max, corner_light_space);
             }
-
-            // Include geometry that might be outside the frustrum but
-            // contributes to lighting.
-            const float z_mult = 15.f;
-            const float z_mult_inv = 1 / z_mult;
-
-            min.z *= (min.z < 0) ? z_mult : z_mult_inv;
-            max.z *= (max.z < 0) ? z_mult_inv : z_mult;
         }
+
+        // Include geometry that might be outside the frustrum but
+        // contributes to lighting.
+        const float z_mult_inv = 1 / params.z_multiplier;
+
+        min.z *= (min.z < 0) ? params.z_multiplier : z_mult_inv;
+        max.z *= (max.z < 0) ? z_mult_inv : params.z_multiplier;
 
         mat4 light_view = lookAt(center - ctx_r.sun.direction * -min.z, center,
                                  vec3(0.f, 1.f, 0.f));
 
         // Snap to shadow map texels.
-        if (stabilize)
+        if (params.stabilize)
         {
-            light_view[3].x -= fmodf(light_view[3].x, (radius / size.x) * 2.0f);
-            light_view[3].y -= fmodf(light_view[3].y, (radius / size.x) * 2.0f);
+            light_view[3].x -=
+                fmodf(light_view[3].x, (radius / params.size.x) * 2.0f);
+            light_view[3].y -=
+                fmodf(light_view[3].y, (radius / params.size.x) * 2.0f);
             // TODO:
             // light_view[3].z -= ...
         }
@@ -181,7 +188,9 @@ void ShadowPass::render(ViewportContext &ctx, RenderContext &ctx_r)
 
     glBindVertexArray(ctx_r.entity_vao);
 
-    glCullFace(GL_FRONT); // Peter panning.
+    // Peter panning.
+    if (params.cull_front_faces)
+        glCullFace(GL_FRONT);
 
     for (auto &r : ctx_r.queue)
     {
@@ -192,5 +201,6 @@ void ShadowPass::render(ViewportContext &ctx, RenderContext &ctx_r)
         }
     }
 
-    glCullFace(GL_BACK);
+    if (params.cull_front_faces)
+        glCullFace(GL_BACK);
 }

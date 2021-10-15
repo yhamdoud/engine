@@ -1,5 +1,9 @@
 #version 460 core
 
+#ifndef ENGINE_DEFINES
+    #define CASCADE_COUNT 3
+#endif
+
 in vec2 tex_coords;
 in vec3 view_ray;
 
@@ -33,9 +37,12 @@ uniform DirectionalLight u_directional_light;
 const uint light_count = 3;
 uniform Light u_lights[light_count];
 
-const uint cascade_count = 3;
-uniform mat4 u_light_transforms[cascade_count];
-uniform float u_cascade_distances[cascade_count];
+uniform mat4 u_light_transforms[CASCADE_COUNT];
+
+#if CASCADE_COUNT > 1
+uniform float u_cascade_distances[CASCADE_COUNT];
+#endif
+
 uniform mat4 u_view_inv;
 uniform bool u_color_cascades;
 uniform bool u_filter;
@@ -71,8 +78,9 @@ float linearize_depth(float depth, mat4 proj)
 
 uint calculate_cascade_index(vec3 pos)
 {
-    uint cascade_idx = cascade_count - 1;
-    for (int i = 0; i < cascade_count; i++)
+#if CASCADE_COUNT > 1
+    uint cascade_idx = CASCADE_COUNT - 1;
+    for (int i = 0; i < CASCADE_COUNT; i++)
     {
         // Sign change
         if (-pos.z < u_cascade_distances[i])
@@ -81,14 +89,15 @@ uint calculate_cascade_index(vec3 pos)
             break;
         }
     }
-
     return cascade_idx;
+#else
+    return 0;
+#endif
 }
 
 // Source: https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
 float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal, vec3 light_dir)
 {
-
     vec3 pos = light_pos.xyz / light_pos.w;
 
     // Handle points beyond the far plane of the light's frustrum.

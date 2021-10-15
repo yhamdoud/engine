@@ -74,7 +74,10 @@ class Renderer
 
     ShadowPass shadow{{
         .size{4096, 4096},
+        .cascade_count = 3,
         .stabilize = true,
+        .z_multiplier = 1.3f,
+        .cull_front_faces = true,
     }};
 
     GeometryPass geometry{};
@@ -99,12 +102,13 @@ class Renderer
     }};
 
     LightingPass lighting{{
+        .cascade_count = shadow.params.cascade_count,
         .indirect_light = true,
         .direct_light = true,
         .use_base_color = true,
         .color_shadow_cascades = false,
         .filter_shadows = true,
-        .leak_offset = 0.4f,
+        .leak_offset = 0.5f,
     }};
 
     ForwardPass forward{{
@@ -130,7 +134,7 @@ class Renderer
         .min_log_luminance = -10.f,
         .max_log_luminance = 2.f,
         .exposure_adjust_speed = 1.1f,
-        .target_luminance = 0.25f,
+        .target_luminance = 0.2f,
     }}; // namespace engine
 
     Renderer(glm::ivec2 viewport_size);

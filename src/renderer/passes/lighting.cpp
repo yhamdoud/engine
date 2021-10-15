@@ -12,17 +12,18 @@ using namespace std;
 using namespace glm;
 using namespace engine;
 
-LightingPass::LightingPass(LightingConfig cfg)
-    : indirect_light(cfg.indirect_light), direct_light(cfg.direct_light),
-      use_base_color(cfg.use_base_color),
-      color_shadow_cascades(cfg.color_shadow_cascades),
-      filter_shadows(cfg.filter_shadows), leak_offset(cfg.leak_offset)
+LightingPass::LightingPass(LightingConfig params) : params(params)
 
 {
-    lighting_shader = *Shader::from_paths(ShaderPaths{
-        .vert = shaders_path / "lighting.vs",
-        .frag = shaders_path / "lighting.fs",
-    });
+    lighting_shader = *Shader::from_paths(
+        ShaderPaths{
+            .vert = shaders_path / "lighting.vs",
+            .frag = shaders_path / "lighting.fs",
+        },
+        {
+            .frag =
+                fmt::format("#define CASCADE_COUNT {}", params.cascade_count),
+        });
 
     lighting_shader.set("u_g_depth", 0);
     lighting_shader.set("u_g_normal_metallic", 1);
@@ -44,11 +45,11 @@ void LightingPass::initialize(ViewportContext &ctx) {}
 
 void LightingPass::parse_parameters()
 {
-    lighting_shader.set("u_use_direct", direct_light);
-    lighting_shader.set("u_leak_offset", leak_offset);
-    lighting_shader.set("u_use_base_color", use_base_color);
-    lighting_shader.set("u_color_cascades", color_shadow_cascades);
-    lighting_shader.set("u_filter", filter_shadows);
+    lighting_shader.set("u_use_direct", params.direct_light);
+    lighting_shader.set("u_leak_offset", params.leak_offset);
+    lighting_shader.set("u_use_base_color", params.use_base_color);
+    lighting_shader.set("u_color_cascades", params.color_shadow_cascades);
+    lighting_shader.set("u_filter", params.filter_shadows);
 }
 
 void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
@@ -85,7 +86,7 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
         lighting_shader.set("u_ssao", false);
     }
 
-    if (ctx_r.sh_texs.size() != 0 && indirect_light)
+    if (ctx_r.sh_texs.size() != 0 && params.indirect_light)
     {
         lighting_shader.set("u_inv_grid_transform", ctx_r.inv_grid_transform);
         lighting_shader.set("u_grid_dims", ctx_r.grid_dims);
@@ -116,8 +117,9 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     }
 
     lighting_shader.set("u_light_transforms[0]", span(ctx_v.light_transforms));
-    lighting_shader.set("u_cascade_distances[0]",
-                        span(ctx_v.cascade_distances));
+    if (params.cascade_count > 1)
+        lighting_shader.set("u_cascade_distances[0]",
+                            span(ctx_v.cascade_distances));
 
     lighting_shader.set("u_directional_light.direction",
                         vec3{ctx_v.view * vec4{ctx_r.sun.direction, 0.f}});

@@ -6,31 +6,32 @@
 namespace engine
 {
 
-struct ShadowConfig
-{
-    glm::ivec2 size;
-    bool stabilize;
-};
-
 class ShadowPass
 {
-    constexpr static int cascade_count = 3;
+    static constexpr int max_cascade_count = 5;
+
+    struct Params
+    {
+        glm::ivec2 size;
+        int cascade_count;
+        bool stabilize;
+        float z_multiplier;
+        bool cull_front_faces;
+    };
 
     uint frame_buf;
     Shader shader;
     uint shadow_map;
 
-    std::array<float, cascade_count> cascade_distances;
-    std::array<glm::mat4, cascade_count> light_transforms;
+    std::array<float, max_cascade_count> cascade_distances;
+    std::array<glm::mat4, max_cascade_count> light_transforms;
 
   public:
-    bool stabilize;
+    Params params;
 
-    glm::ivec2 size{4096, 4096};
+    std::array<uint, max_cascade_count> debug_views;
 
-    std::array<uint, cascade_count> debug_views;
-
-    ShadowPass(ShadowConfig cfg);
+    ShadowPass(Params params);
 
     void parse_parameters();
     void initialize(ViewportContext &ctx);

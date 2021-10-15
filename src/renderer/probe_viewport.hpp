@@ -37,12 +37,16 @@ struct ProbeViewport
 
     ShadowPass shadow{{
         .size = {256, 256},
+        .cascade_count = 1,
         .stabilize = true,
+        .z_multiplier = 1.5f,
+        .cull_front_faces = false,
     }};
 
     GeometryPass geometry{};
 
     LightingPass lighting{{
+        .cascade_count = shadow.params.cascade_count,
         .indirect_light = false,
         .direct_light = true,
         .use_base_color = true,

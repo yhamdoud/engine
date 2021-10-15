@@ -1,6 +1,8 @@
 #version 460 core
 
-#define CASCADE_COUNT 3
+#ifndef ENGINE_DEFINES
+    #define CASCADE_COUNT 3
+#endif
 
 layout(triangles, invocations = CASCADE_COUNT) in;
 layout(triangle_strip, max_vertices = 3) out;

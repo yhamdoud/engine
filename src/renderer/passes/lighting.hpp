@@ -8,6 +8,7 @@ namespace engine
 
 struct LightingConfig
 {
+    int cascade_count;
     bool indirect_light;
     bool direct_light;
     bool use_base_color;
@@ -21,12 +22,7 @@ class LightingPass
     Shader lighting_shader;
 
   public:
-    bool indirect_light;
-    bool direct_light;
-    bool use_base_color;
-    bool color_shadow_cascades;
-    bool filter_shadows;
-    float leak_offset;
+    LightingConfig params;
 
     // FIXME: workaround
     bool ssao = true, ssr = true;

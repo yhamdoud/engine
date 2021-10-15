@@ -533,7 +533,7 @@ void Renderer::bake()
 
     for (int idx = cur_baking_offset; idx < stop_idx; idx++)
     {
-        probe_view.lighting.indirect_light = cur_bounce_idx != 0;
+        probe_view.lighting.params.indirect_light = cur_bounce_idx != 0;
         probe_view.position = vec3(probe_grid.grid_transform *
                                    vec4{baking_jobs[idx].coords, 1.f});
         probe_view.render(ctx_r);
