@@ -1,5 +1,11 @@
 #version 460 core
 
+#ifdef VALIDATOR
+    #extension GL_GOOGLE_include_directive : require
+#endif
+
+#include "/include/common.h"
+
 in vec2 tex_coords;
 in vec3 view_ray;
 
@@ -22,27 +28,9 @@ uniform int u_max_steps;
 // Maximum camera-space distance to trace before returning a miss.
 uniform float u_max_dist;
 
-float linearize_depth(float depth, mat4 proj)
-{
-    return -proj[3][2] / (2. * depth - 1. + proj[2][2]);
-}
-
-void swap(inout float a, inout float b)
-{
-    float t = a;
-    a = b;
-    b = t;
-}
-
 bool intersects_depth(float z, float z_min, float z_max)
 {
     return (z_max >= z - u_thickness) && (z_min < z);
-}
-
-float distance_squared(vec2 a, vec2 b)
-{
-    a -= b;
-    return dot(a, a);
 }
 
 // Returns true if the ray hit something.

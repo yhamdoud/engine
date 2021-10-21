@@ -1,5 +1,11 @@
 #version 460 core
 
+#ifdef VALIDATOR
+#extension GL_GOOGLE_include_directive : require
+#endif
+
+#include "/include/common.h"
+
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(binding = 0) uniform sampler2D u_source;
@@ -10,16 +16,6 @@ uniform uint u_level;
 const uvec2 work_group_size = gl_WorkGroupSize.xy;
 
 shared vec4 tmp[work_group_size.x + 1][work_group_size.y + 1];
-
-float luma(vec3 c)
-{
-    return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-}
-
-float luma(vec4 c)
-{
-    return luma(vec3(c));
-}
 
 vec4 karis_average(vec4 s0, vec4 s1, vec4 s2, vec4 s3)
 {

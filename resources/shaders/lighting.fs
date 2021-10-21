@@ -1,8 +1,13 @@
 #version 460 core
 
-#ifndef ENGINE_DEFINES
+#ifdef VALIDATOR
+    #extension GL_GOOGLE_include_directive : require
     #define CASCADE_COUNT 3
 #endif
+
+#include "/include/common.h"
+#include "/include/pbs.h"
+#include "/include/shadow.h"
 
 in vec2 tex_coords;
 in vec3 view_ray;
@@ -39,9 +44,7 @@ uniform Light u_lights[light_count];
 
 uniform mat4 u_light_transforms[CASCADE_COUNT];
 
-#if CASCADE_COUNT > 1
 uniform float u_cascade_distances[CASCADE_COUNT];
-#endif
 
 uniform mat4 u_view_inv;
 uniform bool u_color_cascades;
@@ -67,33 +70,6 @@ layout (binding = 12) uniform sampler2D u_hdr_prev;
 layout (binding = 13) uniform sampler2D u_reflections;
 
 out vec4 frag_color;
-
-const float PI = 3.14159265359;
-
-// https://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer/
-float linearize_depth(float depth, mat4 proj)
-{
-    return -proj[3][2] / (2. * depth - 1. + proj[2][2]);
-}
-
-uint calculate_cascade_index(vec3 pos)
-{
-#if CASCADE_COUNT > 1
-    uint cascade_idx = CASCADE_COUNT - 1;
-    for (int i = 0; i < CASCADE_COUNT; i++)
-    {
-        // Sign change
-        if (-pos.z < u_cascade_distances[i])
-        {
-            cascade_idx = i;
-            break;
-        }
-    }
-    return cascade_idx;
-#else
-    return 0;
-#endif
-}
 
 // Source: https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
 float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal, vec3 light_dir)
@@ -145,40 +121,6 @@ float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal, vec3 light
     return shadow;
 }
 
-// PBS
-
-// Normal distribution function
-// Source: https://google.github.io/filament
-float D_GGX(float NoH, float a2) {
-    float f = (NoH * a2 - NoH) * NoH + 1.0;
-    return a2 / (PI * f * f);
-}
-
-// Geometric shadowing
-// Source: https://google.github.io/filament
-float V_SmithGGXCorrelated(float NoV, float NoL, float a2) {
-    float GGXL = NoV * sqrt((-NoL * a2 + NoL) * NoL + a2);
-    float GGXV = NoL * sqrt((-NoV * a2 + NoV) * NoV + a2);
-    return 0.5 / (GGXV + GGXL);
-}
-
-// Fresnel
-// Source: https://google.github.io/filament
-vec3 F_Schlick(float u, vec3 f0)
-{
-    float f = pow(1.0 - u, 5.0);
-    return f + f0 * (1.0 - f);
-}
-
-// Source: https://google.github.io/filament
-float Fd_Lambert() {
-    return 1.0 / PI;
-}
-
-vec3 F_Schlick_roughness(float u, vec3 f0, float roughness)
-{
-    return f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(clamp(1.0 - u, 0.0, 1.0), 5.0);
-}   
 
 vec3 brdf(vec3 v, vec3 l, vec3 n, vec3 diffuse_color, vec3 f0, float roughness)
 {
@@ -246,7 +188,7 @@ void main()
     // Luminance or radiance?
     vec3 out_luminance = vec3(0.);
 
-    uint cascade_idx = calculate_cascade_index(pos);
+    uint cascade_idx = calculate_cascade_index(pos, u_cascade_distances);
 
     // Direct lighting.
     if (u_use_direct) {

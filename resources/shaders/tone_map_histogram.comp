@@ -4,9 +4,12 @@
 
 #version 460 core
 
-#ifndef ENGINE_DEFINES
+#ifdef VALIDATOR
+    #extension GL_GOOGLE_include_directive : require
 	#define LOCAL_SIZE 16
 #endif
+
+#include "/include/common.h"
 
 const uint bin_count = LOCAL_SIZE * LOCAL_SIZE;
 
@@ -36,15 +39,10 @@ shared uint hist_shared[bin_count];
 
 const float discard_threshold = 0.001;
 
-// Calculates relative luminance, as we are working in linear space
-float luminance(vec3 c)
-{
-    return dot(c, vec3(0.2126, 0.7152, 0.0722));
-}
-
 uint hdr_to_bin(vec3 hdr_color)
 {
-    float luminance = luminance(hdr_color);
+	// Calculates relative luminance, as we are working in linear space
+    float luminance = luma(hdr_color);
     
 	// Avoid taking the log of very small values.
     if(luminance < discard_threshold)

@@ -1,5 +1,11 @@
 #version 460 core
 
+#ifdef VALIDATOR
+    #extension GL_GOOGLE_include_directive : require
+#endif
+
+#include "/include/common.h"
+
 in vec2 tex_coords;
 in vec3 view_ray;
 
@@ -21,11 +27,6 @@ layout (std140, binding = 3) uniform Uniforms
 };
 
 uniform vec3 u_kernel[64];
-
-float linearize_depth(float depth, mat4 proj)
-{
-    return -proj[3][2] / (2. * depth - 1. + proj[2][2]);
-}
 
 void main()
 {

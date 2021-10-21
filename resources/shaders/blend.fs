@@ -1,5 +1,12 @@
 #version 460 core
 
+#ifdef VALIDATOR
+#extension GL_GOOGLE_include_directive : require
+#endif
+
+#include "/include/common.h"
+#include "/include/pbs.h"
+
 in vec2 tex_coords;
 
 uniform bool u_correct;
@@ -9,16 +16,6 @@ layout (binding = 1) uniform sampler2D u_g_base_color_roughness;
 layout (binding = 2) uniform sampler2D u_texture;
 
 layout (location = 0) out vec4 frag_color;
-
-vec3 F_Schlick_roughness(float u, vec3 f0, float roughness)
-{
-    return f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(clamp(1.0 - u, 0.0, 1.0), 5.0);
-}   
-
-float linearize_depth(float depth, mat4 proj)
-{
-    return -proj[3][2] / (2. * depth - 1. + proj[2][2]);
-}
 
 void main()
 {

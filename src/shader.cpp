@@ -5,13 +5,13 @@
 #include <cstdlib>
 #include <filesystem>
 #include <optional>
+#include <regex>
 #include <string_view>
 #include <utility>
 #include <variant>
 
 #include <glad/glad.h>
 #include <glm/ext.hpp>
-
 #include <glm/glm.hpp>
 #include <stb_image.h>
 
@@ -26,6 +26,56 @@ using std::filesystem::path;
 using namespace engine;
 using namespace std;
 
+// https://community.khronos.org/t/include-in-glsl/59203/6
+static std::string process_includes(const std::string &source,
+                                    const path &filename, int level)
+{
+    if (level > 16)
+        logger.error("Cyclic includes");
+
+    regex re("^[ ]*#[ ]*include[ ]+[\"<](.*)[\">].*");
+
+    stringstream input;
+    stringstream output;
+    input << source;
+
+    size_t line_number = 1;
+    smatch matches;
+
+    string line;
+    while (std::getline(input, line))
+    {
+        if (regex_search(line, matches, re))
+        {
+            std::string include_file = matches[1];
+            std::string include_string;
+
+            auto path = shaders_path;
+            path.concat(include_file);
+
+            if (filesystem::exists(path))
+            {
+                include_string = utils::from_file(path);
+            }
+            else
+            {
+                logger.error("Cannot open include file: {}", include_file);
+            }
+
+            output << process_includes(include_string, include_file, level + 1)
+                   << endl;
+        }
+        else
+        {
+            // TODO: fix line count
+            output << line << endl;
+        }
+        ++line_number;
+    }
+
+    return output.str();
+}
+
 uint Shader::compile_shader_stage(string source, const string &defines,
                                   GLenum stage)
 {
@@ -39,7 +89,9 @@ uint Shader::compile_shader_stage(string source, const string &defines,
 
     source.insert(version_stop, default_defines);
 
-    auto c_str = source.c_str();
+    auto processed = process_includes(source, "foo", 0);
+
+    auto c_str = processed.c_str();
 
     glShaderSource(shader, 1, &c_str, nullptr);
     glCompileShader(shader);
@@ -308,8 +360,8 @@ GLuint engine::upload_cube_map(const std::array<path, 6> &paths)
 
         int width, height, channel_count;
 
-        glm::uint8_t *data =
-            stbi_load(path.string().c_str(), &width, &height, &channel_count, 0);
+        glm::uint8_t *data = stbi_load(path.string().c_str(), &width, &height,
+                                       &channel_count, 0);
 
         if (face_idx == 0)
             glTextureStorage2D(id, 1, GL_RGBA8, width, height);

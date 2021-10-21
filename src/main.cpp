@@ -46,17 +46,17 @@ int main(int argc, char **argv)
     // clang-format off
     options.add_options()
         ("cam_pos_x", "Camera position x component",
-         cxxopts::value<float>()->default_value(("1")))
+         cxxopts::value<float>()->default_value(("4")))
         ("cam_pos_y", "Camera position y component",
-         cxxopts::value<float>()->default_value(("1")))
+         cxxopts::value<float>()->default_value(("4")))
         ("cam_pos_z", "Camera position z component",
-         cxxopts::value<float>()->default_value(("1")))
+         cxxopts::value<float>()->default_value(("0")))
         ("cam_look_x", "Camera look x component",
          cxxopts::value<float>()->default_value(("0")))
         ("cam_look_y", "Camera look y component",
          cxxopts::value<float>()->default_value(("0")))
         ("cam_look_z", "Camera look z component",
-         cxxopts::value<float>()->default_value(("1")))
+         cxxopts::value<float>()->default_value(("0")))
         ("bake", "Bake irradiance probes");
     // clang-format on
 

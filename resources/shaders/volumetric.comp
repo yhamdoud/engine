@@ -1,12 +1,14 @@
 #version 460 core
 
-#ifndef ENGINE_DEFINES
-	#define LOCAL_SIZE 32
-    #define CASCADE_COUNT 3
+#ifdef VALIDATOR
+#extension GL_GOOGLE_include_directive : require
+#define LOCAL_SIZE 32
+#define CASCADE_COUNT 3
 #endif
 
-// TODO:
-const float PI = 3.14159265359;
+#include "/include/common.h"
+#include "/include/shadow.h"
+#include "/include/math.h"
 
 layout(local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE) in;
 
@@ -24,39 +26,12 @@ layout (std140, binding = 0) uniform Uniforms
 
 layout (binding = 1) uniform sampler2D u_g_depth;
 layout (binding = 2) uniform sampler2DArrayShadow u_shadow_map;
-
 layout(binding = 3, rgba16f) restrict uniform image2D u_read;
 
 
-#if CASCADE_COUNT > 1
 uniform float u_cascade_distances[CASCADE_COUNT];
-#endif
-
 uniform mat4 u_light_transforms[CASCADE_COUNT];
 
-uint calculate_cascade_index(vec3 pos)
-{
-#if CASCADE_COUNT > 1
-    uint cascade_idx = CASCADE_COUNT - 1;
-    for (int i = 0; i < CASCADE_COUNT; i++)
-    {
-        // Sign change
-        if (-pos.z < u_cascade_distances[i])
-        {
-            cascade_idx = i;
-            break;
-        }
-    }
-    return cascade_idx;
-#else
-    return 0;
-#endif
-}
-
-float linearize_depth(float depth, mat4 proj)
-{
-    return -proj[3][2] / (2. * depth - 1. + proj[2][2]);
-}
 
 float henyey_greenstein(float theta, float g)
 {
@@ -92,7 +67,7 @@ void main()
 
 	for (int i = 0; i < u.step_count; i++)
 	{
-        uint cascade_idx = calculate_cascade_index(pos);
+        uint cascade_idx = calculate_cascade_index(pos, u_cascade_distances);
         vec4 pos_light = u_light_transforms[cascade_idx] * u.view_inv * vec4(pos, 1.);
         pos_light.xyz /= pos_light.w;
 

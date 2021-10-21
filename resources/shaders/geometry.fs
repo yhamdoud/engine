@@ -1,5 +1,11 @@
 #version 460 core
 
+#ifdef VALIDATOR
+#extension GL_GOOGLE_include_directive : require
+#endif
+
+#include "/include/common.h"
+
 // TODO: Use this when when using hardware depth buffer.
 // layout(early_fragment_tests) in;
 
@@ -48,11 +54,6 @@ mat3 calculate_tbn_matrix(vec4 tangent_sign, vec3 normal)
     vec3 bitangent = cross(normal, tangent) * bitangent_sign;
 
     return mat3(tangent, bitangent, normal);
-}
-
-float saturate(float x)
-{
-    return clamp(x, 0., 1.);
 }
 
 void main()
