@@ -21,6 +21,7 @@
 #include "renderer/passes/ssao.hpp"
 #include "renderer/passes/ssr.hpp"
 #include "renderer/passes/tone_map.hpp"
+#include "renderer/passes/volumetric.hpp"
 #include "renderer/probe_viewport.hpp"
 
 namespace engine
@@ -48,7 +49,7 @@ class Renderer
     int bake_batch_size = 32;
     int probe_view_count = 10;
 
-    Camera camera{glm::vec3{0, 0, 4}, glm::vec3{0}};
+    Camera camera;
 
     ViewportContext ctx_v{
         .near = 0.1f,
@@ -59,8 +60,8 @@ class Renderer
     RenderContext ctx_r = RenderContext{
         .sun{
             .color = glm::vec3{1.f, 0.95f, 0.95f},
-            .intensity = 40.f,
-            .direction = glm::normalize(glm::vec3{0.2f, -1.f, 0.2f}),
+            .intensity = 30.f,
+            .direction = glm::normalize(glm::vec3{0.03f, -0.8f, 0.5f}),
         },
         .lights{
             Light{glm::vec3{0, 3, 3}, glm::vec3{0., 0., 0.}},
@@ -115,6 +116,11 @@ class Renderer
         .draw_probes = false,
     }};
 
+    VolumetricPass volumetric{{
+        .step_count = 10,
+        .scatter_intensity = 0.6,
+    }};
+
     bool motion_blur_enabled = true;
     MotionBlurPass motion_blur{{
         .sample_count = 20,
@@ -137,7 +143,8 @@ class Renderer
         .target_luminance = 0.2f,
     }}; // namespace engine
 
-    Renderer(glm::ivec2 viewport_size);
+    Renderer(glm::ivec2 viewport_size, glm::vec3 camera_position,
+             glm::vec3 camera_look);
     ~Renderer();
 
     Renderer(const Renderer &) = delete;

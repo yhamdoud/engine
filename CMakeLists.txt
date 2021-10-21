@@ -22,8 +22,9 @@ set(IMGUI_DIR "${EXTERN_DIR}/imgui")
 set(GLFW_DIR "${EXTERN_DIR}/glfw")
 set(GLM_DIR "${EXTERN_DIR}/glm")
 set(GLI_DIR "${EXTERN_DIR}/gli")
+set(CXXOPTS_DIR "${EXTERN_DIR}/cxxopts")
 
-file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.hpp")
+file(GLOB_RECURSE SRC_FILES "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.hpp")
 add_executable(${PROJECT_NAME} ${SRC_FILES})
 include_directories(${SRC_DIR})
 
@@ -68,7 +69,8 @@ add_subdirectory(${GLM_DIR})
 target_link_libraries(${PROJECT_NAME} PRIVATE glm)
 
 # GLI
-set(GLI_TEST_ENABLE OFF CACHE BOOL "" FORCE)
 include_directories(${GLI_DIR})
-# add_subdirectory(${GLI_DIR})
-# target_link_libraries(${PROJECT_NAME} PRIVATE gli)
+
+## cxxopts
+add_subdirectory(${CXXOPTS_DIR})
+target_link_libraries(${PROJECT_NAME} PRIVATE cxxopts)

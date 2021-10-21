@@ -22,3 +22,6 @@
 [submodule "extern/gli"]
 	path = extern/gli
 	url = https://github.com/g-truc/gli
+[submodule "extern/cxxopts"]
+	path = extern/cxxopts
+	url = https://github.com/jarro2783/cxxopts

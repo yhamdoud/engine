@@ -1,17 +1,14 @@
 #include <filesystem>
 
+#include <cxxopts.hpp>
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 
-#include "constants.hpp"
 #include "editor.hpp"
 #include "entity.hpp"
 #include "importer.hpp"
 #include "logger.hpp"
-#include "profiler.hpp"
 #include "renderer/renderer.hpp"
-#include "shader.hpp"
-#include "transform.hpp"
 #include "window.hpp"
 
 using std::filesystem::path;
@@ -43,9 +40,27 @@ mat4 get_world_position(size_t node_idx)
     return world_transform;
 }
 
-int main()
+int main(int argc, char **argv)
 {
-    FrameMarkStart("Loading");
+    cxxopts::Options options("engine", "Deferred rendering engine");
+    // clang-format off
+    options.add_options()
+        ("cam_pos_x", "Camera position x component",
+         cxxopts::value<float>()->default_value(("1")))
+        ("cam_pos_y", "Camera position y component",
+         cxxopts::value<float>()->default_value(("1")))
+        ("cam_pos_z", "Camera position z component",
+         cxxopts::value<float>()->default_value(("1")))
+        ("cam_look_x", "Camera look x component",
+         cxxopts::value<float>()->default_value(("0")))
+        ("cam_look_y", "Camera look y component",
+         cxxopts::value<float>()->default_value(("0")))
+        ("cam_look_z", "Camera look z component",
+         cxxopts::value<float>()->default_value(("1")))
+        ("bake", "Bake irradiance probes");
+    // clang-format on
+
+    auto result = options.parse(argc, argv);
 
     ivec2 size{1600, 900};
 
@@ -56,7 +71,14 @@ int main()
         return EXIT_FAILURE;
     }
 
-    Renderer renderer(size);
+    Renderer renderer(size,
+                      glm::vec3(result["cam_pos_x"].as<float>(),
+                                result["cam_pos_y"].as<float>(),
+                                result["cam_pos_z"].as<float>()),
+                      glm::vec3(result["cam_look_x"].as<float>(),
+                                result["cam_look_y"].as<float>(),
+                                result["cam_look_z"].as<float>()));
+
     Editor editor(window, renderer);
 
     glfwSetWindowUserPointer(window.impl, &renderer);
@@ -71,7 +93,7 @@ int main()
         return EXIT_FAILURE;
 
     renderer.ctx_r.skybox_tex = skybox_tex;
-    
+
     path model = models_path / "sponza/Sponza.gltf";
     // path model = models_path / "bistro/gltf/bistro.gltf";
     // path model = models_path / "avocado.glb";
@@ -89,9 +111,11 @@ int main()
     double last_time = glfwGetTime();
     vec2 cursor_pos = window.get_cursor_position();
 
-    FrameMarkEnd("Loading");
-
     renderer.update_vao();
+
+    if (result.count("bake"))
+        renderer.prepare_bake(vec3{0.5f, 4.5f, 0.5f}, vec3{22.f, 8.f, 9.f}, 1,
+                              1);
 
     window.run(
         [&]()

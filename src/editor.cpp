@@ -84,6 +84,12 @@ void Editor::draw_renderer_menu()
             renderer.ctx_r.sun.direction = normalize(light_dir);
     }
 
+    if (ImGui::CollapsingHeader("Camera"))
+    {
+        ImGui::InputFloat3("Position##Camera",
+                           value_ptr(renderer.camera.position));
+    }
+
     if (ImGui::CollapsingHeader("GI"))
     {
         ImGui::SliderInt("Bounces", &bounce_count, 1, 10);
@@ -138,6 +144,17 @@ void Editor::draw_renderer_menu()
     {
         if (ImGui::Checkbox("Draw probes", &renderer.forward.draw_probes))
             renderer.forward.parse_parameters();
+    }
+
+    if (ImGui::CollapsingHeader("Volumetric"))
+    {
+        auto &params = renderer.volumetric.params;
+
+        if (ImGui::SliderFloat("Scatter intensity", &params.scatter_intensity,
+                               0.f, 3.f) |
+            ImGui::SliderInt("Sample count##Volumetric", &params.step_count, 1,
+                             50))
+            renderer.volumetric.parse_parameters();
     }
 
     if (ImGui::Checkbox("##SSR", &renderer.ssr_enabled))

@@ -52,6 +52,7 @@ struct ViewportContext
     glm::mat4 proj;
     glm::mat4 proj_inv;
     glm::mat4 view;
+    glm::mat4 view_inv;
     glm::mat4 view_proj_prev;
     float near = 0;
     float far = 0;

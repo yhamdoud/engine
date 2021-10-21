@@ -68,7 +68,9 @@ static bool init_framebuffer(ivec2 size, uint hdr_frame_buf, uint &depth_tex,
            GL_FRAMEBUFFER_COMPLETE;
 }
 
-Renderer::Renderer(glm::ivec2 viewport_size)
+Renderer::Renderer(glm::ivec2 viewport_size, glm::vec3 camera_position,
+                   glm::vec3 camera_look)
+    : camera(camera_position, camera_look)
 {
     ctx_v.size = viewport_size;
 
@@ -154,6 +156,7 @@ Renderer::Renderer(glm::ivec2 viewport_size)
     ssao.initialize(ctx_v);
     lighting.initialize(ctx_v);
     forward.initialize(ctx_v);
+    volumetric.initialize(ctx_v);
     ssr.initialize(ctx_v);
     motion_blur.initialize(ctx_v);
     bloom.initialize(ctx_v);
@@ -363,13 +366,14 @@ void Renderer::render(float dt, std::vector<Entity> queue)
 
     ZoneScoped;
 
+    // TODO: throw this in a UBO
     ctx_v.proj = perspective(ctx_v.fov,
                              static_cast<float>(ctx_v.size.x) /
                                  static_cast<float>(ctx_v.size.y),
                              ctx_v.near, ctx_v.far);
     ctx_v.proj_inv = inverse(ctx_v.proj);
-
     ctx_v.view = camera.get_view();
+    ctx_v.view_inv = glm::inverse(ctx_v.view);
 
     ctx_r.queue = std::move(queue);
     ctx_r.dt = dt;
@@ -422,6 +426,12 @@ void Renderer::render(float dt, std::vector<Entity> queue)
         TracyGpuZone("Forward pass");
         GpuZone _(5);
         forward.render(ctx_v, ctx_r);
+    }
+
+    if (true)
+    {
+        TracyGpuZone("Volumetric pass");
+        volumetric.render(ctx_v, ctx_r);
     }
 
     if (motion_blur_enabled)
