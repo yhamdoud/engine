@@ -1,5 +1,7 @@
 #pragma once
 
+#include <fmt/format.h>
+
 #include "constants.hpp"
 #include "renderer/context.hpp"
 #include "renderer/pass.hpp"
@@ -13,7 +15,11 @@ struct GeometryConfig
 
 class GeometryPass
 {
-    uint f_buf;
+    static constexpr int group_size = 32;
+
+    uint fbuf;
+    uint fbuf_downsample;
+
     uint normal_metal = invalid_texture_id;
     uint base_color_rough = invalid_texture_id;
     uint velocity = invalid_texture_id;
@@ -22,6 +28,15 @@ class GeometryPass
     Shader shader = *Shader::from_paths(ShaderPaths{
         .vert = shaders_path / "geometry.vs",
         .frag = shaders_path / "geometry.fs",
+    });
+
+    // Shader downsample_shader = *Shader::from_comp_path(
+    //     shaders_path / "downsample.comp",
+    //     fmt::format("#define LOCAL_SIZE {}\n", group_size));
+
+    Shader downsample_shader = *Shader::from_paths(ShaderPaths{
+        .vert = shaders_path / "lighting.vs",
+        .frag = shaders_path / "z_downsample.frag",
     });
 
   public:

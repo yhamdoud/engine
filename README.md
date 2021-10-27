@@ -24,6 +24,7 @@ https://user-images.githubusercontent.com/18217298/137032993-6adf4c04-9362-4703-
 -   HDR lighting
 -   Automatic exposure
 -   Tone mapping
+-   Volumetric lighting
 -   Motion blur
 -   Directional and point lights
 -   Normal mapping
@@ -47,8 +48,6 @@ https://user-images.githubusercontent.com/18217298/137032993-6adf4c04-9362-4703-
 -   TAA
 -   Reflection probes
 -   Light volumes
--   Bilateral blur filter
--   Volumetric lighting
 
 ## Building
 
@@ -156,6 +155,21 @@ The SSAO texture is box blurred in a full-screen post-processing pass.
 
 The editor exposes several parameters, like sample count and radius.
 This allows one to tweak the SSAO for a specific scene.
+
+### Volumetric lighting
+
+Volumetric lighting is implemented as a post-processing pass consisting of 4 steps.
+First, the depth buffer is raymarched at half resolution to determine the scattering amount for a given fragment.
+In the next 2 passes, a seperable bilateral blur is performed to filter the result.
+Finally, a bilateral upsample is performed and the volumetrics are added to the HDR target.
+
+Our approach is based on the work presented in the GPU Pro 5 article "Volumetric Light Effects in
+Killzone: Shadow Fall" by Nathan Vos.
+During the raymarching step, we sample the shadow map to determine if the ray is lit at its current position.
+We calculate the contribution of each sample using the Henyey-Greenstein phase function, to approximate the effects described by Mie-scattering.
+
+To reduce the amount of raymarching steps without introducing undersampling artifacts, the ray's initial position is jittered using a tiled Bayer matrix.
+The blur passes perform a 7x7 bilateral Gaussian blur and is responsible for filtering the dithered volumetic lighting buffer.
 
 ### Bloom
 

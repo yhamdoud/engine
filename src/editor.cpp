@@ -12,6 +12,7 @@
 #include "glm/geometric.hpp"
 #include "profiler.hpp"
 #include "renderer/passes/tone_map.hpp"
+#include "renderer/passes/volumetric.hpp"
 
 using namespace engine;
 using namespace std;
@@ -51,8 +52,9 @@ void Editor::draw()
 }
 
 static const char *passes[] = {
-    "Baking", "Shadow",      "Geometry", "SSAO",     "Lighting",  "Forward",
-    "SSR",    "Motion blur", "Bloom",    "Tone map", "Frame time"};
+    "Baking", "Shadow",      "Geometry", "SSAO",     "Lighting",   "Forward",
+    "SSR",    "Motion blur", "Bloom",    "Tone map", "Frame time", "Volumetric",
+};
 
 void Editor::draw_profiler()
 {
@@ -146,14 +148,22 @@ void Editor::draw_renderer_menu()
             renderer.forward.parse_parameters();
     }
 
+    (ImGui::Checkbox("##Volumetric", &renderer.volumetric.enabled));
+    ImGui::SameLine();
     if (ImGui::CollapsingHeader("Volumetric"))
     {
         auto &params = renderer.volumetric.params;
+        using Flags = VolumetricPass::Flags;
 
         if (ImGui::SliderFloat("Scatter intensity", &params.scatter_intensity,
-                               0.f, 3.f) |
+                               0.f, 1.f) |
+            ImGui::SliderFloat("Scatter amount", &params.scatter_amount, 0.f,
+                               5.f) |
             ImGui::SliderInt("Sample count##Volumetric", &params.step_count, 1,
-                             50))
+                             64) |
+            ImGui::CheckboxFlags("Bilateral upsample", (int *)&params.flags,
+                                 Flags::bilateral_upsample) |
+            ImGui::CheckboxFlags("Blur", (int *)&params.flags, Flags::blur))
             renderer.volumetric.parse_parameters();
     }
 

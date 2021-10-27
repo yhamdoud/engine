@@ -21,7 +21,7 @@ ShadowPass::ShadowPass(Params params) : params(params)
     glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &shadow_map);
     glCreateFramebuffers(1, &frame_buf);
 
-    assert(params.cascade_count < max_cascade_coutn);
+    assert(params.cascade_count < max_cascade_count);
 
     shader = *Shader::from_paths(
         ShaderPaths{

@@ -1,0 +1,81 @@
+#version 460 core
+
+#ifdef VALIDATOR
+#extension GL_GOOGLE_include_directive : require
+#define LOCAL_SIZE 32
+#endif
+
+#include "/include/common.h"
+#include "/include/uniforms.h"
+
+layout(local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE) in;
+
+layout(std140, binding = 0) uniform Uniform { VolumetricUniforms u; };
+
+layout(binding = 1) uniform sampler2D u_g_depth;
+layout(binding = 3) uniform sampler2D u_read;
+layout(binding = 7, rgba16f) restrict uniform image2D u_write;
+
+// Bilateral upsampling depth discontunity.
+vec4 bilateral_filter(sampler2D tex, vec2 tex_coords, vec2 tex_size, mat4 proj,
+                      sampler2D depth_tex)
+{
+    // Transform texture coordinates to index in half resolution texture.
+    vec2 index_low = tex_coords * 0.5 * tex_size + 0.5;
+    vec2 f = fract(index_low);
+
+    // Half resolution texel size.
+    vec2 texel_size = 1 / (0.5 * tex_size);
+    // Get texture coordinate of half resolution top left texel center.
+    vec2 center = (floor(index_low) / (0.5 * tex_size)) - vec2(texel_size / 2.);
+
+    vec2 offsets[4] =
+        vec2[](center, center + vec2(texel_size.x, 0),
+               center + vec2(0, texel_size.x), center + texel_size);
+
+    vec4 depth_coarse =
+        vec4(linearize_depth(textureLod(depth_tex, offsets[0], 1).r, proj),
+             linearize_depth(textureLod(depth_tex, offsets[1], 1).r, proj),
+             linearize_depth(textureLod(depth_tex, offsets[2], 1).r, proj),
+             linearize_depth(textureLod(depth_tex, offsets[3], 1).r, proj));
+
+    const float e = 0.01;
+    float depth = linearize_depth(textureLod(depth_tex, tex_coords, 0).r, proj);
+    vec4 weights = 1 / (abs(depth_coarse - depth) + e);
+
+    // vec4 depth_diff = abs(depth_coarse - depth);
+    // depth_diff *= 0.5;
+    // vec4 weights = exp(-(depth_diff * depth_diff));
+
+    // clang-format off
+    weights *= vec4(
+        (1. - f.x) * (1. - f.y),
+        f.x * (1. - f.y),
+        (1 - f.x) * f.y,
+        f.x * f.y
+    );
+    // clang-format on
+
+    return (weights.x * texture(tex, offsets[0]) +
+            weights.y * texture(tex, offsets[1]) +
+            weights.z * texture(tex, offsets[2]) +
+            weights.w * texture(tex, offsets[3])) /
+           dot(weights, vec4(1.));
+}
+
+void main()
+{
+    const ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
+
+    vec2 target_size = vec2(u.read_size);
+    vec2 tex_coords = (vec2(gid)) / vec2(u.read_size);
+
+    vec4 color = imageLoad(u_write, gid);
+
+    color += (u.bilateral_upsample)
+                 ? bilateral_filter(u_read, tex_coords, target_size, u.proj,
+                                    u_g_depth)
+                 : texture(u_read, tex_coords);
+
+    imageStore(u_write, gid, color);
+}

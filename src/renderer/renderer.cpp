@@ -428,8 +428,9 @@ void Renderer::render(float dt, std::vector<Entity> queue)
         forward.render(ctx_v, ctx_r);
     }
 
-    if (true)
+    if (volumetric.enabled)
     {
+        GpuZone _(11);
         TracyGpuZone("Volumetric pass");
         volumetric.render(ctx_v, ctx_r);
     }
@@ -468,6 +469,7 @@ void Renderer::resize_viewport(glm::vec2 size)
     ssao.initialize(ctx_v);
     ssr.initialize(ctx_v);
     bloom.initialize(ctx_v);
+    volumetric.initialize(ctx_v);
 }
 
 void Renderer::prepare_bake(glm::vec3 center, glm::vec3 world_dims,

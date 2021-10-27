@@ -117,8 +117,12 @@ class Renderer
     }};
 
     VolumetricPass volumetric{{
-        .step_count = 10,
-        .scatter_intensity = 0.6,
+        .step_count = 64,
+        .scatter_intensity = 0.85f,
+        .scatter_amount = 0.6f,
+        .flags =
+            (VolumetricPass::Flags)(VolumetricPass::Flags::bilateral_upsample |
+                                    VolumetricPass::Flags::blur),
     }};
 
     bool motion_blur_enabled = true;

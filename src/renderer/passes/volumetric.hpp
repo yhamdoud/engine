@@ -1,7 +1,10 @@
 #pragma once
 
-#include "fmt/format.h"
+#include <cstdint>
 
+#include <fmt/format.h>
+
+#include "constants.hpp"
 #include "renderer/context.hpp"
 #include "renderer/pass.hpp"
 
@@ -10,6 +13,7 @@ namespace engine
 
 class VolumetricPass
 {
+
     struct Uniforms
     {
         glm::mat4 proj;
@@ -19,27 +23,53 @@ class VolumetricPass
         int count;
         float scatter_intensity;
         glm::vec3 sun_dir;
-        float pad0;
+        bool bilateral_upsample;
         glm::vec3 sun_color;
-        float pad1;
+        float scatter_amount;
     };
 
     static constexpr int group_size = 32;
 
-    Shader shader = *Shader::from_comp_path(
+    Shader raymarch_shader = *Shader::from_comp_path(
         shaders_path / "volumetric.comp",
         fmt::format("#define LOCAL_SIZE {}\n#define CASCADE_COUNT 3\n",
                     group_size));
+
+    Shader blur_horizontal_shader = *Shader::from_comp_path(
+        shaders_path / "volumetric_blur.comp",
+        fmt::format("#define LOCAL_SIZE {}\n#define HORIZONTAL\n", group_size));
+
+    Shader blur_vertical_shader = *Shader::from_comp_path(
+        shaders_path / "volumetric_blur.comp",
+        fmt::format("#define LOCAL_SIZE {}\n#define VERTICAL\n", group_size));
+
+    Shader upsample_shader = *Shader::from_comp_path(
+        shaders_path / "volumetric_upsample.comp",
+        fmt::format("#define LOCAL_SIZE {}\n", group_size));
 
     Uniforms uniform_data;
 
     uint uniform_buf;
 
+    uint tex1 = invalid_texture_id;
+    uint tex2 = invalid_texture_id;
+
   public:
+    bool enabled = true;
+
+    enum Flags : int
+    {
+        none,
+        bilateral_upsample,
+        blur,
+    };
+
     struct Params
     {
         int step_count;
         float scatter_intensity;
+        float scatter_amount;
+        Flags flags;
     };
 
     Params params;

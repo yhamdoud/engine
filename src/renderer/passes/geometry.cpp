@@ -48,7 +48,11 @@ void GeometryPass::create_debug_views()
                          rg_swizzle.data());
 }
 
-GeometryPass::GeometryPass() { glCreateFramebuffers(1, &f_buf); }
+GeometryPass::GeometryPass()
+{
+    glCreateFramebuffers(2, &fbuf);
+    downsample_shader.set("u_read", 3);
+}
 
 void GeometryPass::initialize(ViewportContext &ctx)
 {
@@ -56,42 +60,46 @@ void GeometryPass::initialize(ViewportContext &ctx)
     glCreateTextures(GL_TEXTURE_2D, 4, &normal_metal);
 
     glTextureStorage2D(normal_metal, 1, GL_RGBA16F, ctx.size.x, ctx.size.y);
-    glTextureParameteri(normal_metal, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTextureParameteri(normal_metal, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     glTextureStorage2D(base_color_rough, 1, GL_SRGB8_ALPHA8, ctx.size.x,
                        ctx.size.y);
-    glTextureParameteri(base_color_rough, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTextureParameteri(base_color_rough, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     glTextureStorage2D(velocity, 1, GL_RGBA16F, ctx.size.x, ctx.size.y);
 
-    glTextureStorage2D(depth, 1, GL_DEPTH_COMPONENT32, ctx.size.x, ctx.size.y);
-    glTextureParameteri(depth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTextureParameteri(depth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTextureStorage2D(depth, 2, GL_DEPTH_COMPONENT32, ctx.size.x, ctx.size.y);
     glTextureParameteri(depth, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTextureParameteri(depth, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(depth, GL_TEXTURE_MIN_FILTER,
+                        GL_NEAREST_MIPMAP_NEAREST);
+    glTextureParameteri(depth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    glNamedFramebufferTexture(f_buf, GL_DEPTH_ATTACHMENT, depth, 0);
-    glNamedFramebufferTexture(f_buf, GL_COLOR_ATTACHMENT0, normal_metal, 0);
-    glNamedFramebufferTexture(f_buf, GL_COLOR_ATTACHMENT1, base_color_rough, 0);
-    glNamedFramebufferTexture(f_buf, GL_COLOR_ATTACHMENT2, velocity, 0);
+    glNamedFramebufferTexture(fbuf, GL_DEPTH_ATTACHMENT, depth, 0);
+    glNamedFramebufferTexture(fbuf, GL_COLOR_ATTACHMENT0, normal_metal, 0);
+    glNamedFramebufferTexture(fbuf, GL_COLOR_ATTACHMENT1, base_color_rough, 0);
+    glNamedFramebufferTexture(fbuf, GL_COLOR_ATTACHMENT2, velocity, 0);
 
     array<GLenum, 3> draw_bufs{
         GL_COLOR_ATTACHMENT0,
         GL_COLOR_ATTACHMENT1,
         GL_COLOR_ATTACHMENT2,
     };
-    glNamedFramebufferDrawBuffers(f_buf, draw_bufs.size(), draw_bufs.data());
+    glNamedFramebufferDrawBuffers(fbuf, draw_bufs.size(), draw_bufs.data());
 
-    if (glCheckNamedFramebufferStatus(f_buf, GL_FRAMEBUFFER) !=
+    if (glCheckNamedFramebufferStatus(fbuf, GL_FRAMEBUFFER) !=
         GL_FRAMEBUFFER_COMPLETE)
         logger.error("G-buffer incomplete");
 
-    ctx.g_buf = GBuffer{ctx.size,     f_buf,    base_color_rough,
+    ctx.g_buf = GBuffer{ctx.size,     fbuf,     base_color_rough,
                         normal_metal, velocity, depth};
 
     create_debug_views();
+
+    glNamedFramebufferTexture(fbuf_downsample, GL_DEPTH_ATTACHMENT, depth, 1);
+    glNamedFramebufferDrawBuffer(fbuf_downsample, GL_NONE);
+    glNamedFramebufferReadBuffer(fbuf_downsample, GL_NONE);
+    if (glCheckNamedFramebufferStatus(fbuf_downsample, GL_FRAMEBUFFER) !=
+        GL_FRAMEBUFFER_COMPLETE)
+        logger.error("Downsample framebuffer incomplete");
 }
 
 void GeometryPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
@@ -156,5 +164,15 @@ void GeometryPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
         }
 
         Renderer::render_mesh_instance(ctx_r.mesh_instances[r.mesh_index]);
+    }
+
+    {
+        glViewport(0, 0, ctx_v.size.x / 2, ctx_v.size.y / 2);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbuf_downsample);
+        glClear(GL_DEPTH_BUFFER_BIT);
+        glBindTextureUnit(3, depth);
+
+        glUseProgram(downsample_shader.get_id());
+        glDrawArrays(GL_TRIANGLES, 0, 3);
     }
 }

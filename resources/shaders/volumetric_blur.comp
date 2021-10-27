@@ -1,0 +1,77 @@
+#version 460 core
+
+#ifdef VALIDATOR
+#extension GL_GOOGLE_include_directive : require
+#define LOCAL_SIZE 32
+#define HORIZONTAL
+#endif
+
+#include "/include/common.h"
+#include "/include/uniforms.h"
+
+layout(local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE) in;
+
+layout(std140, binding = 0) uniform Uniform { VolumetricUniforms u; };
+
+layout(binding = 1) uniform sampler2D u_g_depth;
+
+#ifdef HORIZONTAL
+layout(binding = 3) uniform sampler2D u_read;
+layout(binding = 6) uniform restrict writeonly image2D u_write;
+#endif
+
+#ifdef VERTICAL
+layout(binding = 4) uniform sampler2D u_read;
+layout(binding = 5) restrict writeonly uniform image2D u_write;
+#endif
+
+vec4 gaussian_7x7(sampler2D tex, vec2 coords, vec2 texel_size, mat4 proj,
+                  sampler2D depth_tex, bool horizontal)
+{
+    const vec4 coefs = vec4(20., 15., 6., 1.) / 64;
+    const float e = 0.01;
+    float depth = linearize_depth(textureLod(depth_tex, coords, 1).r, proj);
+
+    float weight_sum = coefs[0];
+    vec4 color = weight_sum * texture(tex, coords);
+
+    for (int i = 1; i < 4; i++)
+    {
+        vec2 offset = (horizontal ? vec2(i, 0) : vec2(0, i)) * texel_size;
+
+        vec2 depth_coarse = vec2(
+            linearize_depth(textureLod(depth_tex, coords + offset, 1).r, proj),
+            linearize_depth(textureLod(depth_tex, coords - offset, 1).r, proj));
+
+        vec2 depth_diff = abs(depth_coarse - depth);
+        depth_diff *= 0.5;
+        vec2 weights = coefs[i] * exp(-(depth_diff * depth_diff));
+
+        color += weights.x * texture(tex, coords + offset) +
+                 weights.y * texture(tex, coords - offset);
+        weight_sum += weights.x + weights.y;
+    }
+
+    return color / weight_sum;
+}
+
+void main()
+{
+    const ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
+
+    vec2 tex_coords = calc_tex_coords(gid, u.read_size / 2);
+    vec2 texel_size = 2. / u.read_size;
+
+#ifdef HORIZONTAL
+    vec4 color =
+        gaussian_7x7(u_read, tex_coords, texel_size, u.proj, u_g_depth, false);
+
+#endif
+
+#ifdef VERTICAL
+    vec4 color =
+        gaussian_7x7(u_read, tex_coords, texel_size, u.proj, u_g_depth, true);
+#endif
+
+    imageStore(u_write, gid, color);
+}

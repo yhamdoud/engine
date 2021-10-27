@@ -11,7 +11,7 @@
 namespace engine
 {
 
-constexpr size_t query_count = 11;
+constexpr size_t query_count = 12;
 
 class GpuZone
 {
