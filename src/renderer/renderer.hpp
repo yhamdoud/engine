@@ -105,9 +105,9 @@ class Renderer
     LightingPass lighting{{
         .cascade_count = shadow.params.cascade_count,
         .indirect_light = true,
-        .direct_light = true,
-        .use_base_color = true,
-        .color_shadow_cascades = false,
+        .direct_lighting = true,
+        .base_color = true,
+        .color_cascades = false,
         .filter_shadows = true,
         .leak_offset = 0.5f,
     }};

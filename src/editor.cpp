@@ -110,7 +110,7 @@ void Editor::draw_renderer_menu()
     }
 
     if (ImGui::Checkbox("##SSAO", &renderer.ssao_enabled))
-        renderer.lighting.ssao = renderer.ssao_enabled;
+        renderer.lighting.params.ssao = renderer.ssao_enabled;
     ImGui::SameLine();
     if (ImGui::CollapsingHeader("SSAO"))
     {
@@ -132,11 +132,10 @@ void Editor::draw_renderer_menu()
     if (ImGui::CollapsingHeader("Lighting"))
     {
         auto &params = renderer.lighting.params;
-        if (ImGui::Checkbox("Direct lighting", &params.direct_light) |
+        if (ImGui::Checkbox("Direct lighting", &params.direct_lighting) |
             ImGui::Checkbox("Indirect lighting", &params.indirect_light) |
-            ImGui::Checkbox("Base color", &params.use_base_color) |
-            ImGui::Checkbox("Color shadow cascades",
-                            &params.color_shadow_cascades) |
+            ImGui::Checkbox("Base color", &params.base_color) |
+            ImGui::Checkbox("Color shadow cascades", &params.color_cascades) |
             ImGui::Checkbox("Filter shadows", &params.filter_shadows) |
             ImGui::SliderFloat("Leak offset ", &params.leak_offset, 0, 1.f))
             renderer.lighting.parse_parameters();
@@ -168,7 +167,7 @@ void Editor::draw_renderer_menu()
     }
 
     if (ImGui::Checkbox("##SSR", &renderer.ssr_enabled))
-        renderer.lighting.ssr = renderer.ssr_enabled;
+        renderer.lighting.params.ssr = renderer.ssr_enabled;
     ImGui::SameLine();
     if (ImGui::CollapsingHeader("SSR"))
     {

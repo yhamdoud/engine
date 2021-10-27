@@ -12,53 +12,31 @@
 in vec2 tex_coords;
 in vec3 view_ray;
 
-uniform mat4 u_proj;
+struct LightingUniforms
+{
+    mat4 proj;
+    mat4 view_inv;
+    mat4 inv_grid_transform;
+    float leak_offset;
+    bool indirect_lighting;
+    bool direct_lighting;
+    bool base_color;
+    bool color_cascades;
+    bool filter_shadows;
+    bool reflections;
+    bool ambient_occlusion;
+    vec3 grid_dims;
+    vec3 light_intensity;
+    vec3 light_direction;
+};
+
+layout(std140, binding = 0) uniform Uniform { LightingUniforms u; };
 
 layout(binding = 0) uniform sampler2D u_g_depth;
 layout(binding = 1) uniform sampler2D u_g_normal_metallic;
 layout(binding = 2) uniform sampler2D u_g_base_color_roughness;
-layout(binding = 14) uniform sampler2D u_g_velocity;
-
 layout(binding = 3) uniform sampler2DArrayShadow u_shadow_map;
-
 layout(binding = 4) uniform sampler2D u_ao;
-
-uniform bool u_use_irradiance;
-uniform bool u_use_direct;
-uniform bool u_use_base_color;
-
-struct Light
-{
-    vec3 position;
-    vec3 color;
-};
-
-struct DirectionalLight
-{
-    vec3 intensity;
-    vec3 direction;
-};
-
-uniform DirectionalLight u_directional_light;
-
-const uint light_count = 3;
-uniform Light u_lights[light_count];
-
-uniform mat4 u_light_transforms[CASCADE_COUNT];
-
-uniform float u_cascade_distances[CASCADE_COUNT];
-
-uniform mat4 u_view_inv;
-uniform bool u_color_cascades;
-uniform bool u_filter;
-
-// Diffuse GI
-uniform mat4 u_inv_grid_transform;
-uniform vec3 u_grid_dims;
-uniform float u_leak_offset;
-
-uniform bool u_ssr;
-uniform bool u_ssao;
 
 layout(binding = 5) uniform sampler3D u_sh_0;
 layout(binding = 6) uniform sampler3D u_sh_1;
@@ -70,6 +48,10 @@ layout(binding = 11) uniform sampler3D u_sh_6;
 
 layout(binding = 12) uniform sampler2D u_hdr_prev;
 layout(binding = 13) uniform sampler2D u_reflections;
+layout(binding = 14) uniform sampler2D u_g_velocity;
+
+uniform mat4 u_light_transforms[CASCADE_COUNT];
+uniform float u_cascade_distances[CASCADE_COUNT];
 
 out vec4 frag_color;
 
@@ -96,7 +78,7 @@ float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal,
     float shadow = 0.;
 
     // PCF
-    if (u_filter)
+    if (u.filter_shadows)
     {
         int range = 3;
         int sample_count = (2 * range + 1) * (2 * range + 1);
@@ -158,16 +140,51 @@ vec3 brdf(vec3 v, vec3 l, vec3 n, vec3 diffuse_color, vec3 f0, float roughness)
     return (Fd + Fr) * n_dot_l;
 }
 
+vec3 calculate_indirect_lighting(vec3 pos, vec3 n)
+{
+    vec3 pos_world = (u.view_inv * vec4(pos, 1.f)).xyz;
+    vec3 n_world = mat3(u.view_inv) * n;
+
+    // Offset sample in the direction off the normal to reduce leaking.
+    vec3 sample_pos = pos_world + u.leak_offset * n_world;
+    // Transform world position to probe grid texture coordinates.
+    vec3 grid_coords = vec3(u.inv_grid_transform * vec4(sample_pos, 1.f));
+    vec3 grid_tex_coords = (grid_coords + vec3(0.5f)) / u.grid_dims;
+
+    vec4 c0 = texture(u_sh_0, grid_tex_coords);
+    vec4 c1 = texture(u_sh_1, grid_tex_coords);
+    vec4 c2 = texture(u_sh_2, grid_tex_coords);
+    vec4 c3 = texture(u_sh_3, grid_tex_coords);
+    vec4 c4 = texture(u_sh_4, grid_tex_coords);
+    vec4 c5 = texture(u_sh_5, grid_tex_coords);
+    vec4 c6 = texture(u_sh_6, grid_tex_coords);
+    vec3 c7 = vec3(c0.w, c1.w, c2.w);
+    vec3 c8 = vec3(c3.w, c4.w, c5.w);
+
+    // clang-format off
+    vec3 irradiance =
+        c0.rgb * 0.282095 +
+        c1.rgb * 0.488603 * n_world.y +
+        c2.rgb * 0.488603 * n_world.z +
+        c3.rgb * 0.488603 * n_world.x +
+        c4.rgb * 1.092548 * n_world.x * n_world.y +
+        c5.rgb * 1.092548 * n_world.y * n_world.z +
+        c6.rgb * 0.315392 * (3.f * n_world.z * n_world.z - 1.f) +
+        c7.rgb * 1.092548 * n_world.x * n_world.z +
+        c8.rgb * 0.546274 * (n_world.x * n_world.x - n_world.y * n_world.y);
+    // clang-format on
+
+    float occlusion = u.ambient_occlusion ? texture(u_ao, tex_coords).r : 1.;
+
+    return occlusion * irradiance * Fd_Lambert();
+}
+
 void main()
 {
     // TODO: Differentiate between point and directional point_lights.
     vec4 base_color_roughness = texture(u_g_base_color_roughness, tex_coords);
 
-    vec3 base_color;
-    if (u_use_base_color)
-        base_color = base_color_roughness.rgb;
-    else
-        base_color = vec3(1.f);
+    vec3 base_color = (u.base_color) ? base_color_roughness.rgb : vec3(1.);
 
     float roughness = base_color_roughness.a;
 
@@ -177,7 +194,7 @@ void main()
 
     // View space position.
     vec3 pos =
-        view_ray * linearize_depth(texture(u_g_depth, tex_coords).r, u_proj);
+        view_ray * linearize_depth(texture(u_g_depth, tex_coords).r, u.proj);
     vec3 v = normalize(-pos);
 
     // Non-metals have achromatic specular reflectance, metals use base color
@@ -193,79 +210,26 @@ void main()
     uint cascade_idx = calculate_cascade_index(pos, u_cascade_distances);
 
     // Direct lighting.
-    if (u_use_direct)
+    if (u.direct_lighting)
     {
         // Directional light (sun) contribution.
-        vec3 l = normalize(-u_directional_light.direction);
-        vec3 luminance = brdf(v, l, n, diffuse_color, f0, roughness) *
-                         u_directional_light.intensity;
-
-        // Point lights contribution.
-        for (uint i = 0; i < light_count; i++)
-        {
-            Light light = u_lights[i];
-            float dist = length(light.position - pos);
-            // Inverse square law
-            // TODO: Might not be a good fit, can cause divide by zero.
-            float attenuation = 1 / (dist * dist);
-
-            l = normalize(light.position - pos);
-
-            out_luminance += brdf(v, l, n, diffuse_color, f0, roughness) *
-                             light.color * attenuation;
-        }
+        vec3 l = normalize(-u.light_direction);
+        vec3 luminance =
+            brdf(v, l, n, diffuse_color, f0, roughness) * u.light_intensity;
 
         // Fragment position in light space.
-
         vec4 light_pos =
-            u_light_transforms[cascade_idx] * u_view_inv * vec4(pos, 1.);
+            u_light_transforms[cascade_idx] * u.view_inv * vec4(pos, 1.);
         float shadow = calculate_shadow(light_pos, cascade_idx, n, l);
 
         out_luminance += (1. - shadow) * luminance;
     }
 
-    // Indirect lighting.
-    if (u_use_irradiance)
-    {
-        vec3 pos_world = (u_view_inv * vec4(pos, 1.f)).xyz;
-        vec3 n_world = mat3(u_view_inv) * n;
-
-        // Offset sample in the direction off the normal to reduce leaking.
-        vec3 sample_pos = pos_world + u_leak_offset * n_world;
-        // Transform world position to probe grid texture coordinates.
-        vec3 grid_coords = vec3(u_inv_grid_transform * vec4(sample_pos, 1.f));
-        vec3 grid_tex_coords = (grid_coords + vec3(0.5f)) / u_grid_dims;
-
-        vec4 c0 = texture(u_sh_0, grid_tex_coords);
-        vec4 c1 = texture(u_sh_1, grid_tex_coords);
-        vec4 c2 = texture(u_sh_2, grid_tex_coords);
-        vec4 c3 = texture(u_sh_3, grid_tex_coords);
-        vec4 c4 = texture(u_sh_4, grid_tex_coords);
-        vec4 c5 = texture(u_sh_5, grid_tex_coords);
-        vec4 c6 = texture(u_sh_6, grid_tex_coords);
-        vec3 c7 = vec3(c0.w, c1.w, c2.w);
-        vec3 c8 = vec3(c3.w, c4.w, c5.w);
-
-        // clang-format off
-        vec3 irradiance =
-            c0.rgb * 0.282095 +
-            c1.rgb * 0.488603 * n_world.y +
-            c2.rgb * 0.488603 * n_world.z +
-            c3.rgb * 0.488603 * n_world.x +
-            c4.rgb * 1.092548 * n_world.x * n_world.y +
-            c5.rgb * 1.092548 * n_world.y * n_world.z +
-            c6.rgb * 0.315392 * (3.f * n_world.z * n_world.z - 1.f) +
-            c7.rgb * 1.092548 * n_world.x * n_world.z +
-            c8.rgb * 0.546274 * (n_world.x * n_world.x - n_world.y * n_world.y);
-        // clang-format on
-
-        float occlusion = u_ssao ? texture(u_ao, tex_coords).r : 1.;
-
-        out_luminance += occlusion * irradiance * base_color * Fd_Lambert();
-    }
+    if (u.indirect_lighting)
+        out_luminance += base_color * calculate_indirect_lighting(pos, n);
 
     // SSR
-    if (u_ssr)
+    if (u.reflections)
     {
         vec4 r = textureLod(u_reflections, tex_coords, 0);
 
@@ -284,7 +248,7 @@ void main()
     }
 
     // Give different shadow map cascades a recognizable tint.
-    if (u_color_cascades)
+    if (u.color_cascades)
     {
         switch (cascade_idx)
         {

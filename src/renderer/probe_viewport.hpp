@@ -48,9 +48,9 @@ struct ProbeViewport
     LightingPass lighting{{
         .cascade_count = shadow.params.cascade_count,
         .indirect_light = false,
-        .direct_light = true,
-        .use_base_color = true,
-        .color_shadow_cascades = false,
+        .direct_lighting = true,
+        .base_color = true,
+        .color_cascades = false,
         .filter_shadows = false,
         .leak_offset = 0.4f,
     }};

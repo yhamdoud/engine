@@ -13,7 +13,6 @@ namespace engine
 
 class VolumetricPass
 {
-
     struct Uniforms
     {
         glm::mat4 proj;
