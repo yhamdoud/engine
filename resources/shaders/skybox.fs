@@ -6,7 +6,4 @@ out vec4 frag_color;
 
 uniform samplerCube u_skybox;
 
-void main()
-{
-    frag_color = texture(u_skybox, tex_coords);
-}
+void main() { frag_color = texture(u_skybox, tex_coords); }

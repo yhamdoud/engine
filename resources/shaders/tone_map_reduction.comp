@@ -5,33 +5,19 @@
 #version 460 core
 
 #ifndef ENGINE_DEFINES
-    #define BIN_COUNT 256
+#extension GL_GOOGLE_include_directive : require
+#define BIN_COUNT 256
 #endif
+
+#include "/include/uniforms.h"
 
 layout(local_size_x = BIN_COUNT) in;
 
-layout (std140, binding = 0) uniform Uniforms
-{
-    uvec2 size;
-    float min_log_luminance;
-    float log_luminance_range;
-    float log_luminance_range_inverse;
-    float dt;
-    float tau;
-    float target_luminance;
-	float gamma;
-	uint operator;
-} u;
+layout(std140, binding = 0) uniform Uniforms { ToneMapUniforms u; };
 
-layout(std430, binding = 1) buffer Ssbo
-{
-	restrict uint hist[BIN_COUNT];
-};
+layout(std430, binding = 1) buffer Ssbo { restrict uint hist[BIN_COUNT]; };
 
-layout(std430, binding = 3) buffer Ssbo2
-{
-	float luminance_out;
-};
+layout(std430, binding = 3) buffer Ssbo2 { float luminance_out; };
 
 shared uint hist_shared[BIN_COUNT];
 
@@ -62,12 +48,13 @@ void main()
         // We don't want the earlier discarded pixels in bin 0 to contribute to
         // the histogram average.
         float weighted_log_avg =
-            (log_avg / max(float(u.size.x * u.size.y - cur_bin_count), 1.)) - 1.;
+            (log_avg / max(float(u.size.x * u.size.y - cur_bin_count), 1.)) -
+            1.;
 
         // Reverse the luminance to bin mapping.
-        float luminance_avg =
-            exp2(((weighted_log_avg / float(BIN_COUNT - 2)) * u.log_luminance_range)
-            + u.min_log_luminance);
+        float luminance_avg = exp2(((weighted_log_avg / float(BIN_COUNT - 2)) *
+                                    u.log_luminance_range) +
+                                   u.min_log_luminance);
 
         // Exponential feedback loop.
         float adapted_luminance =

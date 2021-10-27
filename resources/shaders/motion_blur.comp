@@ -24,10 +24,10 @@ void main()
     for (int i = 0; i < u_sample_count; i++)
     {
         float t = mix(-u_intensity, u_intensity, i / (u_sample_count - 1.));
-        color += textureLod( u_hdr_read, t * velocity + tex_coords, 0).rgb;
+        color += textureLod(u_hdr_read, t * velocity + tex_coords, 0).rgb;
     }
 
     color /= u_sample_count;
-    
+
     imageStore(u_hdr_write, ivec2(g_id), vec4(color, 1.));
 }

@@ -1,7 +1,7 @@
 #version 460 core
 
 #ifndef ENGINE_DEFINES
-    #define CASCADE_COUNT 3
+#define CASCADE_COUNT 3
 #endif
 
 layout(triangles, invocations = CASCADE_COUNT) in;
@@ -13,7 +13,8 @@ void main()
 {
     for (int i = 0; i < 3; i++)
     {
-        gl_Position = u_light_transforms[gl_InvocationID] * gl_in[i].gl_Position;
+        gl_Position =
+            u_light_transforms[gl_InvocationID] * gl_in[i].gl_Position;
         gl_Layer = gl_InvocationID;
         EmitVertex();
     }

@@ -7,7 +7,8 @@ uniform mat4 u_proj_inv;
 out vec2 tex_coords;
 out vec3 view_ray;
 
-void main() {
+void main()
+{
     vec2 vertices[3] = vec2[3](vec2(-1, -1), vec2(3, -1), vec2(-1, 3));
     // Place the triangle vertices at the far plane of the camera for later
     // position reconstruction.

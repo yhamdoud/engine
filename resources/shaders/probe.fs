@@ -14,7 +14,6 @@ uniform sampler3D u_sh_4;
 uniform sampler3D u_sh_5;
 uniform sampler3D u_sh_6;
 
-
 out vec4 frag_color;
 
 void main()
@@ -35,12 +34,9 @@ void main()
     vec3 c7 = vec3(c0.w, c1.w, c2.w);
     vec3 c8 = vec3(c3.w, c4.w, c5.w);
 
-    radiance = c0.rgb * 0.282095f +
-               c1.rgb * 0.488603f * n.y +
-               c2.rgb * 0.488603f * n.z +
-               c3.rgb * 0.488603f * n.x +
-               c4.rgb * 1.092548f * n.x * n.y +
-               c5.rgb * 1.092548f * n.y * n.z +
+    radiance = c0.rgb * 0.282095f + c1.rgb * 0.488603f * n.y +
+               c2.rgb * 0.488603f * n.z + c3.rgb * 0.488603f * n.x +
+               c4.rgb * 1.092548f * n.x * n.y + c5.rgb * 1.092548f * n.y * n.z +
                c6.rgb * 0.315392f * (3.f * n.z * n.z - 1.f) +
                c7.rgb * 1.092548f * n.x * n.z +
                c8.rgb * 0.546274f * (n.x * n.x - n.y * n.y);

@@ -29,71 +29,70 @@ vec4 karis_average(vec4 s0, vec4 s1, vec4 s2, vec4 s3)
     return (w0 * s0 + w1 * s1 + w2 * s2 * w3 * s3) / denom;
 }
 
-vec4 jiminez_13_tap_karis(sampler2D texture, uint level, vec2 tex_coords, vec2 texel_size)
+vec4 jiminez_13_tap_karis(sampler2D tex, uint level, vec2 tex_coords,
+                          vec2 texel_size)
 {
     const float w0 = 0.125;
     const float w1 = 0.5;
 
     return (
         karis_average(
-            textureLod(texture, tex_coords + texel_size * vec2(-2., -2.), level),
-            textureLod(texture, tex_coords + texel_size * vec2( 0., -2.), level),
-            textureLod(texture, tex_coords + texel_size * vec2(-2.,  0.), level),
-            textureLod(texture, tex_coords + texel_size * vec2( 0.,  0.), level)
-        ) * w0 +
+            textureLod(tex, tex_coords + texel_size * vec2(-2., -2.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(0., -2.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(-2., 0.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(0., 0.), level)) *
+            w0 +
         karis_average(
-            textureLod(texture, tex_coords + texel_size * vec2( 0., -2.), level),
-            textureLod(texture, tex_coords + texel_size * vec2( 2., -2.), level),
-            textureLod(texture, tex_coords + texel_size * vec2( 0.,  0.), level),
-            textureLod(texture, tex_coords + texel_size * vec2( 2.,  0.), level)
-        ) * w0 +
+            textureLod(tex, tex_coords + texel_size * vec2(0., -2.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(2., -2.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(0., 0.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(2., 0.), level)) *
+            w0 +
         karis_average(
-            textureLod(texture, tex_coords + texel_size * vec2(-1., -1.), level),
-            textureLod(texture, tex_coords + texel_size * vec2( 1., -1.), level),
-            textureLod(texture, tex_coords + texel_size * vec2(-1.,  1.), level),
-            textureLod(texture, tex_coords + texel_size * vec2( 1.,  1.), level)
-        ) * w1 +
+            textureLod(tex, tex_coords + texel_size * vec2(-1., -1.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(1., -1.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(-1., 1.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(1., 1.), level)) *
+            w1 +
         karis_average(
-            textureLod(texture, tex_coords + texel_size * vec2(-2.,  0.), level),
-            textureLod(texture, tex_coords + texel_size * vec2( 0.,  0.), level),
-            textureLod(texture, tex_coords + texel_size * vec2(-2.,  2.), level),
-            textureLod(texture, tex_coords + texel_size * vec2( 0.,  2.), level)
-        ) * w0 +
+            textureLod(tex, tex_coords + texel_size * vec2(-2., 0.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(0., 0.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(-2., 2.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(0., 2.), level)) *
+            w0 +
         karis_average(
-            textureLod(texture, tex_coords + texel_size * vec2( 0.,  0.), level),
-            textureLod(texture, tex_coords + texel_size * vec2( 2.,  0.), level),
-            textureLod(texture, tex_coords + texel_size * vec2( 0.,  2.), level),
-            textureLod(texture, tex_coords + texel_size * vec2( 2.,  2.), level)
-        ) * w0
-    );
+            textureLod(tex, tex_coords + texel_size * vec2(0., 0.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(2., 0.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(0., 2.), level),
+            textureLod(tex, tex_coords + texel_size * vec2(2., 2.), level)) *
+            w0);
 }
 
 // http://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare
 // http://advances.realtimerendering.com/s2014/#_NEXT_GENERATION_POST
-vec4 jiminez_13_tap(sampler2D texture, uint level, vec2 tex_coords, vec2 texel_size)
+vec4 jiminez_13_tap(sampler2D tex, uint level, vec2 coords, vec2 texel_size)
 {
     const float w0 = 0.125 / 4.;
     const float w1 = 0.5 / 4.;
 
     return (
-        textureLod(texture, tex_coords + texel_size * vec2(-2., -2.), level) * w0 + 
-        textureLod(texture, tex_coords + texel_size * vec2( 0., -2.), level) * w0 * 2 + 
-        textureLod(texture, tex_coords + texel_size * vec2( 2., -2.), level) * w0 + 
+        textureLod(tex, coords + texel_size * vec2(-2., -2.), level) * w0 +
+        textureLod(tex, coords + texel_size * vec2(0., -2.), level) * w0 * 2 +
+        textureLod(tex, coords + texel_size * vec2(2., -2.), level) * w0 +
 
-        textureLod(texture, tex_coords + texel_size * vec2(-1., -1.), level) * w1 + 
-        textureLod(texture, tex_coords + texel_size * vec2( 1., -1.), level) * w1 + 
+        textureLod(tex, coords + texel_size * vec2(-1., -1.), level) * w1 +
+        textureLod(tex, coords + texel_size * vec2(1., -1.), level) * w1 +
 
-        textureLod(texture, tex_coords + texel_size * vec2(-2.,  0.), level) * w0 * 2. + 
-        textureLod(texture, tex_coords, level)                               * w0 * 4. +
-        textureLod(texture, tex_coords + texel_size * vec2( 2.,  0.), level) * w0 * 2. + 
+        textureLod(tex, coords + texel_size * vec2(-2., 0.), level) * w0 * 2. +
+        textureLod(tex, coords, level) * w0 * 4. +
+        textureLod(tex, coords + texel_size * vec2(2., 0.), level) * w0 * 2. +
 
-        textureLod(texture, tex_coords + texel_size * vec2(-1.,  1.), level) * w1 + 
-        textureLod(texture, tex_coords + texel_size * vec2( 1.,  1.), level) * w1 + 
+        textureLod(tex, coords + texel_size * vec2(-1., 1.), level) * w1 +
+        textureLod(tex, coords + texel_size * vec2(1., 1.), level) * w1 +
 
-        textureLod(texture, tex_coords + texel_size * vec2(-2.,  2.), level) * w0 + 
-        textureLod(texture, tex_coords + texel_size * vec2( 0.,  2.), level) * w0 * 2 + 
-        textureLod(texture, tex_coords + texel_size * vec2( 2.,  2.), level) * w0
-    );
+        textureLod(tex, coords + texel_size * vec2(-2., 2.), level) * w0 +
+        textureLod(tex, coords + texel_size * vec2(0., 2.), level) * w0 * 2 +
+        textureLod(tex, coords + texel_size * vec2(2., 2.), level) * w0);
 }
 
 void main()
@@ -107,9 +106,10 @@ void main()
     const vec2 tex_coords = (vec2(g_id) + vec2(0.5)) / vec2(target_size);
     const vec2 texel_size = vec2(1.0) / vec2(source_size);
 
-    const vec4 value = u_level == 0
-        ? jiminez_13_tap_karis(u_source, u_level, tex_coords, texel_size)
-        : jiminez_13_tap(u_source, u_level, tex_coords, texel_size);
+    const vec4 value =
+        u_level == 0
+            ? jiminez_13_tap_karis(u_source, u_level, tex_coords, texel_size)
+            : jiminez_13_tap(u_source, u_level, tex_coords, texel_size);
 
     imageStore(u_target, ivec2(g_id), value);
 }

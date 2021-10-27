@@ -26,36 +26,34 @@ void main()
     // Perform bilinear samples and store them in shared memory.
     // TODO: Is this really faster than the naive approach? Benchmark it!
 
-    // The target texture is a quarter of the source resolution so we are 
+    // The target texture is a quarter of the source resolution so we are
     // already sampling inbetween the texels, we just have to add texel offsets
     // to sample the corners.
 
     // Sample top left corner.
-    tmp[l_id.x][l_id.y] =  textureLod(u_source, tex_coords - texel_size, u_level);
+    tmp[l_id.x][l_id.y] =
+        textureLod(u_source, tex_coords - texel_size, u_level);
 
     if (l_id.x == work_group_size.x - 1)
         // Sample top right corner.
-        tmp[l_id.x + 1][l_id.y] = textureLod(u_source, tex_coords + vec2(texel_size.x, -texel_size.y), u_level);
+        tmp[l_id.x + 1][l_id.y] = textureLod(
+            u_source, tex_coords + vec2(texel_size.x, -texel_size.y), u_level);
 
     if (l_id.y == work_group_size.y - 1)
         // Sample bottom left corner.
-        tmp[l_id.x][l_id.y + 1] = textureLod(u_source, tex_coords + vec2(-texel_size.x, texel_size.y), u_level);
+        tmp[l_id.x][l_id.y + 1] = textureLod(
+            u_source, tex_coords + vec2(-texel_size.x, texel_size.y), u_level);
 
     if (l_id.x == work_group_size.x - 1 && l_id.y == work_group_size.y - 1)
         // Sample bottom right corner.
-        tmp[l_id.x + 1][l_id.y + 1] = textureLod(u_source, tex_coords + texel_size, u_level);
+        tmp[l_id.x + 1][l_id.y + 1] =
+            textureLod(u_source, tex_coords + texel_size, u_level);
 
     barrier();
 
-    imageStore(
-        u_target,
-        ivec2(g_id), 
-        // 16-texel average downsampling filter.
-        (
-            tmp[l_id.x][l_id.y] +
-            tmp[l_id.x + 1][l_id.y] +
-            tmp[l_id.x][l_id.y + 1] +
-            tmp[l_id.x + 1][l_id.y + 1]
-        ) / 4
-    );
+    imageStore(u_target, ivec2(g_id),
+               // 16-texel average downsampling filter.
+               (tmp[l_id.x][l_id.y] + tmp[l_id.x + 1][l_id.y] +
+                tmp[l_id.x][l_id.y + 1] + tmp[l_id.x + 1][l_id.y + 1]) /
+                   4);
 }

@@ -1,9 +1,9 @@
 #version 460 core
 
-layout (location = 0) in vec3 a_position;
-layout (location = 1) in vec3 a_normal;
-layout (location = 2) in vec2 a_tex_coords;
-layout (location = 3) in vec4 a_tangent;
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec2 a_tex_coords;
+layout(location = 3) in vec4 a_tangent;
 
 uniform mat4 u_model;
 uniform mat4 u_mvp;
@@ -20,7 +20,8 @@ out Varying
     vec4 light_space_pos;
     vec4 position;
     vec4 position_prev;
-} vs_out;
+}
+vs_out;
 
 void main()
 {

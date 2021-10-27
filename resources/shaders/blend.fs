@@ -11,11 +11,11 @@ in vec2 tex_coords;
 
 uniform bool u_correct;
 
-layout (binding = 0) uniform sampler2D u_g_normal_metallic;
-layout (binding = 1) uniform sampler2D u_g_base_color_roughness;
-layout (binding = 2) uniform sampler2D u_texture;
+layout(binding = 0) uniform sampler2D u_g_normal_metallic;
+layout(binding = 1) uniform sampler2D u_g_base_color_roughness;
+layout(binding = 2) uniform sampler2D u_texture;
 
-layout (location = 0) out vec4 frag_color;
+layout(location = 0) out vec4 frag_color;
 
 void main()
 {
@@ -31,9 +31,7 @@ void main()
 
     float n_dot_v = p.a;
 
-    vec3 F = u_correct
-        ? F_Schlick_roughness(n_dot_v, f0, roughness)
-        : vec3(1.);
+    vec3 F = u_correct ? F_Schlick_roughness(n_dot_v, f0, roughness) : vec3(1.);
 
     frag_color = textureLod(u_texture, tex_coords, 0).a * vec4(F * p.rgb, 1.);
 }

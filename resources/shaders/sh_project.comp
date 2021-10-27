@@ -2,7 +2,7 @@
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout (binding = 0, rgba16f) uniform readonly imageCube radiance_map;
+layout(binding = 0, rgba16f) uniform readonly imageCube radiance_map;
 
 layout(std430, binding = 1) writeonly buffer buf { vec4 coefs[96][7]; };
 
@@ -10,7 +10,6 @@ const uint work_group_size = gl_WorkGroupSize.x * gl_WorkGroupSize.y;
 shared vec4 sh[work_group_size][7];
 
 uniform float u_weight_sum;
-
 
 void project(vec3 n, in vec3 color, out vec4 sh[7])
 {
@@ -40,10 +39,13 @@ void project(vec3 n, in vec3 color, out vec4 sh[7])
 
 void main()
 {
-    const vec3 radiance = imageLoad(radiance_map, ivec3(gl_GlobalInvocationID)).rgb;
+    const vec3 radiance =
+        imageLoad(radiance_map, ivec3(gl_GlobalInvocationID)).rgb;
 
     // Texture coordinates in [-1, 1] range.
-    vec2 coords = (gl_GlobalInvocationID.xy + vec2(0.5f)) / imageSize(radiance_map) * 2.f - vec2(1.f);
+    vec2 coords = (gl_GlobalInvocationID.xy + vec2(0.5f)) /
+                      imageSize(radiance_map) * 2.f -
+                  vec2(1.f);
 
     float tmp = 1 + coords.s * coords.s + coords.t * coords.t;
     // Differential solid angle.
@@ -51,22 +53,29 @@ void main()
 
     vec3 s;
 
-    // Convert a texture coordinates to a normalized vector poinitng to the corresponding texel in world space.
+    // Convert a texture coordinates to a normalized vector poinitng to the
+    // corresponding texel in world space.
     // https://www.khronos.org/opengl/wiki/Cubemap_Texture#Upload_and_orientation
     switch (gl_GlobalInvocationID.z)
     {
     case 0:
-        s = vec3(1.0f, -coords.t, -coords.s); break;
+        s = vec3(1.0f, -coords.t, -coords.s);
+        break;
     case 1:
-        s = vec3(-1.0f, -coords.t, coords.s); break;
+        s = vec3(-1.0f, -coords.t, coords.s);
+        break;
     case 2:
-        s = vec3(coords.s, 1.0f, coords.t); break;
+        s = vec3(coords.s, 1.0f, coords.t);
+        break;
     case 3:
-        s = vec3(coords.s, -1.0f, -coords.t); break;
+        s = vec3(coords.s, -1.0f, -coords.t);
+        break;
     case 4:
-        s = vec3(coords.s, -coords.t, 1.0f); break;
+        s = vec3(coords.s, -coords.t, 1.0f);
+        break;
     case 5:
-        s = vec3(coords.s, -coords.t, -1.0f); break;
+        s = vec3(coords.s, -coords.t, -1.0f);
+        break;
     }
 
     s = normalize(s);
@@ -81,15 +90,16 @@ void main()
         if (gl_LocalInvocationIndex < stride)
         {
             for (uint i = 0; i < 7; i++)
-                sh[gl_LocalInvocationIndex][i] += sh[gl_LocalInvocationIndex + stride][i];
+                sh[gl_LocalInvocationIndex][i] +=
+                    sh[gl_LocalInvocationIndex + stride][i];
         }
     }
 
     if (gl_LocalInvocationIndex == 0)
     {
-        uint offset = gl_WorkGroupID.x +
-                         gl_WorkGroupID.y * gl_NumWorkGroups.x +
-                      gl_WorkGroupID.z * gl_NumWorkGroups.x * gl_NumWorkGroups.y;
+        uint offset =
+            gl_WorkGroupID.x + gl_WorkGroupID.y * gl_NumWorkGroups.x +
+            gl_WorkGroupID.z * gl_NumWorkGroups.x * gl_NumWorkGroups.y;
 
         for (uint i = 0; i < 7; i++)
             coefs[offset][i] = u_weight_sum * sh[0][i];

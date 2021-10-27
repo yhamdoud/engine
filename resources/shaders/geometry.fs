@@ -9,9 +9,9 @@
 // TODO: Use this when when using hardware depth buffer.
 // layout(early_fragment_tests) in;
 
-layout (location = 0) out vec4 g_normal_metallic;
-layout (location = 1) out vec4 g_base_color_roughness;
-layout (location = 2) out vec4 g_velocity;
+layout(location = 0) out vec4 g_normal_metallic;
+layout(location = 1) out vec4 g_base_color_roughness;
+layout(location = 2) out vec4 g_velocity;
 
 uniform vec3 u_light_pos;
 uniform mat3 u_normal_mat;
@@ -43,7 +43,8 @@ in Varying
     vec4 light_space_pos;
     vec4 position;
     vec4 position_prev;
-} fs_in;
+}
+fs_in;
 
 mat3 calculate_tbn_matrix(vec4 tangent_sign, vec3 normal)
 {
@@ -74,10 +75,12 @@ void main()
     if (u_use_normal)
     {
         mat3 tbn = calculate_tbn_matrix(fs_in.tangent, fs_in.normal);
-        vec3 normal_tangent = vec3(texture(u_normal, fs_in.tex_coords).xy * 2. -1., 0);
+        vec3 normal_tangent =
+            vec3(texture(u_normal, fs_in.tex_coords).xy * 2. - 1., 0);
         // Reconstruct z-component of normal.
         // TODO: Maybe disable this when loading uncompressed textures.
-        normal_tangent.z = sqrt(saturate(1. - dot(normal_tangent.xy, normal_tangent.xy)));
+        normal_tangent.z =
+            sqrt(saturate(1. - dot(normal_tangent.xy, normal_tangent.xy)));
 
         g_normal_metallic.xyz = normalize(tbn * normal_tangent);
     }
@@ -91,14 +94,16 @@ void main()
 
     if (u_use_metallic_roughness)
     {
-        vec2 metallic_roughness = texture(u_metallic_roughness, fs_in.tex_coords).bg;
+        vec2 metallic_roughness =
+            texture(u_metallic_roughness, fs_in.tex_coords).bg;
 
         g_normal_metallic.a *= metallic_roughness[0];
         g_base_color_roughness.a *= metallic_roughness[1];
     }
 
     vec3 pos = (fs_in.position.xyz / fs_in.position.w) * 0.5 + 0.5;
-    vec3 pos_prev = (fs_in.position_prev.xyz / fs_in.position_prev.w) * 0.5 + 0.5;
+    vec3 pos_prev =
+        (fs_in.position_prev.xyz / fs_in.position_prev.w) * 0.5 + 0.5;
 
     vec2 velocity = pos.xy - pos_prev.xy;
     g_velocity = vec4(velocity, 0., 1.);

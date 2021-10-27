@@ -14,25 +14,28 @@ void swap(inout float a, inout float b)
     b = t;
 }
 
-float luma(vec3 c)
-{
-    return dot(c, vec3(0.2126, 0.7152, 0.0722));
-}
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
-float luma(vec4 c)
-{
-    return luma(vec3(c));
-}
+float luma(vec4 c) { return luma(vec3(c)); }
 
-float saturate(float x)
-{
-    return clamp(x, 0., 1.);
-}
+float saturate(float x) { return clamp(x, 0., 1.); }
+
+vec3 saturate(vec3 x) { return clamp(x, 0., 1.); }
 
 float distance_squared(vec2 a, vec2 b)
 {
     a -= b;
     return dot(a, a);
+}
+
+vec2 calc_tex_coords(ivec2 index, ivec2 size)
+{
+    return (vec2(index) + 0.5) / vec2(size);
+}
+
+vec2 calc_tex_coords(uvec2 index, uvec2 size)
+{
+    return (vec2(index) + 0.5) / vec2(size);
 }
 
 #endif

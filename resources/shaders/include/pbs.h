@@ -29,15 +29,13 @@ vec3 F_Schlick(float u, vec3 f0)
 }
 
 // Source: https://google.github.io/filament
-float Fd_Lambert()
-{
-    return 1.0 / PI;
-}
+float Fd_Lambert() { return 1.0 / PI; }
 
 // Source: https://seblagarde.wordpress.com/2011/08/17/hello-world/
 vec3 F_Schlick_roughness(float u, vec3 f0, float roughness)
 {
-    return f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(clamp(1.0 - u, 0.0, 1.0), 5.0);
-}   
+    return f0 +
+           (max(vec3(1.0 - roughness), f0) - f0) * pow(saturate(1.0 - u), 5.0);
+}
 
 #endif
