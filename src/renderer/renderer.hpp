@@ -149,8 +149,9 @@ class Renderer
 
     Renderer(glm::ivec2 viewport_size, glm::vec3 camera_position,
              glm::vec3 camera_look);
-    ~Renderer();
 
+    // TODO: Build a destruction queue. OS takes cares of this for now...
+    ~Renderer() = default;
     Renderer(const Renderer &) = delete;
     Renderer &operator=(const Renderer &) = delete;
     Renderer(Renderer &&) = delete;
