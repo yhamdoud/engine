@@ -23,6 +23,7 @@ set(GLFW_DIR "${EXTERN_DIR}/glfw")
 set(GLM_DIR "${EXTERN_DIR}/glm")
 set(GLI_DIR "${EXTERN_DIR}/gli")
 set(CXXOPTS_DIR "${EXTERN_DIR}/cxxopts")
+set(IMGUIZMO_DIR "${EXTERN_DIR}/ImGuizmo")
 
 file(GLOB_RECURSE SRC_FILES "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.hpp")
 add_executable(${PROJECT_NAME} ${SRC_FILES})
@@ -74,3 +75,10 @@ include_directories(${GLI_DIR})
 ## cxxopts
 add_subdirectory(${CXXOPTS_DIR})
 target_link_libraries(${PROJECT_NAME} PRIVATE cxxopts)
+
+## ImGuizmo
+file(GLOB IMGUIZMO_SOURCES ${IMGUIZMO_DIR}/*.cpp)
+add_library(imguizmo ${IMGUIZMO_SOURCES})
+target_include_directories(imguizmo PUBLIC ${IMGUIZMO_DIR})
+target_link_libraries(imguizmo PUBLIC imgui)
+target_link_libraries(${PROJECT_NAME} PRIVATE imguizmo)

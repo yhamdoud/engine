@@ -1,21 +1,29 @@
-#include <glad/glad.h>
+#include <glm/ext.hpp>
 #include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
 #include <Tracy.hpp>
-#include <TracyOpenGL.hpp>
+
+#include <ImGuizmo.h>
 
 #include "editor.hpp"
-#include "glm/geometric.hpp"
 #include "profiler.hpp"
 
 using namespace engine;
 using namespace std;
 using namespace glm;
 using namespace fmt;
+
+void Gizmo::draw(const mat4 &view, const mat4 proj, mat4 &matrix)
+{
+    ImGuizmo::Manipulate(
+        value_ptr(view), value_ptr(proj), ImGuizmo::OPERATION::TRANSLATE,
+        ImGuizmo::MODE::LOCAL, value_ptr(matrix), nullptr,
+        do_snap ? snap.data() : nullptr, bound_sizing ? bounds.data() : nullptr,
+        bound_sizing_snap ? bounds_snap.data() : nullptr);
+}
 
 Editor::~Editor()
 {
@@ -42,6 +50,7 @@ void Editor::draw()
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+    ImGuizmo::BeginFrame();
 
     draw_profiler();
     draw_scene_menu();
@@ -91,6 +100,21 @@ void Editor::draw_scene_menu()
 
             ImGui::Separator();
         }
+    }
+
+    ImGui::Separator();
+
+    const ImGuiIO &io = ImGui::GetIO();
+    ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+
+    {
+        auto &light = renderer.ctx_r.lights[0];
+        mat4 matrix(1.f);
+        matrix[3] = vec4(light.position, 1.f);
+
+        gizmo.draw(renderer.ctx_v.view, renderer.ctx_v.proj, matrix);
+
+        light.position = vec3(matrix[3]);
     }
 
     ImGui::End();
