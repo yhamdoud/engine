@@ -39,6 +39,7 @@ struct Light
 {
     glm::vec3 position;
     glm::vec3 color;
+    float intensity;
 };
 
 struct ViewportContext
@@ -53,6 +54,7 @@ struct ViewportContext
     glm::mat4 proj_inv;
     glm::mat4 view;
     glm::mat4 view_inv;
+    glm::mat4 view_proj;
     glm::mat4 view_proj_prev;
     float near = 0;
     float far = 0;
@@ -78,7 +80,7 @@ struct RenderContext
     glm::vec3 grid_dims;
     std::span<uint, 7> sh_texs;
     std::vector<glm::vec3> probes;
-    size_t probe_mesh_idx;
+    size_t sphere_mesh_idx;
     float dt;
     Buffer vertex_buf;
     Buffer index_buf;

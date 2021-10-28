@@ -64,9 +64,9 @@ class Renderer
             .direction = glm::normalize(glm::vec3{0.03f, -0.8f, 0.5f}),
         },
         .lights{
-            Light{glm::vec3{0, 3, 3}, glm::vec3{0., 0., 0.}},
-            Light{glm::vec3{0, 3, 3}, glm::vec3{0., 0., 0.}},
-            Light{glm::vec3{3, 3, 3}, glm::vec3{0., 0., 0.}},
+            Light{glm::vec3{-5, 0, 0}, glm::vec3{1., 1., 0.}, 2.f},
+            Light{glm::vec3{0, 0, 5}, glm::vec3{0., 1., 0.}, 5.f},
+            Light{glm::vec3{5, 0, 0}, glm::vec3{0., 1., 1.}, 8.f},
         },
         .sh_texs = std::span<uint, 7>{probe_buf.front(), 7},
         .vertex_buf{32'000 * sizeof(Vertex), 0},
@@ -145,7 +145,8 @@ class Renderer
         .max_log_luminance = 2.f,
         .exposure_adjust_speed = 1.1f,
         .target_luminance = 0.2f,
-    }}; // namespace engine
+        .auto_exposure = true,
+    }};
 
     Renderer(glm::ivec2 viewport_size, glm::vec3 camera_position,
              glm::vec3 camera_look);

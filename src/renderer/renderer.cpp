@@ -147,9 +147,9 @@ Renderer::Renderer(glm::ivec2 viewport_size, glm::vec3 camera_position,
         logger.error("Main viewport frame buffer incomplete.");
 
     // Setup state for displaying probe.
-    GltfImporter importer{models_path / "sphere.glb", *this};
+    GltfImporter importer{models_path / "sphere.gltf", *this};
     importer.import();
-    ctx_r.probe_mesh_idx = importer.models[0].mesh_index;
+    ctx_r.sphere_mesh_idx = importer.models[0].mesh_index;
 
     shadow.initialize(ctx_v);
     geometry.initialize(ctx_v);
@@ -369,6 +369,7 @@ void Renderer::render(float dt, std::vector<Entity> queue)
     ctx_v.proj_inv = inverse(ctx_v.proj);
     ctx_v.view = camera.get_view();
     ctx_v.view_inv = glm::inverse(ctx_v.view);
+    ctx_v.view_proj = ctx_v.proj * ctx_v.view;
 
     ctx_r.queue = std::move(queue);
     ctx_r.dt = dt;
@@ -450,7 +451,7 @@ void Renderer::render(float dt, std::vector<Entity> queue)
         tone_map.render(ctx_v, ctx_r);
     }
 
-    ctx_v.view_proj_prev = ctx_v.proj * ctx_v.view;
+    ctx_v.view_proj_prev = ctx_v.view_proj;
 }
 
 void Renderer::resize_viewport(glm::vec2 size)

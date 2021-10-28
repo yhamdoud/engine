@@ -58,6 +58,7 @@ class ToneMapPass
         float max_log_luminance;
         float exposure_adjust_speed;
         float target_luminance;
+        bool auto_exposure;
     };
 
     Params params;

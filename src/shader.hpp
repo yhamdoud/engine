@@ -42,6 +42,7 @@ class Shader
     uint id;
     static UniformMap parse_uniforms(uint program);
     static uint compile_shader_stage(std::string source,
+                                     std::filesystem::path path,
                                      const std::string &defines, GLenum stage);
 
   public:

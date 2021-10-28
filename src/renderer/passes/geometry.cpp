@@ -117,7 +117,7 @@ void GeometryPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     for (auto &r : ctx_r.queue)
     {
         const auto model_view = ctx_v.view * r.model;
-        const auto mvp = ctx_v.proj * model_view;
+        const auto mvp = ctx_v.view_proj * r.model;
         const auto mvp_prev = ctx_v.view_proj_prev * r.model;
 
         shader.set("u_mvp", mvp);

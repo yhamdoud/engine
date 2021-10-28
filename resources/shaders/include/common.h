@@ -38,4 +38,45 @@ vec2 calc_tex_coords(uvec2 index, uvec2 size)
     return (vec2(index) + 0.5) / vec2(size);
 }
 
+vec3 pos_from_depth(float depth, vec2 tex_coords, mat4 proj_inv)
+{
+    vec4 pos_ndc = vec4(tex_coords * 2. - 1., 0., 1.);
+    vec4 pos_view = proj_inv * pos_ndc;
+
+    return vec3(pos_view.xy / pos_view.z, 1.) * depth;
+}
+
+void decode_g_buf(vec2 tex_coords, sampler2D normal_metallic,
+                  sampler2D base_color_roughness, out vec3 normal,
+                  out float metallic, out vec3 base_color, out float roughness)
+{
+    vec4 n_m = texture(normal_metallic, tex_coords);
+    normal = n_m.rgb;
+    metallic = n_m.a;
+
+    vec4 bc_r = texture(base_color_roughness, tex_coords);
+    base_color = bc_r.rgb;
+    roughness = bc_r.a;
+}
+
+void decode_g_buf(vec2 tex_coords, sampler2D depth_tex,
+                  sampler2D normal_metallic, sampler2D base_color_roughness,
+                  out float depth, out vec3 normal, out float metallic,
+                  out vec3 base_color, out float roughness)
+{
+    depth = texture(depth_tex, tex_coords).r;
+
+    decode_g_buf(tex_coords, normal_metallic, base_color_roughness, normal,
+                 metallic, base_color, roughness);
+}
+
+void decode_material(vec3 base_color, float metallic, out vec3 diffuse_color,
+                     out vec3 f0)
+{
+    // Non-metals have achromatic specular reflectance, metals use base color as
+    // the specular color.
+    diffuse_color = (1.0 - metallic) * base_color.rgb;
+    f0 = mix(vec3(0.04), base_color, metallic);
+}
+
 #endif

@@ -2,33 +2,16 @@
 
 #ifdef VALIDATOR
 #extension GL_GOOGLE_include_directive : require
-#define CASCADE_COUNT 3
+#define CASCADE_COUNT 1
 #endif
 
 #include "/include/common.h"
 #include "/include/pbs.h"
 #include "/include/shadow.h"
+#include "/include/uniforms.h"
 
 in vec2 tex_coords;
 in vec3 view_ray;
-
-struct LightingUniforms
-{
-    mat4 proj;
-    mat4 view_inv;
-    mat4 inv_grid_transform;
-    float leak_offset;
-    bool indirect_lighting;
-    bool direct_lighting;
-    bool base_color;
-    bool color_cascades;
-    bool filter_shadows;
-    bool reflections;
-    bool ambient_occlusion;
-    vec3 grid_dims;
-    vec3 light_intensity;
-    vec3 light_direction;
-};
 
 layout(std140, binding = 0) uniform Uniform { LightingUniforms u; };
 
@@ -106,40 +89,6 @@ float calculate_shadow(vec4 light_pos, uint cascade_idx, vec3 normal,
     return shadow;
 }
 
-vec3 brdf(vec3 v, vec3 l, vec3 n, vec3 diffuse_color, vec3 f0, float roughness)
-{
-    const vec3 h = normalize(v + l);
-
-    const float n_dot_v = abs(dot(n, v)) + 1e-5;
-    const float n_dot_l = saturate(dot(n, l));
-    const float n_dot_h = saturate(dot(n, h));
-    const float l_dot_h = saturate(dot(l, h));
-
-    const float a = roughness * roughness;
-    // Clamp roughness to prevent NaN fragments.
-    const float a2 = max(0.01, a * a);
-
-    const float D = D_GGX(n_dot_h, a2);
-    const vec3 F = F_Schlick(l_dot_h, f0);
-    const float V = V_SmithGGXCorrelated(n_dot_v, n_dot_l, a2);
-
-    // Specular BRDF component.
-    // V already contains the denominator from Cook-Torrance.
-    vec3 Fr = D * V * F;
-
-    // Diffuse BRDF component.
-    vec3 Fd = diffuse_color * Fd_Lambert();
-    vec3 Fin = F_Schlick(n_dot_l, f0);
-    vec3 Fout = F_Schlick(n_dot_v, f0);
-
-    // TODO: Energy conserving but causes artifacts at edges.
-    // https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#coupling-diffuse-and-specular-reflection
-    // https://computergraphics.stackexchange.com/questions/2285/how-to-properly-combine-the-diffuse-and-specular-terms
-    // return ((1 - Fin) * (1 - Fout) * Fd + Fr) * NoL;
-
-    return (Fd + Fr) * n_dot_l;
-}
-
 vec3 calculate_indirect_lighting(vec3 pos, vec3 n)
 {
     vec3 pos_world = (u.view_inv * vec4(pos, 1.f)).xyz;
@@ -181,30 +130,24 @@ vec3 calculate_indirect_lighting(vec3 pos, vec3 n)
 
 void main()
 {
-    // TODO: Differentiate between point and directional point_lights.
-    vec4 base_color_roughness = texture(u_g_base_color_roughness, tex_coords);
+    float depth;
+    vec3 base_color;
+    float roughness;
+    vec3 n;
+    float metallic;
 
-    vec3 base_color = (u.base_color) ? base_color_roughness.rgb : vec3(1.);
+    decode_g_buf(tex_coords, u_g_depth, u_g_normal_metallic,
+                 u_g_base_color_roughness, depth, n, metallic, base_color,
+                 roughness);
 
-    float roughness = base_color_roughness.a;
+    vec3 diffuse_color;
+    vec3 f0;
 
-    vec4 normal_metallic = texture(u_g_normal_metallic, tex_coords);
-    vec3 n = normal_metallic.rgb;
-    float metallic = normal_metallic.a;
+    decode_material(base_color, metallic, diffuse_color, f0);
 
-    // View space position.
-    vec3 pos =
-        view_ray * linearize_depth(texture(u_g_depth, tex_coords).r, u.proj);
+    vec3 pos = view_ray * linearize_depth(depth, u.proj);
     vec3 v = normalize(-pos);
 
-    // Non-metals have achromatic specular reflectance, metals use base color
-    // as the specular color.
-    vec3 diffuse_color = (1.0 - metallic) * base_color.rgb;
-
-    // TODO: More physically accurate way to calculate?
-    vec3 f0 = mix(vec3(0.04), base_color, metallic);
-
-    // Luminance or radiance?
     vec3 out_luminance = vec3(0.);
 
     uint cascade_idx = calculate_cascade_index(pos, u_cascade_distances);

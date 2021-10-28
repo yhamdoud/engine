@@ -57,6 +57,8 @@ void ProbeViewport::render(RenderContext &ctx_r)
         glNamedFramebufferTextureLayer(ctx.hdr_frame_buf, GL_COLOR_ATTACHMENT0,
                                        ctx.hdr_tex, 0, face_idx);
         ctx.view = views[face_idx];
+        ctx.view_inv = glm::inverse(ctx.view);
+        ctx.view_proj = ctx.proj * ctx.view;
 
         shadow.render(ctx, ctx_r);
         geometry.render(ctx, ctx_r);

@@ -55,14 +55,17 @@ void ToneMapPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     glBindTextureUnit(2, ctx_v.hdr_tex);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, luminance_buf);
 
-    uvec2 group_count = (ctx_v.size + group_size - 1) / group_size;
-    glUseProgram(histogram_shader.get_id());
-    glDispatchCompute(group_count.x, group_count.y, 1u);
+    if (params.auto_exposure)
+    {
+        uvec2 group_count = (ctx_v.size + group_size - 1) / group_size;
+        glUseProgram(histogram_shader.get_id());
+        glDispatchCompute(group_count.x, group_count.y, 1u);
 
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-    glUseProgram(reduction_shader.get_id());
-    glDispatchCompute(1u, 1u, 1u);
+        glUseProgram(reduction_shader.get_id());
+        glDispatchCompute(1u, 1u, 1u);
+    }
 
     glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.ldr_frame_buf);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

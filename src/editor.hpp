@@ -15,6 +15,7 @@ class Editor
     glm::vec3 light_dir{0.f, -1.f, 1.f};
 
     void draw_profiler();
+    void draw_scene_menu();
     void draw_renderer_menu();
 
   public:

@@ -27,6 +27,7 @@ https://user-images.githubusercontent.com/18217298/137032993-6adf4c04-9362-4703-
 -   Volumetric lighting
 -   Motion blur
 -   Directional and point lights
+-   Light bounding volumes
 -   Normal mapping
 -   Skyboxes
 
@@ -47,7 +48,6 @@ https://user-images.githubusercontent.com/18217298/137032993-6adf4c04-9362-4703-
 
 -   TAA
 -   Reflection probes
--   Light volumes
 
 ## Building
 
@@ -111,6 +111,10 @@ The G-buffer consists of the following render targets:
     -   RG: Velocity
     -   BA: Unused
 -   Depth buffer
+
+The directional light is rendered in a full screen pass.
+Effects like SSR and SSAO are also composited during this pass.
+Point light rendering is optimized using bounding volume to only shade fragments that fall in the range of the light.
 
 ### Physically based shading
 

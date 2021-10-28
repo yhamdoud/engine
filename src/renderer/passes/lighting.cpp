@@ -1,8 +1,11 @@
+#include <cmath>
+
 #include <Tracy.hpp>
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
 
 #include "constants.hpp"
+#include "glm/ext/scalar_constants.hpp"
 #include "lighting.hpp"
 #include "logger.hpp"
 #include "model.hpp"
@@ -44,6 +47,12 @@ void LightingPass::parse_parameters()
     };
 }
 
+static float light_radius_squared(const Light &l, float eps)
+{
+    const float luminance = l.intensity * compMax(l.color);
+    return luminance / eps;
+}
+
 void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 {
     ZoneScoped;
@@ -59,6 +68,7 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     uniforms.light_intensity = ctx_r.sun.intensity * ctx_r.sun.color;
     uniforms.light_direction =
         vec3{ctx_v.view * vec4{ctx_r.sun.direction, 0.f}};
+    uniforms.proj_inv = ctx_v.proj_inv;
 
     glNamedBufferSubData(uniform_buf, 0, sizeof(Uniforms), &uniforms);
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buf);
@@ -87,9 +97,44 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
         lighting_shader.set("u_cascade_distances[0]",
                             span(ctx_v.cascade_distances));
 
+    glDisable(GL_DEPTH_TEST);
+
     glViewport(0, 0, ctx_v.size.x, ctx_v.size.y);
     glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.hdr_frame_buf);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
     glUseProgram(lighting_shader.get_id());
     glDrawArrays(GL_TRIANGLES, 0, 3);
+
+    glUseProgram(point_light_shader.get_id());
+
+    point_light_shader.set("u_view", ctx_v.view);
+
+    glCullFace(GL_FRONT);
+    glEnable(GL_BLEND);
+    glBlendEquation(GL_FUNC_ADD);
+    glBlendFunc(GL_ONE, GL_ONE);
+
+    // TODO: instancing
+    if (params.direct_lighting)
+    {
+        for (const auto &light : ctx_r.lights)
+        {
+            const float radius_squared = light_radius_squared(light, 0.01f);
+
+            point_light_shader.set("u_view_proj", ctx_v.view_proj);
+            point_light_shader.set("u_light.position", light.position);
+            point_light_shader.set("u_light.color",
+                                   light.intensity * light.color);
+            point_light_shader.set("u_light.radius", sqrt(radius_squared));
+            point_light_shader.set("u_light.radius_squared", radius_squared);
+
+            Renderer::render_mesh_instance(
+                ctx_r.mesh_instances[ctx_r.sphere_mesh_idx]);
+        }
+    }
+
+    glDisable(GL_BLEND);
+    glCullFace(GL_BACK);
+    glEnable(GL_DEPTH_TEST);
 }

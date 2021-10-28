@@ -98,6 +98,7 @@ int main(int argc, char **argv)
     // path model = models_path / "bistro/gltf/bistro.gltf";
     // path model = models_path / "avocado.glb";
     // path model = models_path / "boom_box.glb";
+    // path model = models_path / "plane.glb";
 
     {
         GltfImporter importer(model, renderer);

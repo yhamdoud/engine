@@ -1,5 +1,7 @@
 #pragma once
 
+#include <fmt/format.h>
+
 #include "renderer/context.hpp"
 #include "renderer/pass.hpp"
 
@@ -11,6 +13,7 @@ class LightingPass
     struct Uniforms
     {
         glm::mat4 proj;
+        glm::mat4 proj_inv;
         glm::mat4 view_inv;
         glm::mat4 inv_grid_transform;
         float leak_offset;
@@ -44,6 +47,11 @@ class LightingPass
     };
 
     Shader lighting_shader;
+
+    Shader point_light_shader = *Shader::from_paths(ShaderPaths{
+        .vert = shaders_path / "point_light.vs",
+        .frag = shaders_path / "point_light.fs",
+    });
 
     Uniforms uniforms;
     uint uniform_buf;

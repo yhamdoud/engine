@@ -11,12 +11,11 @@
 #include "editor.hpp"
 #include "glm/geometric.hpp"
 #include "profiler.hpp"
-#include "renderer/passes/tone_map.hpp"
-#include "renderer/passes/volumetric.hpp"
 
 using namespace engine;
 using namespace std;
 using namespace glm;
+using namespace fmt;
 
 Editor::~Editor()
 {
@@ -45,6 +44,7 @@ void Editor::draw()
     ImGui::NewFrame();
 
     draw_profiler();
+    draw_scene_menu();
     draw_renderer_menu();
 
     ImGui::Render();
@@ -67,6 +67,32 @@ void Editor::draw_profiler()
                         static_cast<float>(profiler_zone_time(i)) / 1e6);
         }
     }
+    ImGui::End();
+}
+
+void Editor::draw_scene_menu()
+{
+    ImGui::Begin("Scene");
+
+    if (ImGui::TreeNode("Point lights"))
+    {
+        for (size_t i = 0; i < renderer.ctx_r.lights.size(); i++)
+        {
+            auto &light = renderer.ctx_r.lights[i];
+
+            string id = format("##Point Light {}", i);
+
+            ImGui::InputFloat3(format("Position{}", id).c_str(),
+                               value_ptr(light.position));
+            ImGui::ColorEdit3(format("Color{}", id).c_str(),
+                              value_ptr(light.color));
+            ImGui::SliderFloat(format("Intensity{}", id).c_str(),
+                               &light.intensity, 0.f, 100.f);
+
+            ImGui::Separator();
+        }
+    }
+
     ImGui::End();
 }
 
@@ -227,6 +253,7 @@ void Editor::draw_renderer_menu()
                                -10.f, 10.f) |
             ImGui::SliderFloat("Target luminance", &params.target_luminance,
                                0.01f, 2.f) |
+            ImGui::Checkbox("Auto exposure", &params.auto_exposure) |
             ImGui::ListBox("Operator",
                            reinterpret_cast<int *>(&params.tm_operator), items,
                            IM_ARRAYSIZE(items), 4))
