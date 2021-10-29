@@ -16,7 +16,9 @@ struct Gizmo
     bool bound_sizing = false;
     bool bound_sizing_snap = false;
 
-    void draw(const glm::mat4 &view, const glm::mat4 proj, glm::mat4 &matrix);
+    glm::vec3 *position = nullptr;
+
+    void draw(const glm::mat4 &view, const glm::mat4 proj);
 };
 
 class Editor

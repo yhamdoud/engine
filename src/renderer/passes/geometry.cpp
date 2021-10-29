@@ -59,6 +59,9 @@ void GeometryPass::initialize(ViewportContext &ctx)
     glDeleteTextures(4, &normal_metal);
     glCreateTextures(GL_TEXTURE_2D, 4, &normal_metal);
 
+    glDeleteTextures(1, &ctx.id_tex);
+    glCreateTextures(GL_TEXTURE_2D, 1, &ctx.id_tex);
+
     glTextureStorage2D(normal_metal, 1, GL_RGBA16F, ctx.size.x, ctx.size.y);
 
     glTextureStorage2D(base_color_rough, 1, GL_SRGB8_ALPHA8, ctx.size.x,
@@ -69,19 +72,20 @@ void GeometryPass::initialize(ViewportContext &ctx)
     glTextureStorage2D(depth, 2, GL_DEPTH_COMPONENT32, ctx.size.x, ctx.size.y);
     glTextureParameteri(depth, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTextureParameteri(depth, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(depth, GL_TEXTURE_MIN_FILTER,
-                        GL_NEAREST_MIPMAP_NEAREST);
-    glTextureParameteri(depth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glTextureStorage2D(ctx.id_tex, 1, GL_R32UI, ctx.size.x, ctx.size.y);
 
     glNamedFramebufferTexture(fbuf, GL_DEPTH_ATTACHMENT, depth, 0);
     glNamedFramebufferTexture(fbuf, GL_COLOR_ATTACHMENT0, normal_metal, 0);
     glNamedFramebufferTexture(fbuf, GL_COLOR_ATTACHMENT1, base_color_rough, 0);
     glNamedFramebufferTexture(fbuf, GL_COLOR_ATTACHMENT2, velocity, 0);
+    glNamedFramebufferTexture(fbuf, GL_COLOR_ATTACHMENT3, ctx.id_tex, 0);
 
-    array<GLenum, 3> draw_bufs{
+    array<GLenum, 4> draw_bufs{
         GL_COLOR_ATTACHMENT0,
         GL_COLOR_ATTACHMENT1,
         GL_COLOR_ATTACHMENT2,
+        GL_COLOR_ATTACHMENT3,
     };
     glNamedFramebufferDrawBuffers(fbuf, draw_bufs.size(), draw_bufs.data());
 
@@ -108,7 +112,14 @@ void GeometryPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 
     glViewport(0, 0, ctx_v.size.x, ctx_v.size.y);
     glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.g_buf.framebuffer);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    const uvec4 zero(0u);
+    const uvec4 minus_one(-1);
+    glClearNamedFramebufferuiv(fbuf, GL_COLOR, 0, value_ptr(zero));
+    glClearNamedFramebufferuiv(fbuf, GL_COLOR, 1, value_ptr(zero));
+    glClearNamedFramebufferuiv(fbuf, GL_COLOR, 2, value_ptr(zero));
+    glClearNamedFramebufferuiv(fbuf, GL_COLOR, 3, value_ptr(minus_one));
+    glClear(GL_DEPTH_BUFFER_BIT);
 
     glBindVertexArray(ctx_r.entity_vao);
 
@@ -165,6 +176,25 @@ void GeometryPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 
         Renderer::render_mesh_instance(ctx_r.mesh_instances[r.mesh_index]);
     }
+
+    glUseProgram(point_light_shader.get_id());
+    glDepthMask(false);
+
+    point_light_shader.set("u_view_proj", ctx_v.view_proj);
+
+    for (uint32_t i = 0; i < ctx_r.lights.size(); i++)
+    {
+        const auto &light = ctx_r.lights[i];
+
+        point_light_shader.set("u_light.position", light.position);
+        point_light_shader.set("u_light.radius", 0.5f);
+        point_light_shader.set("u_id", i);
+
+        Renderer::render_mesh_instance(
+            ctx_r.mesh_instances[ctx_r.sphere_mesh_idx]);
+    }
+
+    glDepthMask(true);
 
     {
         glViewport(0, 0, ctx_v.size.x / 2, ctx_v.size.y / 2);

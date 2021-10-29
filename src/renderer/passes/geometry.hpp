@@ -30,9 +30,11 @@ class GeometryPass
         .frag = shaders_path / "geometry.fs",
     });
 
-    // Shader downsample_shader = *Shader::from_comp_path(
-    //     shaders_path / "downsample.comp",
-    //     fmt::format("#define LOCAL_SIZE {}\n", group_size));
+    // FIXME: duplicate
+    Shader point_light_shader = *Shader::from_paths(ShaderPaths{
+        .vert = shaders_path / "point_light.vs",
+        .frag = shaders_path / "point_light_id.frag",
+    });
 
     Shader downsample_shader = *Shader::from_paths(ShaderPaths{
         .vert = shaders_path / "lighting.vs",

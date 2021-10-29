@@ -1,5 +1,3 @@
-#define GLFW_INCLUDE_NONE
-
 #include <iostream>
 
 #include <glad/glad.h>
@@ -13,106 +11,24 @@ using namespace std;
 using namespace glm;
 using namespace engine;
 
-static void gl_message_callback(GLenum source, GLenum type, GLuint id,
-                                GLenum severity, GLsizei length,
-                                GLchar const *message, void const *user_param)
-{
-    const string source_string{[&source]
-                               {
-                                   switch (source)
-                                   {
-                                   case GL_DEBUG_SOURCE_API:
-                                       return "API";
-                                   case GL_DEBUG_SOURCE_WINDOW_SYSTEM:
-                                       return "Window system";
-                                   case GL_DEBUG_SOURCE_SHADER_COMPILER:
-                                       return "Shader compiler";
-                                   case GL_DEBUG_SOURCE_THIRD_PARTY:
-                                       return "Third party";
-                                   case GL_DEBUG_SOURCE_APPLICATION:
-                                       return "Application";
-                                   case GL_DEBUG_SOURCE_OTHER:
-                                       return "";
-                                   }
-                               }()};
-
-    const string type_string{[&type]
-                             {
-                                 switch (type)
-                                 {
-                                 case GL_DEBUG_TYPE_ERROR:
-                                     return "Error";
-                                 case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
-                                     return "Deprecated behavior";
-                                 case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
-                                     return "Undefined behavior";
-                                 case GL_DEBUG_TYPE_PORTABILITY:
-                                     return "Portability";
-                                 case GL_DEBUG_TYPE_PERFORMANCE:
-                                     return "Performance";
-                                 case GL_DEBUG_TYPE_MARKER:
-                                     return "Marker";
-                                 case GL_DEBUG_TYPE_OTHER:
-                                     return "";
-                                 }
-                             }()};
-
-    const auto log_type = [&severity]
-    {
-        switch (severity)
-        {
-        case GL_DEBUG_SEVERITY_NOTIFICATION:
-            return LogType::info;
-        case GL_DEBUG_SEVERITY_LOW:
-            return LogType::warning;
-        case GL_DEBUG_SEVERITY_MEDIUM:
-        case GL_DEBUG_SEVERITY_HIGH:
-            return LogType::error;
-        }
-    }();
-
-    logger.log(log_type, "OpenGL {0} {1}: {3}", type_string, source_string, id,
-               message);
-}
-
-Window::Window(ivec2 size, const char *title) : size(size)
+bool Window::init_glfw()
 {
     if (!glfwInit())
-    {
-        logger.error("GLFW initialization failed.");
-        abort();
-    }
+        return false;
 
-    glfwSetErrorCallback(glfw_error_callback);
+    glfwSetErrorCallback(
+        [](int error, const char *description)
+        { logger.error("GLFW ({}): {}", error, description); });
 
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-    impl = glfwCreateWindow(size.x, size.y, title, nullptr, nullptr);
-
-    if (impl == nullptr)
-    {
-        logger.error("Window creation failed.");
-        abort();
-    }
-
-    glfwSetFramebufferSizeCallback(impl, framebuffer_size_callback);
-    glfwSetKeyCallback(impl, key_callback);
-    glfwSetScrollCallback(impl, scroll_callback);
-
-    glfwMakeContextCurrent(impl);
+    return true;
 }
 
-Window::~Window()
-{
-    glfwDestroyWindow(impl);
-    glfwTerminate();
-}
-
-bool Window::load_gl()
+bool Window::init_gl()
 {
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
         return false;
@@ -120,7 +36,68 @@ bool Window::load_gl()
     // Enable error callback.
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageCallback(gl_message_callback, nullptr);
+    glDebugMessageCallback(
+        [](GLenum source, GLenum type, GLuint id, GLenum severity,
+           GLsizei length, GLchar const *message, void const *user_param)
+        {
+            const string source_string{[&source]
+                                       {
+                                           switch (source)
+                                           {
+                                           case GL_DEBUG_SOURCE_API:
+                                               return "API";
+                                           case GL_DEBUG_SOURCE_WINDOW_SYSTEM:
+                                               return "Window system";
+                                           case GL_DEBUG_SOURCE_SHADER_COMPILER:
+                                               return "Shader compiler";
+                                           case GL_DEBUG_SOURCE_THIRD_PARTY:
+                                               return "Third party";
+                                           case GL_DEBUG_SOURCE_APPLICATION:
+                                               return "Application";
+                                           case GL_DEBUG_SOURCE_OTHER:
+                                               return "";
+                                           }
+                                       }()};
+
+            const string type_string{[&type]
+                                     {
+                                         switch (type)
+                                         {
+                                         case GL_DEBUG_TYPE_ERROR:
+                                             return "Error";
+                                         case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
+                                             return "Deprecated behavior";
+                                         case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
+                                             return "Undefined behavior";
+                                         case GL_DEBUG_TYPE_PORTABILITY:
+                                             return "Portability";
+                                         case GL_DEBUG_TYPE_PERFORMANCE:
+                                             return "Performance";
+                                         case GL_DEBUG_TYPE_MARKER:
+                                             return "Marker";
+                                         case GL_DEBUG_TYPE_OTHER:
+                                             return "";
+                                         }
+                                     }()};
+
+            const auto log_type = [&severity]
+            {
+                switch (severity)
+                {
+                case GL_DEBUG_SEVERITY_NOTIFICATION:
+                    return LogType::info;
+                case GL_DEBUG_SEVERITY_LOW:
+                    return LogType::warning;
+                case GL_DEBUG_SEVERITY_MEDIUM:
+                case GL_DEBUG_SEVERITY_HIGH:
+                    return LogType::error;
+                }
+            }();
+
+            logger.log(log_type, "OpenGL {0} {1}: {3}", type_string,
+                       source_string, id, message);
+        },
+        nullptr);
 
     // Disable shader compiler spam.
     glDebugMessageControl(GL_DEBUG_SOURCE_SHADER_COMPILER, GL_DEBUG_TYPE_OTHER,
@@ -128,6 +105,58 @@ bool Window::load_gl()
 
     return true;
 }
+
+Window::Window(ivec2 size, const char *title) : size(size)
+{
+    impl = glfwCreateWindow(size.x, size.y, title, nullptr, nullptr);
+    glfwSetWindowUserPointer(impl, this);
+
+    if (impl == nullptr)
+    {
+        logger.error("Window creation failed.");
+        abort();
+    }
+
+    glfwSetKeyCallback(
+        impl,
+        [](GLFWwindow *w, int key, int scancode, int action, int mods)
+        {
+            auto *usr = reinterpret_cast<Window *>(glfwGetWindowUserPointer(w));
+
+            if (action == GLFW_PRESS)
+                usr->on_key_press(key, scancode, mods);
+            else
+                // TODO:
+                ;
+        });
+
+    glfwSetScrollCallback(impl,
+                          [](GLFWwindow *w, double offset_x, double offset_y)
+                          {
+                              reinterpret_cast<Window *>(
+                                  glfwGetWindowUserPointer(w))
+                                  ->on_mouse_scroll(offset_x, offset_y);
+                          });
+
+    glfwSetMouseButtonCallback(
+        impl,
+        [](GLFWwindow *w, int button, int action, int mods)
+        {
+            reinterpret_cast<Window *>(glfwGetWindowUserPointer(w))
+                ->on_mouse_button_press(button, action, mods);
+        });
+
+    glfwMakeContextCurrent(impl);
+}
+
+Window::~Window()
+{
+    close();
+    glfwDestroyWindow(impl);
+    glfwTerminate();
+}
+
+void Window::close() { glfwSetWindowShouldClose(impl, GLFW_TRUE); }
 
 void Window::run(const function<void()> &main_loop)
 {
@@ -180,40 +209,36 @@ void Window::set_full_screen(bool enable)
     }
 }
 
-void engine::scroll_callback(GLFWwindow *window, double x_offset,
-                             double y_offset)
+void Window::add_key_callback(int key, const KeyCallback &callback)
 {
-    auto *renderer =
-        reinterpret_cast<Renderer *>(glfwGetWindowUserPointer(window));
-
-    renderer->camera.zoom(y_offset);
+    key_callbacks[key].push_back(callback);
 }
 
-void engine::key_callback(GLFWwindow *window, int key, int scancode, int action,
-                          int mods)
+void Window::add_mouse_button_callback(int button,
+                                       const MouseButtonCallback &callback)
 {
-    auto *renderer =
-        reinterpret_cast<Renderer *>(glfwGetWindowUserPointer(window));
-
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-    {
-        glfwSetWindowShouldClose(window, GLFW_TRUE);
-    }
-    else if (key == GLFW_KEY_C && action == GLFW_PRESS)
-    {
-        renderer->camera.reset();
-    }
+    mouse_button_callbacks[button].push_back(callback);
 }
 
-void engine::glfw_error_callback(int error, const char *description)
+void Window::add_mouse_scroll_callback(const MouseScrollCallback &callback)
 {
-    logger.error("GLFW ({}): {}", error, description);
-    abort();
+    mouse_scroll_callbacks.push_back(callback);
 }
 
-void engine::framebuffer_size_callback(GLFWwindow *window, int width,
-                                       int height)
+void Window::on_mouse_button_press(int button, int action, int mods)
 {
-    //    window_data.width = width;
-    //    window_data.height = height;
+    for (const auto &callback : mouse_button_callbacks[button])
+        callback(action, mods);
+}
+
+void Window::on_mouse_scroll(double offset_x, double offset_y)
+{
+    for (const auto &callback : mouse_scroll_callbacks)
+        callback(offset_x, offset_y);
+}
+
+void Window::on_key_press(int key, int action, int mods)
+{
+    for (const auto &callback : key_callbacks[key])
+        callback(action, mods);
 }

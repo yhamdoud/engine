@@ -12,6 +12,7 @@
 layout(location = 0) out vec4 g_normal_metallic;
 layout(location = 1) out vec4 g_base_color_roughness;
 layout(location = 2) out vec4 g_velocity;
+layout(location = 3) out uint id;
 
 uniform vec3 u_light_pos;
 uniform mat3 u_normal_mat;
@@ -107,4 +108,6 @@ void main()
 
     vec2 velocity = pos.xy - pos_prev.xy;
     g_velocity = vec4(velocity, 0., 1.);
+
+    id = -1;
 }

@@ -31,20 +31,20 @@ include_directories(${SRC_DIR})
 
 # glad
 add_library(glad STATIC "${GLAD_DIR}/src/glad.c")
-target_include_directories(glad PRIVATE "${GLAD_DIR}/include")
-target_include_directories(${PROJECT_NAME} PRIVATE "${GLAD_DIR}/include")
+target_include_directories(glad SYSTEM PRIVATE "${GLAD_DIR}/include")
+target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE "${GLAD_DIR}/include")
 target_link_libraries(${PROJECT_NAME} PRIVATE glad ${CMAKE_DL_LIBS})
 
 # cgtlf
-include_directories(${PROJECT_NAME} ${CGLTF_DIR})
+include_directories(SYSTEM ${PROJECT_NAME} ${CGLTF_DIR})
 
 # Tracy
 add_subdirectory(${TRACY_DIR})
-target_include_directories(${PROJECT_NAME} PRIVATE ${TRACY_DIR})
+target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${TRACY_DIR})
 target_link_libraries(${PROJECT_NAME} PRIVATE TracyClient)
 
 # stb
-target_include_directories(${PROJECT_NAME} PRIVATE ${STB_DIR})
+target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${STB_DIR})
 
 # fmt
 add_subdirectory(${FMT_DIR})
@@ -70,7 +70,7 @@ add_subdirectory(${GLM_DIR})
 target_link_libraries(${PROJECT_NAME} PRIVATE glm)
 
 # GLI
-include_directories(${GLI_DIR})
+include_directories(SYSTEM ${GLI_DIR})
 
 ## cxxopts
 add_subdirectory(${CXXOPTS_DIR})
@@ -79,6 +79,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE cxxopts)
 ## ImGuizmo
 file(GLOB IMGUIZMO_SOURCES ${IMGUIZMO_DIR}/*.cpp)
 add_library(imguizmo ${IMGUIZMO_SOURCES})
-target_include_directories(imguizmo PUBLIC ${IMGUIZMO_DIR})
+target_include_directories(imguizmo SYSTEM PUBLIC ${IMGUIZMO_DIR})
 target_link_libraries(imguizmo PUBLIC imgui)
 target_link_libraries(${PROJECT_NAME} PRIVATE imguizmo)

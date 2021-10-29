@@ -6,6 +6,7 @@
 #include "entity.hpp"
 #include "model.hpp"
 #include "renderer/buffer.hpp"
+#include "renderer/light.hpp"
 
 namespace engine
 {
@@ -27,29 +28,16 @@ struct MeshInstance
     int primitive_count;
 };
 
-struct DirectionalLight
-{
-    glm::vec3 color;
-    // Intensity is illuminance at perpendicular incidence in lux.
-    float intensity;
-    glm::vec3 direction;
-};
-
-struct Light
-{
-    glm::vec3 position;
-    glm::vec3 color;
-    float intensity;
-};
-
 struct ViewportContext
 {
     glm::ivec2 size;
     uint hdr_tex = invalid_texture_id;
     uint hdr2_tex = invalid_texture_id;
+    uint id_tex = invalid_texture_id;
     uint hdr_prev_tex = invalid_texture_id;
     uint hdr_frame_buf = default_frame_buffer_id;
     uint ldr_frame_buf = default_frame_buffer_id;
+    uint geometry_fbuf = default_frame_buffer_id;
     glm::mat4 proj;
     glm::mat4 proj_inv;
     glm::mat4 view;

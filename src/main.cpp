@@ -18,27 +18,6 @@ using namespace std;
 using namespace engine;
 
 vector<Entity> entities;
-vector<SceneGraphNode> scene_graph;
-
-size_t scene_graph_insert(const Transform &transform, size_t parent_idx)
-{
-    scene_graph.emplace_back(transform.get_model(), parent_idx);
-    return scene_graph.size() - 1;
-}
-
-mat4 get_world_position(size_t node_idx)
-{
-    auto node = scene_graph[node_idx];
-    mat4 world_transform = node.local_transform_matrix;
-
-    while (node.parent_index != SceneGraphNode::root_index)
-    {
-        node = scene_graph[node.parent_index];
-        world_transform = node.local_transform_matrix * world_transform;
-    }
-
-    return world_transform;
-}
 
 int main(int argc, char **argv)
 {
@@ -62,10 +41,16 @@ int main(int argc, char **argv)
 
     auto result = options.parse(argc, argv);
 
-    ivec2 size{1600, 900};
+    if (!Window::init_glfw())
+    {
+        logger.error("GLFW initialization failed");
+        return EXIT_FAILURE;
+    }
 
+    ivec2 size{1600, 900};
     Window window(size, "engine");
-    if (!window.load_gl())
+
+    if (!Window::init_gl())
     {
         logger.error("OpenGL initialization failed");
         return EXIT_FAILURE;
@@ -78,10 +63,14 @@ int main(int argc, char **argv)
                       glm::vec3(result["cam_look_x"].as<float>(),
                                 result["cam_look_y"].as<float>(),
                                 result["cam_look_z"].as<float>()));
-
     Editor editor(window, renderer);
 
-    glfwSetWindowUserPointer(window.impl, &renderer);
+    window.add_mouse_scroll_callback([&renderer](double, double offset)
+                                     { renderer.camera.zoom(offset); });
+    window.add_key_callback(GLFW_KEY_ESCAPE,
+                            [&window](int, int) { window.close(); });
+    window.add_key_callback(GLFW_KEY_C,
+                            [&renderer](int, int) { renderer.camera.reset(); });
 
     const path skybox_path = textures_path / "skybox-1";
     auto skybox_tex =

@@ -579,3 +579,14 @@ float Renderer::baking_progress()
 }
 
 bool Renderer::is_baking() { return baking_jobs.size() != 0; }
+
+uint32_t Renderer::id_at_screen_coords(const glm::ivec2 &pos)
+{
+    uint32_t id;
+    glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.g_buf.framebuffer);
+    glReadBuffer(GL_COLOR_ATTACHMENT0 + 3);
+
+    glReadPixels(pos.x, ctx_v.size.y - pos.y, 1, 1, GL_RED_INTEGER,
+                 GL_UNSIGNED_INT, &id);
+    return id;
+}

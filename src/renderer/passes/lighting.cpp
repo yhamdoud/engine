@@ -5,7 +5,6 @@
 #include <glm/glm.hpp>
 
 #include "constants.hpp"
-#include "glm/ext/scalar_constants.hpp"
 #include "lighting.hpp"
 #include "logger.hpp"
 #include "model.hpp"
@@ -45,12 +44,6 @@ void LightingPass::parse_parameters()
         .color_cascades = params.color_cascades,
         .filter_shadows = params.filter_shadows,
     };
-}
-
-static float light_radius_squared(const Light &l, float eps)
-{
-    const float luminance = l.intensity * compMax(l.color);
-    return luminance / eps;
 }
 
 void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
@@ -109,6 +102,7 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     glUseProgram(point_light_shader.get_id());
 
     point_light_shader.set("u_view", ctx_v.view);
+    point_light_shader.set("u_view_proj", ctx_v.view_proj);
 
     glCullFace(GL_FRONT);
     glEnable(GL_BLEND);
@@ -120,9 +114,8 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     {
         for (const auto &light : ctx_r.lights)
         {
-            const float radius_squared = light_radius_squared(light, 0.01f);
+            const float radius_squared = light.radius_squared(0.01f);
 
-            point_light_shader.set("u_view_proj", ctx_v.view_proj);
             point_light_shader.set("u_light.position", light.position);
             point_light_shader.set("u_light.color",
                                    light.intensity * light.color);

@@ -9,6 +9,7 @@
 #include <ImGuizmo.h>
 
 #include "editor.hpp"
+#include "logger.hpp"
 #include "profiler.hpp"
 
 using namespace engine;
@@ -16,13 +17,24 @@ using namespace std;
 using namespace glm;
 using namespace fmt;
 
-void Gizmo::draw(const mat4 &view, const mat4 proj, mat4 &matrix)
+void Gizmo::draw(const mat4 &view, const mat4 proj)
 {
+    if (position == nullptr)
+        return;
+
+    mat4 matrix(1.f);
+    matrix[3] = vec4(*position, 1.f);
+
+    ImGuiIO &io = ImGui::GetIO();
+    ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+
     ImGuizmo::Manipulate(
         value_ptr(view), value_ptr(proj), ImGuizmo::OPERATION::TRANSLATE,
         ImGuizmo::MODE::LOCAL, value_ptr(matrix), nullptr,
         do_snap ? snap.data() : nullptr, bound_sizing ? bounds.data() : nullptr,
         bound_sizing_snap ? bounds_snap.data() : nullptr);
+
+    *position = vec3(matrix[3]);
 }
 
 Editor::~Editor()
@@ -39,6 +51,17 @@ Editor::Editor(Window &w, Renderer &r) : window(w), renderer(r)
 
     ImGui_ImplGlfw_InitForOpenGL(w.impl, true);
     ImGui_ImplOpenGL3_Init("#version 460");
+
+    window.add_mouse_button_callback(
+        GLFW_MOUSE_BUTTON_LEFT,
+        [&](int, int)
+        {
+            auto id =
+                renderer.id_at_screen_coords(window.get_cursor_position());
+
+            if (id != static_cast<uint32_t>(-1))
+                gizmo.position = &renderer.ctx_r.lights[id].position;
+        });
 }
 
 void Editor::draw()
@@ -52,9 +75,11 @@ void Editor::draw()
     ImGui::NewFrame();
     ImGuizmo::BeginFrame();
 
+    // ImGui::ShowDemoWindow();
     draw_profiler();
     draw_scene_menu();
     draw_renderer_menu();
+    gizmo.draw(renderer.ctx_v.view, renderer.ctx_v.proj);
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -100,21 +125,8 @@ void Editor::draw_scene_menu()
 
             ImGui::Separator();
         }
-    }
 
-    ImGui::Separator();
-
-    const ImGuiIO &io = ImGui::GetIO();
-    ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
-
-    {
-        auto &light = renderer.ctx_r.lights[0];
-        mat4 matrix(1.f);
-        matrix[3] = vec4(light.position, 1.f);
-
-        gizmo.draw(renderer.ctx_v.view, renderer.ctx_v.proj, matrix);
-
-        light.position = vec3(matrix[3]);
+        ImGui::TreePop();
     }
 
     ImGui::End();

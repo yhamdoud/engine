@@ -1,6 +1,9 @@
 #pragma once
 
+#define GLFW_INCLUDE_NONE
+
 #include <functional>
+#include <map>
 #include <optional>
 #include <variant>
 
@@ -15,12 +18,24 @@ namespace engine
 
 class Window
 {
+    using MouseButtonCallback = std::function<void(int, int)>;
+    using MouseScrollCallback =
+        std::function<void(double offset_x, double offset_y)>;
+    using KeyCallback = std::function<void(int, int)>;
+
     glm::ivec2 size;
+    std::unordered_map<int, std::vector<MouseButtonCallback>>
+        mouse_button_callbacks{};
+    std::vector<MouseScrollCallback> mouse_scroll_callbacks{};
+    std::unordered_map<int, std::vector<KeyCallback>> key_callbacks{};
+
+    void on_mouse_button_press(int button, int action, int mods);
+    void on_mouse_scroll(double offset_x, double offset_y);
+    void on_key_press(int key, int scancode, int mods);
 
   public:
     bool is_full_screen;
 
-    // TODO: Wrap this behind an interface completely, eventually.
     GLFWwindow *impl;
 
     Window(glm::ivec2 size, const char *title);
@@ -31,25 +46,20 @@ class Window
     Window(Window &&) = delete;
     Window &operator=(Window &&) = delete;
 
+    void close();
     void run(const std::function<void()> &main_loop);
-    glm::vec2 get_cursor_position();
     void resize(glm::ivec2 resolution);
     void set_full_screen(bool enable);
 
-    static bool load_gl();
+    glm::vec2 get_cursor_position();
+
+    void add_key_callback(int key, const KeyCallback &callback);
+    void add_mouse_button_callback(int button,
+                                   const MouseButtonCallback &callback);
+    void add_mouse_scroll_callback(const MouseScrollCallback &callback);
+
+    static bool init_glfw();
+    static bool init_gl();
 };
-
-std::optional<GLFWwindow *> init_glfw(uint width, uint height);
-
-static void glfw_error_callback(int error, const char *description);
-
-static void key_callback(GLFWwindow *window, int key, int scancode, int action,
-                         int mods);
-
-static void scroll_callback(GLFWwindow *window, double x_offset,
-                            double y_offset);
-
-static void framebuffer_size_callback(GLFWwindow *window, int width,
-                                      int height);
 
 } // namespace engine

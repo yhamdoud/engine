@@ -180,6 +180,8 @@ class Renderer
 
     float baking_progress();
     bool is_baking();
+
+    uint32_t id_at_screen_coords(const glm::ivec2 &pos);
 };
 
 } // namespace engine
