@@ -1,5 +1,6 @@
 #pragma once
 
+#include "constants.hpp"
 #include "renderer/context.hpp"
 #include "renderer/passes/forward.hpp"
 #include "renderer/passes/geometry.hpp"
@@ -13,7 +14,7 @@ namespace engine
 
 struct ProbeGrid
 {
-    uint coef_buf;
+    uint coef_buf = invalid_texture_id;
     int bounce_count;
     glm::ivec3 dims;
     glm::ivec3 group_count;

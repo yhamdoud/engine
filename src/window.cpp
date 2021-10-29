@@ -1,3 +1,4 @@
+#include <cassert>
 #include <iostream>
 
 #include <glad/glad.h>
@@ -56,6 +57,8 @@ bool Window::init_gl()
                                                return "Application";
                                            case GL_DEBUG_SOURCE_OTHER:
                                                return "";
+                                           default:
+                                               assert(false);
                                            }
                                        }()};
 
@@ -77,6 +80,8 @@ bool Window::init_gl()
                                              return "Marker";
                                          case GL_DEBUG_TYPE_OTHER:
                                              return "";
+                                         default:
+                                             assert(false);
                                          }
                                      }()};
 
@@ -91,6 +96,8 @@ bool Window::init_gl()
                 case GL_DEBUG_SEVERITY_MEDIUM:
                 case GL_DEBUG_SEVERITY_HIGH:
                     return LogType::error;
+                default:
+                    assert(false);
                 }
             }();
 
@@ -125,9 +132,6 @@ Window::Window(ivec2 size, const char *title) : size(size)
 
             if (action == GLFW_PRESS)
                 usr->on_key_press(key, scancode, mods);
-            else
-                // TODO:
-                ;
         });
 
     glfwSetScrollCallback(impl,

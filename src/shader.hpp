@@ -23,16 +23,16 @@ struct Uniform
 
 struct ShaderPaths
 {
-    std::filesystem::path vert;
-    std::filesystem::path geom;
-    std::filesystem::path frag;
+    std::filesystem::path vert{};
+    std::filesystem::path geom{};
+    std::filesystem::path frag{};
 };
 
 struct ShaderDefines
 {
-    std::string vert;
-    std::string geom;
-    std::string frag;
+    std::string vert{};
+    std::string geom{};
+    std::string frag{};
 };
 
 using UniformMap = std::unordered_map<std::string, Uniform>;

@@ -52,8 +52,8 @@ void BloomPass::render(ViewportContext &ctx_v, RenderContext &r_ctx)
     for (uint i = 0u; i < cfg.pass_count; i++)
     {
         // Round up.
-        const uint group_count_x = ((ctx_v.size.x >> i + 1u) + 15u) / 16u;
-        const uint group_count_y = ((ctx_v.size.y >> i + 1u) + 15u) / 16u;
+        const uint group_count_x = ((ctx_v.size.x >> (i + 1u)) + 15u) / 16u;
+        const uint group_count_y = ((ctx_v.size.y >> (i + 1u)) + 15u) / 16u;
 
         downsample_shader.set("u_level", i);
 
@@ -77,8 +77,8 @@ void BloomPass::render(ViewportContext &ctx_v, RenderContext &r_ctx)
 
     for (int i = upsample_count - 1; i >= 0; i--)
     {
-        const uint group_count_x = ((ctx_v.size.x >> i + 1u) + 15u) / 16u;
-        const uint group_count_y = ((ctx_v.size.y >> i + 1u) + 15u) / 16u;
+        const uint group_count_x = ((ctx_v.size.x >> (i + 1u)) + 15u) / 16u;
+        const uint group_count_y = ((ctx_v.size.y >> (i + 1u)) + 15u) / 16u;
 
         upsample.set("u_level", (uint)i + 1u);
         upsample.set("u_target_level", (uint)i);

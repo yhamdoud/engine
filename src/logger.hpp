@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cassert>
 #include <chrono>
 #include <string>
 #include <string_view>
@@ -53,6 +54,8 @@ class Logger
                 return fmt::color::red;
             case LogType::debug:
                 return fmt::color::pink;
+            default:
+                assert(false);
             }
         }();
 

@@ -15,16 +15,16 @@ class VolumetricPass
 {
     struct Uniforms
     {
-        glm::mat4 proj;
-        glm::mat4 proj_inv;
-        glm::mat4 view_inv;
-        glm::uvec2 size;
-        int count;
-        float scatter_intensity;
-        glm::vec3 sun_dir;
-        bool bilateral_upsample;
-        glm::vec3 sun_color;
-        float scatter_amount;
+        glm::mat4 proj{};
+        glm::mat4 proj_inv{};
+        glm::mat4 view_inv{};
+        glm::uvec2 size{};
+        int count = 0;
+        float scatter_intensity = 0.f;
+        glm::vec3 sun_dir{};
+        bool bilateral_upsample = false;
+        glm::vec3 sun_color{};
+        float scatter_amount = 0.f;
     };
 
     static constexpr int group_size = 32;

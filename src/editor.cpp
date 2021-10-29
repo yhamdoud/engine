@@ -95,7 +95,7 @@ void Editor::draw_profiler()
 
     ImGui::Begin("Profiler");
     {
-        for (int i = 0; i < query_count; i++)
+        for (size_t i = 0; i < query_count; i++)
         {
             ImGui::Text("%s: %.3f ms", passes[i],
                         static_cast<float>(profiler_zone_time(i)) / 1e6);
@@ -187,7 +187,7 @@ void Editor::draw_renderer_menu()
                             window_size.x / viewport_aspect_ratio};
 
         ImGui::Text("Depth");
-        ImGui::Image((ImTextureID)renderer.ctx_v.ao_tex, texture_size,
+        ImGui::Image((ImTextureID)(ulong)renderer.ctx_v.ao_tex, texture_size,
                      ImVec2(0, 1), ImVec2(1, 0));
     }
 
@@ -246,8 +246,8 @@ void Editor::draw_renderer_menu()
         ImVec2 window_size = ImGui::GetWindowSize();
         ImVec2 texture_size{window_size.x,
                             window_size.x / viewport_aspect_ratio};
-        ImGui::Image((ImTextureID)renderer.ctx_v.reflections_tex, texture_size,
-                     ImVec2(0, 1), ImVec2(1, 0));
+        ImGui::Image((ImTextureID)(ulong)renderer.ctx_v.reflections_tex,
+                     texture_size, ImVec2(0, 1), ImVec2(1, 0));
     }
 
     ImGui::Checkbox("##Motion blur", &renderer.motion_blur_enabled);
@@ -267,11 +267,10 @@ void Editor::draw_renderer_menu()
     ImGui::SameLine();
     if (ImGui::CollapsingHeader("Bloom"))
     {
-        if (ImGui::SliderFloat("Intensity", &renderer.bloom.cfg.intensity, 0.f,
-                               0.25f),
-            ImGui::SliderFloat("Upsample radius",
-                               &renderer.bloom.cfg.upsample_radius, 0.f, 3.f))
-            ;
+        ImGui::SliderFloat("Intensity", &renderer.bloom.cfg.intensity, 0.f,
+                           0.25f);
+        ImGui::SliderFloat("Upsample radius",
+                           &renderer.bloom.cfg.upsample_radius, 0.f, 3.f);
     }
 
     if (ImGui::CollapsingHeader("Tone map"))
@@ -334,7 +333,7 @@ void Editor::draw_renderer_menu()
 
         for (int i = 0; i < params.cascade_count; i++)
         {
-            ImGui::Image((ImTextureID)renderer.shadow.debug_views[i],
+            ImGui::Image((ImTextureID)(ulong)renderer.shadow.debug_views[i],
                          texture_size, ImVec2(0, 1), ImVec2(1, 0));
         }
     }
@@ -346,27 +345,28 @@ void Editor::draw_renderer_menu()
                             window_size.x / viewport_aspect_ratio};
 
         ImGui::Text("Depth");
-        ImGui::Image((ImTextureID)renderer.ctx_v.g_buf.depth, texture_size,
-                     ImVec2(0, 1), ImVec2(1, 0));
-
-        ImGui::Text("Base color");
-        ImGui::Image((ImTextureID)renderer.geometry.debug_view_base_color,
+        ImGui::Image((ImTextureID)(ulong)renderer.ctx_v.g_buf.depth,
                      texture_size, ImVec2(0, 1), ImVec2(1, 0));
 
+        ImGui::Text("Base color");
+        ImGui::Image(
+            (ImTextureID)(ulong)renderer.geometry.debug_view_base_color,
+            texture_size, ImVec2(0, 1), ImVec2(1, 0));
+
         ImGui::Text("Normal");
-        ImGui::Image((ImTextureID)renderer.geometry.debug_view_normal,
+        ImGui::Image((ImTextureID)(ulong)renderer.geometry.debug_view_normal,
                      texture_size, ImVec2(0, 1), ImVec2(1, 0));
 
         ImGui::Text("Metallic");
-        ImGui::Image((ImTextureID)renderer.geometry.debug_view_metallic,
+        ImGui::Image((ImTextureID)(ulong)renderer.geometry.debug_view_metallic,
                      texture_size, ImVec2(0, 1), ImVec2(1, 0));
 
         ImGui::Text("Roughness");
-        ImGui::Image((ImTextureID)renderer.geometry.debug_view_roughness,
+        ImGui::Image((ImTextureID)(ulong)renderer.geometry.debug_view_roughness,
                      texture_size, ImVec2(0, 1), ImVec2(1, 0));
 
         ImGui::Text("Velocity");
-        ImGui::Image((ImTextureID)renderer.geometry.debug_view_velocity,
+        ImGui::Image((ImTextureID)(ulong)renderer.geometry.debug_view_velocity,
                      texture_size, ImVec2(0, 1), ImVec2(1, 0));
     }
 

@@ -12,24 +12,24 @@ class LightingPass
 {
     struct Uniforms
     {
-        glm::mat4 proj;
-        glm::mat4 proj_inv;
-        glm::mat4 view_inv;
-        glm::mat4 inv_grid_transform;
-        float leak_offset;
-        int indirect_lighting;
-        int direct_lighting;
-        int base_color;
-        int color_cascades;
-        int filter_shadows;
-        int reflections;
-        int ambient_occlusion;
-        glm::vec3 grid_dims;
-        float _pad0;
-        glm::vec3 light_intensity;
-        float _pad1;
-        glm::vec3 light_direction;
-        float _pad2;
+        glm::mat4 proj{};
+        glm::mat4 proj_inv{};
+        glm::mat4 view_inv{};
+        glm::mat4 inv_grid_transform{};
+        float leak_offset = 0.f;
+        int indirect_lighting = false;
+        int direct_lighting = false;
+        int base_color = false;
+        int color_cascades = false;
+        int filter_shadows = false;
+        int reflections = false;
+        int ambient_occlusion = false;
+        glm::vec3 grid_dims{};
+        int _pad0 = 0.f;
+        glm::vec3 light_intensity{};
+        int _pad1 = 0.f;
+        glm::vec3 light_direction{};
+        int _pad2 = 0.f;
     };
 
     struct Params
@@ -42,8 +42,8 @@ class LightingPass
         bool filter_shadows;
         float leak_offset;
         // FIXME:
-        bool ssao;
-        bool ssr;
+        bool ssao = false;
+        bool ssr = false;
     };
 
     Shader lighting_shader;
