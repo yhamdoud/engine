@@ -61,6 +61,7 @@ struct RenderContext
     std::vector<MeshInstance> mesh_instances{};
     std::vector<Entity> queue{};
     std::vector<Light> lights{};
+    uint light_shadows_array = invalid_texture_id;
     uint entity_vao = invalid_texture_id;
     uint skybox_vao = invalid_texture_id;
     uint skybox_tex = invalid_texture_id;

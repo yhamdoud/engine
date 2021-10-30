@@ -83,6 +83,7 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     glBindTextureUnit(12, ctx_v.hdr_prev_tex);
     glBindTextureUnit(13, ctx_v.reflections_tex);
     glBindTextureUnit(14, ctx_v.g_buf.velocity);
+    glBindTextureUnit(15, ctx_r.light_shadows_array);
 
     // TODO: UBO
     lighting_shader.set("u_light_transforms[0]", span(ctx_v.light_transforms));
@@ -112,10 +113,12 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     // TODO: instancing
     if (params.direct_lighting)
     {
+        int i = 0;
         for (const auto &light : ctx_r.lights)
         {
             const float radius_squared = light.radius_squared(0.01f);
 
+            point_light_shader.set("u_light_idx", i);
             point_light_shader.set("u_light.position", light.position);
             point_light_shader.set("u_light.color",
                                    light.intensity * light.color);
@@ -124,6 +127,7 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 
             Renderer::render_mesh_instance(
                 ctx_r.mesh_instances[ctx_r.sphere_mesh_idx]);
+            i++;
         }
     }
 

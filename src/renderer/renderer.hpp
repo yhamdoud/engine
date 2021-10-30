@@ -79,6 +79,7 @@ class Renderer
         .stabilize = true,
         .z_multiplier = 1.3f,
         .cull_front_faces = true,
+        .render_point_lights = true,
     }};
 
     GeometryPass geometry{};

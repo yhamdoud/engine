@@ -121,6 +121,20 @@ Renderer::Renderer(glm::ivec2 viewport_size, glm::vec3 camera_position,
                                    binding_tangents);
     }
 
+    // Point lights.
+    {
+        uint &tex = ctx_r.light_shadows_array;
+
+        glCreateTextures(GL_TEXTURE_CUBE_MAP_ARRAY, 1, &tex);
+
+        glTextureStorage3D(tex, 1, GL_DEPTH_COMPONENT32, 1024, 1024,
+                           ctx_r.lights.size() * 6);
+        glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(tex, GL_TEXTURE_COMPARE_MODE,
+                            GL_COMPARE_REF_TO_TEXTURE);
+    }
+
     // Skybox stuff.
     {
         unsigned int buffer;

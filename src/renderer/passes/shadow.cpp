@@ -21,9 +21,13 @@ ShadowPass::ShadowPass(Params params) : params(params)
     glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &shadow_map);
     glCreateFramebuffers(1, &frame_buf);
 
+    // We only care about the depth test.
+    glNamedFramebufferDrawBuffer(frame_buf, GL_NONE);
+    glNamedFramebufferReadBuffer(frame_buf, GL_NONE);
+
     assert(params.cascade_count < max_cascade_count);
 
-    shader = *Shader::from_paths(
+    directional_shader = *Shader::from_paths(
         ShaderPaths{
             .vert = shaders_path / "shadow_map.vs",
             .geom = shaders_path / "shadow_map.geom",
@@ -75,11 +79,6 @@ void ShadowPass::initialize(ViewportContext &ctx)
                       GL_DEPTH_COMPONENT32, 0, 1, i, 1);
     }
 
-    glNamedFramebufferTexture(frame_buf, GL_DEPTH_ATTACHMENT, shadow_map, 0);
-    // We only care about the depth test.
-    glNamedFramebufferDrawBuffer(frame_buf, GL_NONE);
-    glNamedFramebufferReadBuffer(frame_buf, GL_NONE);
-
     ctx.cascade_distances = span(cascade_distances);
     ctx.light_transforms = span(light_transforms);
     ctx.shadow_map = shadow_map;
@@ -88,6 +87,8 @@ void ShadowPass::initialize(ViewportContext &ctx)
 void ShadowPass::render(ViewportContext &ctx, RenderContext &ctx_r)
 {
     ZoneScoped;
+
+    glNamedFramebufferTexture(frame_buf, GL_DEPTH_ATTACHMENT, shadow_map, 0);
 
     glViewport(0, 0, params.size.x, params.size.y);
     glBindFramebuffer(GL_FRAMEBUFFER, frame_buf);
@@ -182,9 +183,9 @@ void ShadowPass::render(ViewportContext &ctx, RenderContext &ctx_r)
         light_transforms[c_idx] = light_proj * light_view;
     }
 
-    glUseProgram(shader.get_id());
+    glUseProgram(directional_shader.get_id());
 
-    shader.set("u_light_transforms[0]", span(light_transforms));
+    directional_shader.set("u_light_transforms[0]", span(light_transforms));
 
     glBindVertexArray(ctx_r.entity_vao);
 
@@ -192,12 +193,67 @@ void ShadowPass::render(ViewportContext &ctx, RenderContext &ctx_r)
     if (params.cull_front_faces)
         glCullFace(GL_FRONT);
 
-    for (auto &r : ctx_r.queue)
+    for (const auto &r : ctx_r.queue)
     {
         if (r.flags & Entity::casts_shadow)
         {
-            shader.set("u_model", r.model);
+            directional_shader.set("u_model", r.model);
             Renderer::render_mesh_instance(ctx_r.mesh_instances[r.mesh_index]);
+        }
+    }
+
+    if (params.render_point_lights)
+    {
+        glViewport(0, 0, 1024, 1024);
+
+        glUseProgram(omni_shader.get_id());
+
+        for (auto light_idx = 0; light_idx < ctx_r.lights.size(); light_idx++)
+        {
+            const Light &l = ctx_r.lights[light_idx];
+            const float far = glm::sqrt(l.radius_squared(0.01f));
+
+            const mat4 proj = perspective(radians(90.f), 1.f, 0.01f, far);
+
+            const array<mat4, 6> views{
+                lookAt(l.position, l.position + vec3{1.f, 0.f, 0.f},
+                       vec3{0.f, -1.f, 0.f}),
+                lookAt(l.position, l.position + vec3{-1.f, 0.f, 0.f},
+                       vec3{0.f, -1.f, 0.f}),
+                lookAt(l.position, l.position + vec3{0.f, 1.f, 0.f},
+                       vec3{0.f, 0.f, 1.f}),
+                lookAt(l.position, l.position + vec3{0.f, -1.f, 0.f},
+                       vec3{0.f, 0.f, -1.f}),
+                lookAt(l.position, l.position + vec3{0.f, 0.f, 1.f},
+                       vec3{0.f, -1.f, 0.f}),
+                lookAt(l.position, l.position + vec3{0.f, 0.f, -1.f},
+                       vec3{0.f, -1.f, 0.f}),
+            };
+
+            omni_shader.set("u_light_position", l.position);
+            omni_shader.set("u_far", far);
+
+            for (int face_idx = 0; face_idx < 6; face_idx++)
+            {
+                glNamedFramebufferTextureLayer(frame_buf, GL_DEPTH_ATTACHMENT,
+                                               ctx_r.light_shadows_array, 0,
+                                               (6 * light_idx) + face_idx);
+                glClear(GL_DEPTH_BUFFER_BIT);
+
+                mat4 view_proj = proj * views[face_idx];
+                omni_shader.set("u_view_proj", view_proj);
+
+                for (const auto &r : ctx_r.queue)
+                {
+                    if (r.flags & Entity::casts_shadow)
+                    {
+                        omni_shader.set("u_model", r.model);
+
+                        Renderer::render_mesh_instance(
+                            ctx_r.mesh_instances[r.mesh_index]);
+                    }
+                }
+            }
         }
     }
 

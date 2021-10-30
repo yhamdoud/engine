@@ -17,10 +17,16 @@ class ShadowPass
         bool stabilize;
         float z_multiplier;
         bool cull_front_faces;
+        bool render_point_lights;
     };
 
     uint frame_buf;
-    Shader shader;
+
+    Shader directional_shader;
+    Shader omni_shader = *Shader::from_paths(ShaderPaths{
+        .vert = shaders_path / "shadow_omni.vert",
+        .frag = shaders_path / "shadow_omni.frag",
+    });
     uint shadow_map;
 
     std::array<float, max_cascade_count> cascade_distances;

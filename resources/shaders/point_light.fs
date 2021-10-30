@@ -18,6 +18,7 @@ struct PointLight
 
 // TODO:
 uniform mat4 u_view;
+uniform int u_light_idx;
 
 uniform PointLight u_light;
 
@@ -27,7 +28,20 @@ layout(binding = 0) uniform sampler2D u_g_depth;
 layout(binding = 1) uniform sampler2D u_g_normal_metallic;
 layout(binding = 2) uniform sampler2D u_g_base_color_roughness;
 
+layout(binding = 15) uniform samplerCubeArrayShadow u_shadow;
+
 out vec4 frag_color;
+
+float calculate_shadow(vec3 frag_pos_world, vec3 light_pos_world)
+{
+    vec3 light_to_frag = frag_pos_world - light_pos_world;
+    float light_dist = length(light_to_frag);
+
+    float shadow = 1. - texture(u_shadow, vec4(light_to_frag, u_light_idx),
+                                light_dist / u_light.radius);
+
+    return shadow;
+}
 
 float attenuate(float dist_squared) { return 4. * PI / dist_squared; }
 
@@ -40,6 +54,7 @@ void main()
     vec3 pos = pos_from_depth(
         linearize_depth(texture(u_g_depth, tex_coords).r, u.proj), tex_coords,
         u.proj_inv);
+    vec3 pos_world = (u.view_inv * vec4(pos, 1.)).xyz;
 
     vec3 pos_to_light = light_pos - pos;
     float dist_squared = dot(pos_to_light, pos_to_light);
@@ -65,7 +80,8 @@ void main()
     vec3 f0;
     decode_material(base_color, metallic, diffuse_color, f0);
 
-    vec3 luminance = attenuate(dist_squared) *
+    float shadow = calculate_shadow(pos_world, u_light.position);
+    vec3 luminance = (1. - shadow) * attenuate(dist_squared) *
                      brdf(v, l, n, diffuse_color, f0, roughness) *
                      u_light.color;
 

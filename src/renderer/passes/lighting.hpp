@@ -42,8 +42,8 @@ class LightingPass
         bool filter_shadows;
         float leak_offset;
         // FIXME:
-        bool ssao = false;
-        bool ssr = false;
+        bool ssao = true;
+        bool ssr = true;
     };
 
     Shader lighting_shader;

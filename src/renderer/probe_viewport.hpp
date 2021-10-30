@@ -42,6 +42,7 @@ struct ProbeViewport
         .stabilize = true,
         .z_multiplier = 1.5f,
         .cull_front_faces = false,
+        .render_point_lights = false,
     }};
 
     GeometryPass geometry{};
@@ -54,6 +55,8 @@ struct ProbeViewport
         .color_cascades = false,
         .filter_shadows = false,
         .leak_offset = 0.4f,
+        .ssao = false,
+        .ssr = false,
     }};
 
     ForwardPass forward{{

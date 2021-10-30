@@ -381,8 +381,8 @@ GLuint engine::upload_cube_map(const std::array<path, 6> &paths)
 
         if (data)
         {
-            glad_glTextureSubImage3D(id, 0, 0, 0, face_idx, width, height, 1,
-                                     format, GL_UNSIGNED_BYTE, data);
+            glTextureSubImage3D(id, 0, 0, 0, face_idx, width, height, 1, format,
+                                GL_UNSIGNED_BYTE, data);
 
             free(data);
         }
