@@ -21,6 +21,7 @@ https://user-images.githubusercontent.com/18217298/137032993-6adf4c04-9362-4703-
 -   SSR
 -   SSAO
 -   Bloom
+-   TAA
 -   HDR lighting
 -   Automatic exposure
 -   Tone mapping
@@ -46,7 +47,6 @@ https://user-images.githubusercontent.com/18217298/137032993-6adf4c04-9362-4703-
 
 ### Planned
 
--   TAA
 -   Reflection probes
 
 ## Building

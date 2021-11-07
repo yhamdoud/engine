@@ -11,6 +11,7 @@
 #include "editor.hpp"
 #include "logger.hpp"
 #include "profiler.hpp"
+#include "renderer/passes/taa.hpp"
 
 using namespace engine;
 using namespace std;
@@ -171,8 +172,8 @@ void Editor::draw_renderer_menu()
         ImGui::ProgressBar(renderer.baking_progress());
     }
 
-    if (ImGui::Checkbox("##SSAO", &renderer.ssao_enabled))
-        renderer.lighting.params.ssao = renderer.ssao_enabled;
+    if (ImGui::Checkbox("##SSAO", &renderer.ssao.enabled))
+        renderer.lighting.params.ssao = renderer.ssao.enabled;
     ImGui::SameLine();
     if (ImGui::CollapsingHeader("SSAO"))
     {
@@ -209,7 +210,38 @@ void Editor::draw_renderer_menu()
             renderer.forward.parse_parameters();
     }
 
-    (ImGui::Checkbox("##Volumetric", &renderer.volumetric.enabled));
+    ImGui::Checkbox("##TAA", &renderer.taa.enabled);
+    ImGui::SameLine();
+    if (ImGui::CollapsingHeader("TAA"))
+    {
+        auto &params = renderer.taa.params;
+        using Flags = TaaPass::Flags;
+
+        const char *filters[] = {"None", "Mitchell", "Blackman-Harris"};
+
+        if (ImGui::SliderInt("Sample count##TAA", &params.jitter_sample_count,
+                             1, 16) |
+            ImGui::CheckboxFlags("Jitter##TAA", (int *)&params.flags,
+                                 Flags::jitter) |
+            ImGui::CheckboxFlags("Velocity at closest depth##TAA",
+                                 (int *)&params.flags,
+                                 Flags::velocity_at_closest_depth) |
+            ImGui::CheckboxFlags("Variance clipping##TAA", (int *)&params.flags,
+                                 Flags::variance_clip) |
+            ImGui::CheckboxFlags("Sharpen##TAA", (int *)&params.flags,
+                                 Flags::sharpen) |
+            ImGui::ListBox("Operator", reinterpret_cast<int *>(&params.filter),
+                           filters, IM_ARRAYSIZE(filters), 4))
+            renderer.taa.parse_params();
+    }
+
+    ImGui::Checkbox("##Sharpen", &renderer.sharpen.enabled);
+    ImGui::SameLine();
+    if (ImGui::CollapsingHeader("Sharpen"))
+    {
+    }
+
+    ImGui::Checkbox("##Volumetric", &renderer.volumetric.enabled);
     ImGui::SameLine();
     if (ImGui::CollapsingHeader("Volumetric"))
     {
@@ -228,8 +260,8 @@ void Editor::draw_renderer_menu()
             renderer.volumetric.parse_parameters();
     }
 
-    if (ImGui::Checkbox("##SSR", &renderer.ssr_enabled))
-        renderer.lighting.params.ssr = renderer.ssr_enabled;
+    if (ImGui::Checkbox("##SSR", &renderer.ssr.enabled))
+        renderer.lighting.params.ssr = renderer.ssr.enabled;
     ImGui::SameLine();
     if (ImGui::CollapsingHeader("SSR"))
     {
@@ -250,7 +282,7 @@ void Editor::draw_renderer_menu()
                      texture_size, ImVec2(0, 1), ImVec2(1, 0));
     }
 
-    ImGui::Checkbox("##Motion blur", &renderer.motion_blur_enabled);
+    ImGui::Checkbox("##Motion blur", &renderer.motion_blur.enabled);
     ImGui::SameLine();
     if (ImGui::CollapsingHeader("Motion blur"))
     {
@@ -263,7 +295,7 @@ void Editor::draw_renderer_menu()
             renderer.motion_blur.parse_parameters();
     }
 
-    ImGui::Checkbox("##Bloom", &renderer.bloom_enabled);
+    ImGui::Checkbox("##Bloom", &renderer.bloom.enabled);
     ImGui::SameLine();
     if (ImGui::CollapsingHeader("Bloom"))
     {

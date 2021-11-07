@@ -1,0 +1,205 @@
+// TAA resolve based shader based on https://alextardif.com/TAA.html
+
+#version 460 core
+
+#ifdef VALIDATOR
+#extension GL_GOOGLE_include_directive : require
+#define LOCAL_SIZE 32
+#endif
+
+#include "/include/common.h"
+#include "/include/math.h"
+#include "/include/uniforms.h"
+
+layout(local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE) in;
+
+layout(std140, binding = 0) uniform Uniform { TaaUniforms u; };
+
+layout(binding = 0, rgba16f) restrict writeonly uniform image2D u_target;
+
+layout(binding = 0) uniform sampler2D u_source;
+layout(binding = 1) uniform sampler2D u_depth;
+layout(binding = 2) uniform sampler2D u_velocity;
+layout(binding = 3) uniform sampler2D u_history;
+
+#define FLT_EPS 0.00000001f
+#define USE_OPTIMIZATIONS 1
+
+const int flag_none = 1;
+const int flag_jitter = 1;
+const int flag_variance_clip = 2;
+const int flag_velocity_at_closest_depth = 4;
+
+const int filter_none = 0;
+const int filter_mitchell = 1;
+const int filter_blackman_harris = 2;
+
+// Source: https://github.com/playdeadgames/temporal
+vec4 clip_aabb(vec3 aabb_min, vec3 aabb_max, vec4 p, vec4 q)
+{
+#if USE_OPTIMIZATIONS
+    // note: only clips towards aabb center (but fast!)
+    vec3 p_clip = 0.5 * (aabb_max + aabb_min);
+    vec3 e_clip = 0.5 * (aabb_max - aabb_min) + FLT_EPS;
+
+    vec4 v_clip = q - vec4(p_clip, p.w);
+    vec3 v_unit = v_clip.xyz / e_clip;
+    vec3 a_unit = abs(v_unit);
+    float ma_unit = max(a_unit.x, max(a_unit.y, a_unit.z));
+
+    if (ma_unit > 1.0)
+        return vec4(p_clip, p.w) + v_clip / ma_unit;
+    else
+        return q; // point inside aabb
+#else
+    vec4 r = q - p;
+    vec3 rmax = aabb_max - p.xyz;
+    vec3 rmin = aabb_min - p.xyz;
+
+    const float eps = FLT_EPS;
+
+    if (r.x > rmax.x + eps)
+        r *= (rmax.x / r.x);
+    if (r.y > rmax.y + eps)
+        r *= (rmax.y / r.y);
+    if (r.z > rmax.z + eps)
+        r *= (rmax.z / r.z);
+
+    if (r.x < rmin.x - eps)
+        r *= (rmin.x / r.x);
+    if (r.y < rmin.y - eps)
+        r *= (rmin.y / r.y);
+    if (r.z < rmin.z - eps)
+        r *= (rmin.z / r.z);
+
+    return p + r;
+#endif
+}
+
+void main()
+{
+    const ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
+
+    vec2 tex_coords = calc_tex_coords(gid, u.size);
+    vec3 pos = pos_from_depth(
+        linearize_depth(textureLod(u_depth, tex_coords, 0).r, u.proj),
+        tex_coords, u.proj_inv);
+
+    vec3 source_sample_sum = vec3(0, 0, 0);
+    float source_sample_weight = 0.0;
+    vec3 neighborhood_min = vec3(10000);
+    vec3 neighborhood_max = vec3(-10000);
+    vec3 m1 = vec3(0, 0, 0);
+    vec3 m2 = vec3(0, 0, 0);
+    float z_closest = 1.0;
+    ivec2 velocity_sample_idx = ivec2(0, 0);
+
+    // Neighborhood sampling
+    for (int x = -1; x <= 1; x++)
+    {
+        for (int y = -1; y <= 1; y++)
+        {
+            ivec2 sample_idx = gid + ivec2(x, y);
+            sample_idx = clamp(sample_idx, ivec2(0), u.size - 1);
+
+            // Max to avoid propagating bad fragments.
+            vec3 neighbor =
+                max(vec3(0), texelFetch(u_source, sample_idx, 0).rgb);
+
+            // reconstruct the image at pixel center, treating the new frame as
+            // a set of sub-samples
+            float subSampleDistance = length(vec2(x, y));
+
+            float subSampleWeight;
+
+            switch (u.reconstruct_filter)
+            {
+            case filter_mitchell:
+                subSampleWeight = mitchell(subSampleDistance);
+                break;
+            case filter_blackman_harris:
+                subSampleWeight = blackman_harris(subSampleDistance);
+                break;
+            default:
+                subSampleWeight = 0;
+            }
+
+            source_sample_sum += neighbor * subSampleWeight;
+            source_sample_weight += subSampleWeight;
+
+            // grab the information for a neighborhood clamp
+            neighborhood_min = min(neighborhood_min, neighbor);
+            neighborhood_max = max(neighborhood_max, neighbor);
+
+            // collect the first and second color moments for variance clipping
+            m1 += neighbor;
+            m2 += neighbor * neighbor;
+
+            // find the sample position of the closest depth in the
+            // neighborhood, which we will use for sampling the velocity buffer
+            float z = textureLod(u_depth, tex_coords, 0).r;
+            if (z < z_closest)
+            {
+                z_closest = z;
+                velocity_sample_idx = sample_idx;
+            }
+        }
+    }
+
+    vec2 velocity = (u.flags & flag_velocity_at_closest_depth) != 0
+                        ? texelFetch(u_velocity, velocity_sample_idx, 0).rg
+                        : texelFetch(u_velocity, gid, 0).rg;
+
+    // Prepare (filtered) source sample.
+    vec3 source_sample = u.reconstruct_filter == filter_none
+                             ? max(vec3(0), texelFetch(u_source, gid, 0).rgb)
+                             : source_sample_sum / source_sample_weight;
+
+    vec2 history_tex_coords = tex_coords - velocity;
+
+    // No history to sample
+    if (any(notEqual(history_tex_coords, saturate(history_tex_coords))))
+    {
+        imageStore(u_target, gid, vec4(source_sample, 1));
+        return;
+    }
+
+    vec3 history = textureLod(u_history, history_tex_coords, 0).rgb;
+
+    // Variance clipping to reduce ghosting
+    if ((u.flags & flag_variance_clip) != 0)
+    {
+        float sample_count_inv = 1.0 / 9.0;
+        float gamma = 1.0;
+        vec3 mu = m1 * sample_count_inv;
+        vec3 sigma = sqrt(abs((m2 * sample_count_inv) - (mu * mu)));
+        vec3 minc = mu - gamma * sigma;
+        vec3 maxc = mu + gamma * sigma;
+
+        // FIXME:
+        history =
+            clip_aabb(
+                minc, maxc,
+                vec4(clamp(history, neighborhood_min, neighborhood_max), 1.),
+                vec4(history, 1.))
+                .xyz;
+    }
+
+    float weight_source = 0.05;
+    float weight_history = 1.0 - weight_source;
+
+    // Scale weights to reduce flickering.
+    vec3 source_compressed =
+        source_sample * 1. /
+        (max(max(source_sample.r, source_sample.g), source_sample.b) + 1.0);
+    vec3 compressedHistory =
+        history * 1. / (max(max(history.r, history.g), history.b) + 1.0);
+
+    weight_source *= 1.0 / (1.0 + luma(source_compressed));
+    weight_history *= 1.0 / (1.0 + luma(compressedHistory));
+
+    vec3 result = (source_sample * weight_source + history * weight_history) /
+                  max(weight_source + weight_history, 0.00001);
+
+    imageStore(u_target, gid, vec4(result, 1));
+}

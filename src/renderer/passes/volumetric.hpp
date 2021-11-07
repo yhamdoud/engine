@@ -58,9 +58,9 @@ class VolumetricPass
 
     enum Flags : int
     {
-        none,
-        bilateral_upsample,
-        blur,
+        none = 0,
+        bilateral_upsample = 1,
+        blur = 2,
     };
 
     struct Params
@@ -77,7 +77,7 @@ class VolumetricPass
 
     void parse_parameters();
     void initialize(ViewportContext &ctx);
-    void render(ViewportContext &ctx_v, RenderContext &ctx_r);
+    void render(ViewportContext &ctx_v, RenderContext &ctx_r, uint target_tex);
 };
 
 } // namespace engine

@@ -48,6 +48,8 @@ class SsaoPass
     });
 
   public:
+    bool enabled = true;
+
     uint ubo;
     SsaoData data;
 

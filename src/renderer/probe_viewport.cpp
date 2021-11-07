@@ -61,7 +61,19 @@ void ProbeViewport::render(RenderContext &ctx_r)
         ctx.view_proj = ctx.proj * ctx.view;
 
         shadow.render(ctx, ctx_r);
-        geometry.render(ctx, ctx_r);
+        geometry.render({
+            .size = ctx.size,
+            .framebuf = ctx.g_buf.framebuffer,
+            .view = ctx.view,
+            .view_proj = ctx.view_proj,
+            .view_proj_prev = ctx.view_proj_prev,
+            .entity_vao = ctx_r.entity_vao,
+            .sphere_mesh = ctx_r.mesh_instances[ctx_r.sphere_mesh_idx],
+            .entities = ctx_r.queue,
+            .meshes = ctx_r.mesh_instances,
+            .lights = ctx_r.lights,
+        });
+
         lighting.render(ctx, ctx_r);
         forward.render(ctx, ctx_r);
     }

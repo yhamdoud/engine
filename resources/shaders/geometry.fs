@@ -35,6 +35,9 @@ uniform float u_far_clip_distance;
 uniform bool u_alpha_mask;
 uniform float u_alpha_cutoff;
 
+uniform vec2 u_jitter;
+uniform vec2 u_jitter_prev;
+
 in Varying
 {
     // View space vectors.
@@ -102,11 +105,11 @@ void main()
         g_base_color_roughness.a *= metallic_roughness[1];
     }
 
-    vec3 pos = (fs_in.position.xyz / fs_in.position.w) * 0.5 + 0.5;
-    vec3 pos_prev =
-        (fs_in.position_prev.xyz / fs_in.position_prev.w) * 0.5 + 0.5;
+    vec2 pos = (fs_in.position.xyz / fs_in.position.w).xy - u_jitter;
+    vec2 pos_prev =
+        (fs_in.position_prev.xyz / fs_in.position_prev.w).xy - u_jitter_prev;
 
-    vec2 velocity = pos.xy - pos_prev.xy;
+    vec2 velocity = (pos - pos_prev) * 0.5;
     g_velocity = vec4(velocity, 0., 1.);
 
     id = -1;

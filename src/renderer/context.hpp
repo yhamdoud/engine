@@ -34,7 +34,7 @@ struct ViewportContext
     uint hdr_tex = invalid_texture_id;
     uint hdr2_tex = invalid_texture_id;
     uint id_tex = invalid_texture_id;
-    uint hdr_prev_tex = invalid_texture_id;
+    uint history_tex = invalid_texture_id;
     uint hdr_frame_buf = default_frame_buffer_id;
     uint ldr_frame_buf = default_frame_buffer_id;
     uint geometry_fbuf = default_frame_buffer_id;

@@ -24,14 +24,15 @@ class BloomPass
     Shader upsample;
 
   public:
+    bool enabled = true;
+
     BloomConfig cfg;
 
     BloomPass(BloomConfig cfg);
 
     void initialize(ViewportContext &ctx);
-    void render(ViewportContext &ctx_v, RenderContext &r_ctx);
+    void render(ViewportContext &ctx_v, RenderContext &r_ctx, uint source,
+                uint target);
 };
-
-static_assert(Pass<BloomPass>);
 
 } // namespace engine

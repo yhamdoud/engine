@@ -183,11 +183,9 @@ void main()
 
         // Reprojection.
         vec2 velocity = texture(u_g_velocity, tex_coords).rg;
-        out_luminance += r.b * F *
-                         textureLod(u_hdr_prev,
-                                    // r.rg - u_dt * velocity,
-                                    r.rg, roughness * max_lod)
-                             .rgb;
+        out_luminance +=
+            r.b * F *
+            textureLod(u_hdr_prev, r.rg - velocity, roughness * max_lod).rgb;
     }
 
     // Give different shadow map cascades a recognizable tint.

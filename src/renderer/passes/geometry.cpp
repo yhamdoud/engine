@@ -42,8 +42,8 @@ void GeometryPass::create_debug_views()
                          www_swizzle.data());
 
     glGenTextures(1, &debug_view_velocity);
-    glTextureView(debug_view_velocity, GL_TEXTURE_2D, velocity, GL_RGBA16F, 0,
-                  1, 0, 1);
+    glTextureView(debug_view_velocity, GL_TEXTURE_2D, velocity, GL_RGBA8_SNORM,
+                  0, 1, 0, 1);
     glTextureParameteriv(debug_view_velocity, GL_TEXTURE_SWIZZLE_RGBA,
                          rg_swizzle.data());
 }
@@ -106,12 +106,12 @@ void GeometryPass::initialize(ViewportContext &ctx)
         logger.error("Downsample framebuffer incomplete");
 }
 
-void GeometryPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
+void GeometryPass::render(const RenderArgs &args)
 {
     ZoneScoped;
 
-    glViewport(0, 0, ctx_v.size.x, ctx_v.size.y);
-    glBindFramebuffer(GL_FRAMEBUFFER, ctx_v.g_buf.framebuffer);
+    glViewport(0, 0, args.size.x, args.size.y);
+    glBindFramebuffer(GL_FRAMEBUFFER, args.framebuf);
 
     const uvec4 zero(0u);
     const uvec4 minus_one(-1);
@@ -121,15 +121,15 @@ void GeometryPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     glClearNamedFramebufferuiv(fbuf, GL_COLOR, 3, value_ptr(minus_one));
     glClear(GL_DEPTH_BUFFER_BIT);
 
-    glBindVertexArray(ctx_r.entity_vao);
+    glBindVertexArray(args.entity_vao);
 
     glUseProgram(shader.get_id());
 
-    for (auto &r : ctx_r.queue)
+    for (auto &r : args.entities)
     {
-        const auto model_view = ctx_v.view * r.model;
-        const auto mvp = ctx_v.view_proj * r.model;
-        const auto mvp_prev = ctx_v.view_proj_prev * r.model;
+        const auto model_view = args.view * r.model;
+        const auto mvp = args.view_proj * r.model;
+        const auto mvp_prev = args.view_proj_prev * r.model;
 
         shader.set("u_mvp", mvp);
         shader.set("u_mvp_prev", mvp_prev);
@@ -140,6 +140,9 @@ void GeometryPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
         shader.set("u_roughness_factor", r.material.roughness_factor);
         shader.set("u_alpha_mask", r.material.alpha_mode == AlphaMode::mask);
         shader.set("u_alpha_cutoff", r.material.alpha_cutoff);
+
+        shader.set("u_jitter", args.jitter);
+        shader.set("u_jitter_prev", args.jitter_prev);
 
         if (r.material.base_color != invalid_texture_id)
         {
@@ -174,30 +177,29 @@ void GeometryPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
             shader.set("u_use_metallic_roughness", false);
         }
 
-        Renderer::render_mesh_instance(ctx_r.mesh_instances[r.mesh_index]);
+        Renderer::render_mesh_instance(args.meshes[r.mesh_index]);
     }
 
     glUseProgram(point_light_shader.get_id());
     glDepthMask(false);
 
-    point_light_shader.set("u_view_proj", ctx_v.view_proj);
+    point_light_shader.set("u_view_proj", args.view_proj);
 
-    for (uint32_t i = 0; i < ctx_r.lights.size(); i++)
+    for (uint32_t i = 0; i < args.lights.size(); i++)
     {
-        const auto &light = ctx_r.lights[i];
+        const auto &light = args.lights[i];
 
         point_light_shader.set("u_light.position", light.position);
         point_light_shader.set("u_light.radius", 0.5f);
         point_light_shader.set("u_id", i);
 
-        Renderer::render_mesh_instance(
-            ctx_r.mesh_instances[ctx_r.sphere_mesh_idx]);
+        Renderer::render_mesh_instance(args.sphere_mesh);
     }
 
     glDepthMask(true);
 
     {
-        glViewport(0, 0, ctx_v.size.x / 2, ctx_v.size.y / 2);
+        glViewport(0, 0, args.size.x / 2, args.size.y / 2);
         glBindFramebuffer(GL_FRAMEBUFFER, fbuf_downsample);
         glClear(GL_DEPTH_BUFFER_BIT);
         glBindTextureUnit(3, depth);

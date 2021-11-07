@@ -47,4 +47,13 @@ struct LightingUniforms
     vec3 light_direction;
 };
 
+struct TaaUniforms
+{
+    mat4 proj;
+    mat4 proj_inv;
+    ivec2 size;
+    int reconstruct_filter;
+    int flags;
+};
+
 #endif

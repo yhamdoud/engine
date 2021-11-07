@@ -11,10 +11,12 @@
 #include "constants.hpp"
 #include "importer.hpp"
 #include "logger.hpp"
+#include "math.hpp"
 #include "model.hpp"
 #include "primitives.hpp"
 #include "profiler.hpp"
 #include "renderer.hpp"
+#include "renderer/passes/taa.hpp"
 
 using namespace glm;
 using namespace std;
@@ -157,7 +159,7 @@ Renderer::Renderer(glm::ivec2 viewport_size, glm::vec3 camera_position,
     glCreateFramebuffers(1, &ctx_v.hdr_frame_buf);
 
     if (!init_framebuffer(ctx_v.size, ctx_v.hdr_frame_buf, depth_tex,
-                          ctx_v.hdr_tex, ctx_v.hdr2_tex, ctx_v.hdr_prev_tex))
+                          ctx_v.hdr_tex, ctx_v.hdr2_tex, ctx_v.history_tex))
         logger.error("Main viewport frame buffer incomplete.");
 
     // Setup state for displaying probe.
@@ -375,11 +377,28 @@ void Renderer::render(float dt, std::vector<Entity> queue)
 
     ZoneScoped;
 
+    const uint32_t jitter_sample_count = 8;
+
     // TODO: throw this in a UBO
     ctx_v.proj = perspective(ctx_v.fov,
                              static_cast<float>(ctx_v.size.x) /
                                  static_cast<float>(ctx_v.size.y),
                              ctx_v.near, ctx_v.far);
+
+    const vec2 jitter = vec2(0.f);
+
+    // FIXME:
+    if (taa.enabled && taa.params.flags & TaaPass::Flags::jitter)
+    {
+        auto jitter_idx = frame_idx + 1u % taa.params.jitter_sample_count;
+        const vec2 jitter = vec2(2.f * halton(jitter_idx + 1, 2) - 1.f,
+                                 2.f * halton(jitter_idx + 1, 3) - 1.f) /
+                            static_cast<vec2>(ctx_v.size);
+
+        ctx_v.proj[2][0] += jitter.x;
+        ctx_v.proj[2][1] += jitter.y;
+    }
+
     ctx_v.proj_inv = inverse(ctx_v.proj);
     ctx_v.view = camera.get_view();
     ctx_v.view_inv = glm::inverse(ctx_v.view);
@@ -404,17 +423,30 @@ void Renderer::render(float dt, std::vector<Entity> queue)
     {
         TracyGpuZone("Geometry pass");
         GpuZone _(2);
-        geometry.render(ctx_v, ctx_r);
+        geometry.render({
+            .size = ctx_v.size,
+            .framebuf = ctx_v.g_buf.framebuffer,
+            .view = ctx_v.view,
+            .view_proj = ctx_v.view_proj,
+            .view_proj_prev = ctx_v.view_proj_prev,
+            .entity_vao = ctx_r.entity_vao,
+            .sphere_mesh = ctx_r.mesh_instances[ctx_r.sphere_mesh_idx],
+            .entities = ctx_r.queue,
+            .meshes = ctx_r.mesh_instances,
+            .lights = ctx_r.lights,
+            .jitter = jitter,
+            .jitter_prev = jitter_prev,
+        });
     }
 
-    if (ssao_enabled)
+    if (ssao.enabled)
     {
         TracyGpuZone("SSAO pass");
         GpuZone _(3);
         ssao.render(ctx_v);
     }
 
-    if (ssr_enabled)
+    if (ssr.enabled)
     {
         TracyGpuZone("SSR pass");
         GpuZone _(6);
@@ -427,45 +459,81 @@ void Renderer::render(float dt, std::vector<Entity> queue)
         lighting.render(ctx_v, ctx_r);
     }
 
-    glCopyImageSubData(ctx_v.hdr_tex, GL_TEXTURE_2D, 0, 0, 0, 0,
-                       ctx_v.hdr_prev_tex, GL_TEXTURE_2D, 0, 0, 0, 0,
-                       ctx_v.size.x, ctx_v.size.y, 1);
-    glGenerateTextureMipmap(ctx_v.hdr_prev_tex);
-
     {
         TracyGpuZone("Forward pass");
         GpuZone _(5);
         forward.render(ctx_v, ctx_r);
     }
 
+    uint source_tex = ctx_v.hdr_tex;
+    uint target_tex = ctx_v.hdr2_tex;
+
+    if (taa.enabled)
+    {
+        taa.render({
+            .proj = ctx_v.proj,
+            .proj_inv = ctx_v.proj_inv,
+            .size = ctx_v.size,
+            .source_tex = source_tex,
+            .target_tex = target_tex,
+            .history_tex = ctx_v.history_tex,
+            .velocity_tex = ctx_v.g_buf.velocity,
+            .depth_tex = ctx_v.g_buf.depth,
+        });
+
+        swap(target_tex, source_tex);
+    }
+
+    glCopyImageSubData(source_tex, GL_TEXTURE_2D, 0, 0, 0, 0, ctx_v.history_tex,
+                       GL_TEXTURE_2D, 0, 0, 0, 0, ctx_v.size.x, ctx_v.size.y,
+                       1);
+    glGenerateTextureMipmap(ctx_v.history_tex);
+
+    // TODO: do after tone mapping
+    if (sharpen.enabled)
+    {
+        sharpen.render({
+            .size = ctx_v.size,
+            .source_tex = source_tex,
+            .target_tex = target_tex,
+        });
+
+        swap(target_tex, source_tex);
+    }
+
     if (volumetric.enabled)
     {
         GpuZone _(11);
         TracyGpuZone("Volumetric pass");
-        volumetric.render(ctx_v, ctx_r);
+        volumetric.render(ctx_v, ctx_r, source_tex);
     }
 
-    if (motion_blur_enabled)
+    if (motion_blur.enabled)
     {
         TracyGpuZone("Motion blur pass");
         GpuZone _(7);
-        motion_blur.render(ctx_v, ctx_r);
+        motion_blur.render(ctx_v, ctx_r, source_tex, target_tex);
+        swap(target_tex, source_tex);
     }
 
-    if (bloom_enabled)
+    if (bloom.enabled)
     {
         GpuZone _(8);
         TracyGpuZone("Bloom pass");
-        bloom.render(ctx_v, ctx_r);
+        bloom.render(ctx_v, ctx_r, source_tex, target_tex);
+        swap(target_tex, source_tex);
     }
 
     {
         GpuZone _(9);
         TracyGpuZone("Tone map pass");
-        tone_map.render(ctx_v, ctx_r);
+        tone_map.render(ctx_v, ctx_r, source_tex);
     }
 
+    jitter_prev = jitter;
     ctx_v.view_proj_prev = ctx_v.view_proj;
+
+    frame_idx++;
 }
 
 void Renderer::resize_viewport(glm::vec2 size)
@@ -473,7 +541,7 @@ void Renderer::resize_viewport(glm::vec2 size)
     ctx_v.size = size;
 
     init_framebuffer(size, ctx_v.hdr_frame_buf, depth_tex, ctx_v.hdr_tex,
-                     ctx_v.hdr2_tex, ctx_v.hdr_prev_tex);
+                     ctx_v.hdr2_tex, ctx_v.history_tex);
 
     geometry.initialize(ctx_v);
     ssao.initialize(ctx_v);

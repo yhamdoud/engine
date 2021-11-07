@@ -18,8 +18,10 @@
 #include "renderer/passes/lighting.hpp"
 #include "renderer/passes/motion_blur.hpp"
 #include "renderer/passes/shadow.hpp"
+#include "renderer/passes/sharpen.hpp"
 #include "renderer/passes/ssao.hpp"
 #include "renderer/passes/ssr.hpp"
+#include "renderer/passes/taa.hpp"
 #include "renderer/passes/tone_map.hpp"
 #include "renderer/passes/volumetric.hpp"
 #include "renderer/probe_viewport.hpp"
@@ -42,6 +44,8 @@ class Renderer
     std::vector<BakingJob> baking_jobs{};
     int cur_baking_offset = 0;
     int cur_bounce_idx = 0;
+    uint64_t frame_idx = 0;
+    glm::vec2 jitter_prev;
 
     void bake();
 
@@ -84,7 +88,6 @@ class Renderer
 
     GeometryPass geometry{};
 
-    bool ssao_enabled = true;
     SsaoPass ssao{{
         .kernel_size = 64,
         .sample_count = 64,
@@ -93,7 +96,6 @@ class Renderer
         .strength = 2.f,
     }};
 
-    bool ssr_enabled = true;
     SsrPass ssr{{
         .thickness = 0.25f,
         .stride = 2,
@@ -117,6 +119,16 @@ class Renderer
         .draw_probes = false,
     }};
 
+    TaaPass taa{{
+        .jitter_sample_count = 4,
+        .flags = (TaaPass::Flags)(
+            TaaPass::Flags::jitter | TaaPass::Flags::velocity_at_closest_depth |
+            TaaPass::Flags::variance_clip | TaaPass::Flags::sharpen),
+        .filter = TaaPass::Filter::blackman_harris,
+    }};
+
+    SharpenPass sharpen{};
+
     VolumetricPass volumetric{{
         .step_count = 64,
         .scatter_intensity = 0.85f,
@@ -126,13 +138,11 @@ class Renderer
                                     VolumetricPass::Flags::blur),
     }};
 
-    bool motion_blur_enabled = true;
     MotionBlurPass motion_blur{{
         .sample_count = 20,
         .intensity = 0.35f,
     }};
 
-    bool bloom_enabled = true;
     BloomPass bloom{{
         .pass_count = 5u,
         .intensity = 0.04f,

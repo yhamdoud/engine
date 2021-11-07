@@ -67,7 +67,7 @@ class ToneMapPass
 
     void parse_params();
     void initialize(ViewportContext &ctx);
-    void render(ViewportContext &ctx_v, RenderContext &ctx_r);
+    void render(ViewportContext &ctx_v, RenderContext &ctx_r, uint source_tex);
 };
 
 } // namespace engine

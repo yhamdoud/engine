@@ -15,7 +15,21 @@ struct GeometryConfig
 
 class GeometryPass
 {
-    static constexpr int group_size = 32;
+    struct RenderArgs
+    {
+        glm::vec2 size{};
+        uint framebuf = default_frame_buffer_id;
+        glm::mat4 view{};
+        glm::mat4 view_proj{};
+        glm::mat4 view_proj_prev{};
+        uint32_t entity_vao = 0;
+        MeshInstance &sphere_mesh;
+        std::vector<Entity> &entities;
+        std::vector<MeshInstance> &meshes;
+        std::vector<Light> &lights;
+        glm::vec2 jitter{};
+        glm::vec2 jitter_prev{};
+    };
 
     uint fbuf;
     uint fbuf_downsample;
@@ -50,9 +64,7 @@ class GeometryPass
     void create_debug_views();
     void parse_parameters();
     void initialize(ViewportContext &ctx);
-    void render(ViewportContext &ctx, RenderContext &r_ctx);
+    void render(const RenderArgs &args);
 };
-
-static_assert(Pass<GeometryPass>);
 
 } // namespace engine

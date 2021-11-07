@@ -42,7 +42,8 @@ void ToneMapPass::initialize(ViewportContext &ctx)
     glNamedBufferData(uniform_buf, sizeof(Uniforms), nullptr, GL_DYNAMIC_DRAW);
 }
 
-void ToneMapPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
+void ToneMapPass::render(ViewportContext &ctx_v, RenderContext &ctx_r,
+                         uint source_tex)
 {
     ZoneScoped;
 
@@ -52,7 +53,7 @@ void ToneMapPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
 
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buf);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, histogram_buf);
-    glBindTextureUnit(2, ctx_v.hdr_tex);
+    glBindTextureUnit(2, source_tex);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, luminance_buf);
 
     if (params.auto_exposure)

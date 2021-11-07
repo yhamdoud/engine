@@ -80,7 +80,7 @@ void LightingPass::render(ViewportContext &ctx_v, RenderContext &ctx_r)
     glBindTextureUnit(9, ctx_r.sh_texs[4]);
     glBindTextureUnit(10, ctx_r.sh_texs[5]);
     glBindTextureUnit(11, ctx_r.sh_texs[6]);
-    glBindTextureUnit(12, ctx_v.hdr_prev_tex);
+    glBindTextureUnit(12, ctx_v.history_tex);
     glBindTextureUnit(13, ctx_v.reflections_tex);
     glBindTextureUnit(14, ctx_v.g_buf.velocity);
     glBindTextureUnit(15, ctx_r.light_shadows_array);

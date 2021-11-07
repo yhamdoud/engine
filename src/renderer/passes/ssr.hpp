@@ -22,6 +22,8 @@ class SsrPass
     Shader ssr;
 
   public:
+    bool enabled = true;
+
     SsrConfig cfg;
 
     SsrPass(SsrConfig cfg);

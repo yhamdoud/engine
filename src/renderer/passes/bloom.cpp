@@ -37,7 +37,8 @@ void BloomPass::initialize(ViewportContext &ctx)
     glTextureParameteri(upsample_tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
-void BloomPass::render(ViewportContext &ctx_v, RenderContext &r_ctx)
+void BloomPass::render(ViewportContext &ctx_v, RenderContext &r_ctx,
+                       uint source, uint target)
 {
     ZoneScoped;
 
@@ -100,9 +101,8 @@ void BloomPass::render(ViewportContext &ctx_v, RenderContext &r_ctx)
     upsample.set("u_target_level", 0u);
     upsample.set("u_intensity", cfg.intensity);
 
-    glBindTextureUnit(1u, ctx_v.hdr2_tex);
-    glBindImageTexture(2u, ctx_v.hdr_tex, 0, false, 0, GL_READ_WRITE,
-                       GL_RGBA16F);
+    glBindTextureUnit(1u, source);
+    glBindImageTexture(2u, target, 0, false, 0, GL_READ_WRITE, GL_RGBA16F);
 
     glDispatchCompute(group_count_x, group_count_y, 1u);
     glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT |

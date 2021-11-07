@@ -1,0 +1,31 @@
+#version 460 core
+
+#ifdef VALIDATOR
+#extension GL_GOOGLE_include_directive : require
+#define LOCAL_SIZE 32
+#endif
+
+#include "/include/common.h"
+
+layout(local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE) in;
+
+layout(binding = 0, rgba16f) restrict writeonly uniform image2D u_target;
+layout(binding = 0) uniform sampler2D u_source;
+
+// https://advances.realtimerendering.com/s2016/#_REFLECTION_SYSTEM_IN
+vec3 sharpen(sampler2D tex, ivec2 idx)
+{
+    vec3 center = texelFetch(tex, idx, 0).rgb;
+
+    return saturate(center + 4 * center -
+                    texelFetchOffset(tex, idx, 0, ivec2(1, 0)).rgb -
+                    texelFetchOffset(tex, idx, 0, ivec2(-1, 0)).rgb -
+                    texelFetchOffset(tex, idx, 0, ivec2(0, 1)).rgb -
+                    texelFetchOffset(tex, idx, 0, ivec2(0, -1)).rgb);
+}
+
+void main()
+{
+    const ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
+    imageStore(u_target, gid, vec4(sharpen(u_source, gid), 1.));
+}

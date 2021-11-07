@@ -20,6 +20,8 @@ float luma(vec4 c) { return luma(vec3(c)); }
 
 float saturate(float x) { return clamp(x, 0., 1.); }
 
+vec2 saturate(vec2 x) { return clamp(x, 0., 1.); }
+
 vec3 saturate(vec3 x) { return clamp(x, 0., 1.); }
 
 float distance_squared(vec2 a, vec2 b)
