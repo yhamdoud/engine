@@ -3,6 +3,7 @@
 
 struct VolumetricUniforms
 {
+    mat4 view;
     mat4 proj;
     mat4 proj_inv;
     mat4 view_inv;

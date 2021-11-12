@@ -2,6 +2,7 @@
 
 #include "logger.hpp"
 #include "renderer/passes/volumetric.hpp"
+#include "renderer/renderer.hpp"
 
 using namespace std;
 using namespace engine;
@@ -11,6 +12,9 @@ VolumetricPass::VolumetricPass(Params params) : params(params)
 {
     glCreateBuffers(1, &uniform_buf);
     glNamedBufferData(uniform_buf, sizeof(Uniforms), nullptr, GL_DYNAMIC_DRAW);
+
+    glCreateFramebuffers(2, &framebuf);
+    glNamedFramebufferDrawBuffer(framebuf, GL_COLOR_ATTACHMENT0);
 
     parse_parameters();
 }
@@ -39,11 +43,18 @@ void VolumetricPass::initialize(ViewportContext &ctx)
 
     glTextureStorage2D(tex1, 1, GL_RGBA16F, ctx.size.x / 2, ctx.size.y / 2);
     glTextureStorage2D(tex2, 1, GL_RGBA16F, ctx.size.x / 2, ctx.size.y / 2);
+
+    glNamedFramebufferTexture(framebuf, GL_COLOR_ATTACHMENT0, tex1, 0);
+
+    if (glCheckNamedFramebufferStatus(framebuf, GL_FRAMEBUFFER) !=
+        GL_FRAMEBUFFER_COMPLETE)
+        logger.error("Volumetrics framebuffer incomplete");
 }
 
 void VolumetricPass::render(ViewportContext &ctx_v, RenderContext &ctx_r,
                             uint target_tex)
 {
+    uniform_data.view = ctx_v.view;
     uniform_data.proj = ctx_v.proj;
     uniform_data.proj_inv = ctx_v.proj_inv;
     uniform_data.view_inv = inverse(ctx_v.view);
@@ -54,15 +65,16 @@ void VolumetricPass::render(ViewportContext &ctx_v, RenderContext &ctx_r,
     glNamedBufferSubData(uniform_buf, 0, sizeof(Uniforms), &uniform_data);
 
     // FIXME:
-    raymarch_shader.set("u_light_transforms[0]", span(ctx_v.light_transforms));
-    raymarch_shader.set("u_cascade_distances[0]",
-                        span(ctx_v.cascade_distances));
+    sun_shader.set("u_light_transforms[0]", span(ctx_v.light_transforms));
+    sun_shader.set("u_cascade_distances[0]", span(ctx_v.cascade_distances));
 
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buf);
     glBindTextureUnit(1, ctx_v.g_buf.depth);
     glBindTextureUnit(2, ctx_v.shadow_map);
     glBindTextureUnit(3, tex1);
     glBindTextureUnit(4, tex2);
+    glBindTextureUnit(5, ctx_r.light_shadows_array);
+
     glBindImageTexture(5, tex1, 0, false, 0, GL_WRITE_ONLY, GL_RGBA16F);
     glBindImageTexture(6, tex2, 0, false, 0, GL_WRITE_ONLY, GL_RGBA16F);
     glBindImageTexture(7, target_tex, 0, false, 0, GL_READ_WRITE, GL_RGBA16F);
@@ -73,8 +85,41 @@ void VolumetricPass::render(ViewportContext &ctx_v, RenderContext &ctx_r,
     uvec2 group_count =
         (ctx_v.size + ivec2(group_size) - 1) / ivec2(group_size);
 
-    glUseProgram(raymarch_shader.get_id());
+    glUseProgram(sun_shader.get_id());
     glDispatchCompute(half_group_count.x, half_group_count.y, 1u);
+
+    glViewport(0, 0, ctx_v.size.x / 2, ctx_v.size.y / 2);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuf);
+
+    glCullFace(GL_FRONT);
+    glEnable(GL_BLEND);
+    glBlendEquation(GL_FUNC_ADD);
+    glBlendFunc(GL_ONE, GL_ONE);
+
+    glUseProgram(point_light_shader.get_id());
+    glBindVertexArray(ctx_r.entity_vao);
+
+    point_light_shader.set("u_view_proj", ctx_v.view_proj);
+
+    int i = 0;
+    for (const auto &light : ctx_r.lights)
+    {
+        const float radius_squared = light.radius_squared(0.01f);
+
+        point_light_shader.set("u_light_idx", i);
+        point_light_shader.set("u_light.position", light.position);
+        point_light_shader.set("u_light.color", light.intensity * light.color);
+        point_light_shader.set("u_light.radius", sqrt(radius_squared));
+        point_light_shader.set("u_light.radius_squared", radius_squared);
+
+        Renderer::render_mesh_instance(
+            ctx_r.mesh_instances[ctx_r.sphere_mesh_idx]);
+        i++;
+    }
+
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+    glCullFace(GL_BACK);
 
     if (params.flags & Flags::blur)
     {

@@ -68,9 +68,9 @@ class Renderer
             .direction = glm::normalize(glm::vec3{0.03f, -0.8f, 0.5f}),
         },
         .lights{
-            Light{glm::vec3{-5, 0, 0}, glm::vec3{1., 1., 0.}, 2.f},
-            Light{glm::vec3{0, 0, 5}, glm::vec3{0., 1., 0.}, 5.f},
-            Light{glm::vec3{5, 0, 0}, glm::vec3{0., 1., 1.}, 8.f},
+            Light{glm::vec3{-5, 0, 0}, glm::vec3{1., 1., 0.}, 1.f},
+            Light{glm::vec3{0, 0, 5}, glm::vec3{0., 1., 0.}, 0.f},
+            Light{glm::vec3{5, 0, 0}, glm::vec3{0., 1., 1.}, 0.f},
         },
         .sh_texs = std::span<uint, 7>{probe_buf.front(), 7},
         .vertex_buf{32'000 * sizeof(Vertex), 0},

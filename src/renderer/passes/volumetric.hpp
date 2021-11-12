@@ -15,6 +15,7 @@ class VolumetricPass
 {
     struct Uniforms
     {
+        glm::mat4 view{};
         glm::mat4 proj{};
         glm::mat4 proj_inv{};
         glm::mat4 view_inv{};
@@ -29,10 +30,15 @@ class VolumetricPass
 
     static constexpr int group_size = 32;
 
-    Shader raymarch_shader = *Shader::from_comp_path(
+    Shader sun_shader = *Shader::from_comp_path(
         shaders_path / "volumetric.comp",
         fmt::format("#define LOCAL_SIZE {}\n#define CASCADE_COUNT 3\n",
                     group_size));
+
+    Shader point_light_shader = *Shader::from_paths(ShaderPaths{
+        .vert = shaders_path / "point_light.vs",
+        .frag = shaders_path / "volumetric_point_light.frag",
+    });
 
     Shader blur_horizontal_shader = *Shader::from_comp_path(
         shaders_path / "volumetric_blur.comp",
@@ -49,6 +55,8 @@ class VolumetricPass
     Uniforms uniform_data;
 
     uint uniform_buf;
+
+    uint framebuf;
 
     uint tex1 = invalid_texture_id;
     uint tex2 = invalid_texture_id;

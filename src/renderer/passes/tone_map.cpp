@@ -47,6 +47,8 @@ void ToneMapPass::render(ViewportContext &ctx_v, RenderContext &ctx_r,
 {
     ZoneScoped;
 
+    glViewport(0, 0, ctx_v.size.x, ctx_v.size.y);
+
     uniform_data.size = ctx_v.size;
     uniform_data.dt = ctx_r.dt;
     glNamedBufferSubData(uniform_buf, 0, sizeof(Uniforms), &uniform_data);

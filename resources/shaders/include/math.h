@@ -3,6 +3,15 @@
 
 #define PI 3.14159265359
 
+// clang-format off
+const mat4 bayer = mat4(
+    0.,  8.,  2.,  10.,
+    12., 4.,  14., 6.,
+    3.,  11., 1.,  9.,
+    15., 7.,  13., 5.
+) / 16.;
+// clang-format on
+
 float blackman_harris(float x)
 {
     x = 1. - x;
@@ -33,6 +42,11 @@ float mitchell(float x)
             (8 * B + 24 * C);
 
     return y / 6.0f;
+}
+
+float henyey_greenstein(float cos_theta, float g)
+{
+    return (1. - g * g) / (4. * PI * pow(1. + g * g - 2. * g * cos_theta, 1.5));
 }
 
 #endif

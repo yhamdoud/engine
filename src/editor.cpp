@@ -122,7 +122,7 @@ void Editor::draw_scene_menu()
             ImGui::ColorEdit3(format("Color{}", id).c_str(),
                               value_ptr(light.color));
             ImGui::SliderFloat(format("Intensity{}", id).c_str(),
-                               &light.intensity, 0.f, 100.f);
+                               &light.intensity, 0.f, 10.f);
 
             ImGui::Separator();
         }

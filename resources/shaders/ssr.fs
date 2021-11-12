@@ -185,6 +185,6 @@ void main()
 
     frag_color =
         vec4(vec2(hit_screen) / size, // Screen to texture space.
-             // float(hit) * (1. - max(0, ray_dir.z)),
+                                      // float(hit) * (1. - max(0, ray_dir.z)),
              float(hit) * dot(ray_dir, normalize(ray_origin)), n_dot_v);
 }

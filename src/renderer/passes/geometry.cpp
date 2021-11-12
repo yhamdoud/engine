@@ -51,6 +51,18 @@ void GeometryPass::create_debug_views()
 GeometryPass::GeometryPass()
 {
     glCreateFramebuffers(2, &fbuf);
+
+    array<GLenum, 4> draw_bufs{
+        GL_COLOR_ATTACHMENT0,
+        GL_COLOR_ATTACHMENT1,
+        GL_COLOR_ATTACHMENT2,
+        GL_COLOR_ATTACHMENT3,
+    };
+    glNamedFramebufferDrawBuffers(fbuf, draw_bufs.size(), draw_bufs.data());
+
+    glNamedFramebufferDrawBuffer(fbuf_downsample, GL_NONE);
+    glNamedFramebufferReadBuffer(fbuf_downsample, GL_NONE);
+
     downsample_shader.set("u_read", 3);
 }
 
@@ -72,6 +84,8 @@ void GeometryPass::initialize(ViewportContext &ctx)
     glTextureStorage2D(depth, 2, GL_DEPTH_COMPONENT32, ctx.size.x, ctx.size.y);
     glTextureParameteri(depth, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTextureParameteri(depth, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(depth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTextureParameteri(depth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     glTextureStorage2D(ctx.id_tex, 1, GL_R32UI, ctx.size.x, ctx.size.y);
 
@@ -80,14 +94,6 @@ void GeometryPass::initialize(ViewportContext &ctx)
     glNamedFramebufferTexture(fbuf, GL_COLOR_ATTACHMENT1, base_color_rough, 0);
     glNamedFramebufferTexture(fbuf, GL_COLOR_ATTACHMENT2, velocity, 0);
     glNamedFramebufferTexture(fbuf, GL_COLOR_ATTACHMENT3, ctx.id_tex, 0);
-
-    array<GLenum, 4> draw_bufs{
-        GL_COLOR_ATTACHMENT0,
-        GL_COLOR_ATTACHMENT1,
-        GL_COLOR_ATTACHMENT2,
-        GL_COLOR_ATTACHMENT3,
-    };
-    glNamedFramebufferDrawBuffers(fbuf, draw_bufs.size(), draw_bufs.data());
 
     if (glCheckNamedFramebufferStatus(fbuf, GL_FRAMEBUFFER) !=
         GL_FRAMEBUFFER_COMPLETE)
